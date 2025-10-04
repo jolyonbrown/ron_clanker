@@ -13,6 +13,78 @@ This project implements a fully autonomous Fantasy Premier League management sys
 
 ---
 
+## 🚨 CURRENT SEASON STATUS (2025/26)
+
+**Date**: Saturday, October 4th 2025
+**Current Gameweek**: 7 (in progress)
+**Ron's Entry Point**: Gameweek 8 (FRESH START - NEW TEAM)
+
+Ron is entering FPL as a **brand new team starting at GW8** with a blank slate and £100m budget. This is the DREAM scenario - fresh start with 6 gameweeks of real performance data to analyze before first selection. See `SEASON_SITUATION.md` for full details.
+
+**MASSIVE Advantages**:
+- ✅ **Fresh £100m budget** - build optimal team from scratch
+- ✅ **6 GWs of REAL data** - identify PROVEN Defensive Contribution performers
+- ✅ **All chips available** - perfect flexibility
+- ✅ **International break** - extended preparation time
+- ✅ **Market inefficiency** - DC players still undervalued despite proven results
+- ✅ **31 gameweeks** to compete (GW8-38)
+
+**Immediate Priority**: Analyze GW1-7 data to identify consistent DC performers, build optimal GW8 squad around proven 2pt earners.
+
+---
+
+## 📋 Gameweek Workflow - Ron's Requirements
+
+### Every Gameweek Ron Must Deliver:
+
+1. **Team Selection** (15 players within budget)
+2. **Captain & Vice-Captain** chosen
+3. **Formation** decided (starting XI + bench order)
+4. **Team Announcement** in Ron's voice explaining:
+   - Why each key player was selected
+   - The tactical approach for the gameweek
+   - Captain reasoning
+   - Any transfers made and why
+   - His overall strategy
+
+**Example Format**:
+```
+GAMEWEEK 8 - RON'S TEAM SELECTION
+
+Right lads, here's how we're lining up for Gameweek 8...
+
+BETWEEN THE STICKS: Raya
+Solid keeper. Arsenal's defense has been rock solid. Four clean sheets
+in seven games. That's £5.6m well spent.
+
+THE BACK LINE: Gabriel (C), Senesi, Timber
+This is where we're different from everyone else. Gabriel's not just
+defending - he's averaging 11 tackles and clearances per game. That's
+2 guaranteed points from Defensive Contribution nearly every week, PLUS
+the clean sheet potential. Same with Timber - 10.5 defensive actions
+per game. The market's still pricing them on goals and assists. We're
+smarter than that.
+
+MIDFIELD ENGINE ROOM: Caicedo, Rice, Semenyo, Kudus, Gravenberch
+Caicedo and Rice - proper midfielders. 12+ defensive actions most weeks.
+Another 4 points from DC every gameweek the so-called experts miss.
+Semenyo for the goals, Kudus for creativity. Balanced.
+
+UP FRONT: Watkins, Haaland
+Haaland gets the armband.
+
+THE GAFFER'S LOGIC:
+Five players earning Defensive Contribution points week in, week out.
+That's 10 guaranteed points before we've even counted goals and assists.
+Foundation first, fancy stuff second.
+
+- Ron
+```
+
+This format should be generated for EVERY gameweek decision.
+
+---
+
 ## 🏗️ Architecture Philosophy
 
 ### Multi-Agent Hierarchical System

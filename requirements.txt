@@ -17,6 +17,9 @@ numpy>=1.24.0
 requests>=2.31.0
 aiohttp>=3.9.0
 
+# FPL Data (MCP Server)
+fpl-mcp>=0.1.0
+
 # Logging
 python-json-logger>=2.0.7
 
