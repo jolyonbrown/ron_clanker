@@ -1,0 +1,39 @@
+# Ron Clanker FPL Management System - Dependencies
+
+# Core
+python>=3.11
+
+# Database
+sqlite3  # Built-in with Python
+
+# Async support
+asyncio  # Built-in with Python
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP requests
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# Logging
+python-json-logger>=2.0.7
+
+# Future ML/AI (Phase 3+)
+# torch>=2.0.0
+# scikit-learn>=1.3.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+
+# Code quality
+black>=23.7.0
+flake8>=6.1.0
+mypy>=1.5.0
+
+# Development
+ipython>=8.14.0
+jupyter>=1.0.0

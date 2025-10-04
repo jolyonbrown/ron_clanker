@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  ron_clanker:
+    build: .
+    container_name: ron_clanker
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - DATABASE_PATH=/app/data/ron_clanker.db
+      - LOG_LEVEL=INFO
+      - MCP_ENABLED=false
+    command: python -m scripts.setup_database
+    restart: unless-stopped
+
+  # MCP Server (future integration)
+  # fantasy_pl_mcp:
+  #   image: fantasy-pl-mcp:latest
+  #   container_name: fantasy_pl_mcp
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - FPL_API_URL=https://fantasy.premierleague.com/api
+  #   restart: unless-stopped
