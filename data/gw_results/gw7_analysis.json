@@ -1,0 +1,818 @@
+{
+  "gameweek": 7,
+  "timestamp": "2025-10-05T13:55:30.395290",
+  "final_score": 63,
+  "vs_average": 26,
+  "beat_average": true,
+  "points_breakdown": {
+    "starting_xi": 63,
+    "captain": 0,
+    "bench": 14,
+    "dc_points": 68,
+    "bonus": 12
+  },
+  "dc_analysis": {
+    "dc_earners": 9,
+    "total_dc_points": 68,
+    "dc_player_names": [
+      "Gabriel",
+      "J.Timber",
+      "Calafiori",
+      "Senesi",
+      "Semenyo",
+      "Caicedo",
+      "Gravenberch",
+      "Kudus",
+      "Jo\u00e3o Pedro"
+    ],
+    "dc_contribution_pct": 107.93650793650794,
+    "highest_dc": {
+      "id": 5,
+      "name": "Gabriel",
+      "team": "ARS",
+      "position": "DEF",
+      "points_raw": 9,
+      "points_earned": 9,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 1,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 1,
+        "defensive_contribution": 11,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": true,
+      "explain": [
+        {
+          "fixture": 61,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            },
+            {
+              "identifier": "clean_sheets",
+              "points": 4,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "bonus",
+              "points": 1,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "defensive_contribution",
+              "points": 2,
+              "value": 11,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "captain_analysis": {
+    "captain_name": "Haaland",
+    "captain_points": 0,
+    "captain_contribution": 0,
+    "optimal_captain": "Semenyo",
+    "optimal_points": 18,
+    "points_left_on_table": 36,
+    "was_optimal": false,
+    "captain_breakdown": {
+      "minutes": 0,
+      "goals_scored": 0,
+      "assists": 0,
+      "clean_sheets": 0,
+      "goals_conceded": 0,
+      "saves": 0,
+      "bonus": 0,
+      "defensive_contribution": 0,
+      "yellow_cards": 0,
+      "red_cards": 0,
+      "own_goals": 0,
+      "penalties_missed": 0,
+      "penalties_saved": 0
+    }
+  },
+  "comparison": {
+    "ron_score": 63,
+    "average_score": 37,
+    "highest_score": 123,
+    "vs_average": 26,
+    "percentile": "N/A",
+    "beat_average": true
+  },
+  "learnings": [
+    "\u2705 Strong DC performance: 9 players earned DC points (68 pts total)",
+    "\u274c Captain hindsight: Semenyo would have been better (36 pts lost)",
+    "\u26a0\ufe0f  Multiple blanks: 5 starting players scored \u22642 pts",
+    "\ud83c\udf1f Hauls: J.Timber, Semenyo, Caicedo, Kudus delivered big"
+  ],
+  "staff_comments": {
+    "ron": "63 points. Good. Captain let us down.",
+    "digger": "9 players earned DC points, lad. 68 points from defensive work. Proper stuff!",
+    "sophia": "4 goals, 3 assists. Good attacking returns!",
+    "maggie": "Actual: 63 pts. Average: 37 pts. Variance: +26 pts. Above expectation.",
+    "jimmy": "Points per player: 5.7. Value delivered.",
+    "ellie": "Key learning: DC strategy working as planned."
+  },
+  "player_details": [
+    {
+      "id": 670,
+      "name": "Roefs",
+      "team": "SUN",
+      "position": "GOA",
+      "points_raw": 2,
+      "points_earned": 2,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 2,
+        "saves": 4,
+        "bonus": 0,
+        "defensive_contribution": 0,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 68,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            },
+            {
+              "identifier": "goals_conceded",
+              "points": -1,
+              "value": 2,
+              "points_modification": 0
+            },
+            {
+              "identifier": "saves",
+              "points": 1,
+              "value": 4,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 565,
+      "name": "Vicario",
+      "team": "TOT",
+      "position": "GOA",
+      "points_raw": 3,
+      "points_earned": 3,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 1,
+        "saves": 3,
+        "bonus": 0,
+        "defensive_contribution": 0,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 67,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            },
+            {
+              "identifier": "saves",
+              "points": 1,
+              "value": 3,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Gabriel",
+      "team": "ARS",
+      "position": "DEF",
+      "points_raw": 9,
+      "points_earned": 9,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 1,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 1,
+        "defensive_contribution": 11,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": true,
+      "explain": [
+        {
+          "fixture": 61,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            },
+            {
+              "identifier": "clean_sheets",
+              "points": 4,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "bonus",
+              "points": 1,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "defensive_contribution",
+              "points": 2,
+              "value": 11,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "J.Timber",
+      "team": "ARS",
+      "position": "DEF",
+      "points_raw": 11,
+      "points_earned": 11,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 0,
+        "assists": 1,
+        "clean_sheets": 1,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 2,
+        "defensive_contribution": 9,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 61,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            },
+            {
+              "identifier": "assists",
+              "points": 3,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "clean_sheets",
+              "points": 4,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "bonus",
+              "points": 2,
+              "value": 2,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Calafiori",
+      "team": "ARS",
+      "position": "DEF",
+      "points_raw": 6,
+      "points_earned": 6,
+      "breakdown": {
+        "minutes": 74,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 1,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 6,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 61,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 74,
+              "points_modification": 0
+            },
+            {
+              "identifier": "clean_sheets",
+              "points": 4,
+              "value": 1,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "name": "Senesi",
+      "team": "BOU",
+      "position": "DEF",
+      "points_raw": 2,
+      "points_earned": 2,
+      "breakdown": {
+        "minutes": 77,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 1,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 7,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 63,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 77,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 260,
+      "name": "Gu\u00e9hi",
+      "team": "CRY",
+      "position": "DEF",
+      "points_raw": 0,
+      "points_earned": 0,
+      "breakdown": {
+        "minutes": 0,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 0,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 66,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 0,
+              "value": 0,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 200,
+      "name": "Anthony",
+      "team": "BUR",
+      "position": "MID",
+      "points_raw": 0,
+      "points_earned": 0,
+      "breakdown": {
+        "minutes": 0,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 0,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 62,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 0,
+              "value": 0,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 82,
+      "name": "Semenyo",
+      "team": "BOU",
+      "position": "MID",
+      "points_raw": 18,
+      "points_earned": 18,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 2,
+        "assists": 1,
+        "clean_sheets": 0,
+        "goals_conceded": 1,
+        "saves": 0,
+        "bonus": 3,
+        "defensive_contribution": 9,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 63,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            },
+            {
+              "identifier": "goals_scored",
+              "points": 10,
+              "value": 2,
+              "points_modification": 0
+            },
+            {
+              "identifier": "assists",
+              "points": 3,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "bonus",
+              "points": 3,
+              "value": 3,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 241,
+      "name": "Caicedo",
+      "team": "CHE",
+      "position": "MID",
+      "points_raw": 10,
+      "points_earned": 10,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 1,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 1,
+        "saves": 0,
+        "bonus": 3,
+        "defensive_contribution": 11,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 65,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            },
+            {
+              "identifier": "goals_scored",
+              "points": 5,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "bonus",
+              "points": 3,
+              "value": 3,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 390,
+      "name": "Gravenberch",
+      "team": "LIV",
+      "position": "MID",
+      "points_raw": 2,
+      "points_earned": 2,
+      "breakdown": {
+        "minutes": 90,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 2,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 8,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 65,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 90,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 582,
+      "name": "Kudus",
+      "team": "TOT",
+      "position": "MID",
+      "points_raw": 12,
+      "points_earned": 12,
+      "breakdown": {
+        "minutes": 89,
+        "goals_scored": 1,
+        "assists": 1,
+        "clean_sheets": 0,
+        "goals_conceded": 1,
+        "saves": 0,
+        "bonus": 3,
+        "defensive_contribution": 6,
+        "yellow_cards": 1,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 67,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 89,
+              "points_modification": 0
+            },
+            {
+              "identifier": "goals_scored",
+              "points": 5,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "assists",
+              "points": 3,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "yellow_cards",
+              "points": -1,
+              "value": 1,
+              "points_modification": 0
+            },
+            {
+              "identifier": "bonus",
+              "points": 3,
+              "value": 3,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 136,
+      "name": "Thiago",
+      "team": "BRE",
+      "position": "FOR",
+      "points_raw": 0,
+      "points_earned": 0,
+      "breakdown": {
+        "minutes": 0,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 0,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 64,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 0,
+              "value": 0,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 249,
+      "name": "Jo\u00e3o Pedro",
+      "team": "CHE",
+      "position": "FOR",
+      "points_raw": 2,
+      "points_earned": 2,
+      "breakdown": {
+        "minutes": 73,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 1,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 1,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": false,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 65,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 2,
+              "value": 73,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 430,
+      "name": "Haaland",
+      "team": "MCI",
+      "position": "FOR",
+      "points_raw": 0,
+      "points_earned": 0,
+      "breakdown": {
+        "minutes": 0,
+        "goals_scored": 0,
+        "assists": 0,
+        "clean_sheets": 0,
+        "goals_conceded": 0,
+        "saves": 0,
+        "bonus": 0,
+        "defensive_contribution": 0,
+        "yellow_cards": 0,
+        "red_cards": 0,
+        "own_goals": 0,
+        "penalties_missed": 0,
+        "penalties_saved": 0
+      },
+      "is_captain": true,
+      "is_vice": false,
+      "explain": [
+        {
+          "fixture": 64,
+          "stats": [
+            {
+              "identifier": "minutes",
+              "points": 0,
+              "value": 0,
+              "points_modification": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
