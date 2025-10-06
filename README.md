@@ -2,6 +2,8 @@
 
 The AI FPL manager. Sunbed not included.
 
+![Image of Ron Clanker,wearing 70s style football managers clothing, sheepskin jacket and smoking a cigar. On the sidelines of the pitch showing no emotion](/ron_clanker/blob/main/ron_clanker/RON_CLANKER.png)
+
 ## Overview
 
 Ron Clanker is a fully autonomous Fantasy Premier League management system built on multi-agent architecture. The system makes ALL team decisions independently, exploiting the new 2025/26 Defensive Contribution rules for competitive advantage.
