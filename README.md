@@ -2,7 +2,7 @@
 
 The AI FPL manager. Sunbed not included.
 
-![Image of Ron Clanker,wearing 70s style football managers clothing, sheepskin jacket and smoking a cigar. On the sidelines of the pitch showing no emotion](/ron_clanker/blob/main/ron_clanker/RON_CLANKER.png)
+![Image of Ron Clanker,wearing 70s style football managers clothing, sheepskin jacket and smoking a cigar. On the sidelines of the pitch showing no emotion](../blob/main/ron_clanker/RON_CLANKER.png)
 
 ## Overview
 
