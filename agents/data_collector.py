@@ -1,126 +1,345 @@
 """
-Data Collection Agent
+Data Collection Agent - Maggie
 
-Fetches FPL data via the fantasy-pl-mcp server.
-Responsible for keeping all player, team, and fixture data up-to-date.
+Maggie is Ron Clanker's data specialist. She fetches all FPL data from the API,
+caches it appropriately, and publishes events when data is updated.
+
+Responsibilities:
+- Fetch player, team, fixture, and gameweek data from FPL API
+- Cache data in Redis to minimize API calls
+- Publish events when data is refreshed
+- Provide clean interface for other agents to access FPL data
 """
 
+import asyncio
 import json
-from typing import Dict, List, Any, Optional
-from datetime import datetime
 import logging
+from typing import Dict, List, Any, Optional
+from datetime import datetime, timedelta
+import aiohttp
+import redis.asyncio as redis
+
+from infrastructure.events import Event, EventType, EventPriority
 
 logger = logging.getLogger(__name__)
+
+# Import EventBus optionally (for standalone usage)
+try:
+    from infrastructure.event_bus import EventBus
+except ImportError:
+    EventBus = None
 
 
 class DataCollector:
     """
-    Data Collection Agent for FPL data via MCP.
+    Maggie - The Data Collection Agent
 
-    In production, this will use the MCP client to fetch data.
-    For now, includes methods that will integrate with MCP.
+    Fetches and caches FPL data, providing a single source of truth
+    for all other agents.
     """
 
-    def __init__(self, mcp_client=None):
+    FPL_API_BASE = "https://fantasy.premierleague.com/api"
+
+    # Cache TTLs (time to live)
+    CACHE_TTL_BOOTSTRAP = 6 * 3600  # 6 hours (data changes max twice daily)
+    CACHE_TTL_FIXTURES = 12 * 3600  # 12 hours (fixtures rarely change)
+    CACHE_TTL_PLAYER_DETAIL = 24 * 3600  # 24 hours (historical data)
+    CACHE_TTL_LIVE = 60  # 1 minute (during matches, data is live)
+
+    def __init__(
+        self,
+        redis_client: Optional[redis.Redis] = None,
+        redis_url: str = "redis://localhost:6379",
+        event_bus: Optional['EventBus'] = None
+    ):
         """
         Initialize Data Collector.
 
         Args:
-            mcp_client: MCP client instance (optional, for future integration)
+            redis_client: Redis client for caching (optional)
+            redis_url: Redis connection URL
+            event_bus: Event bus for publishing data updates (optional)
         """
-        self.mcp_client = mcp_client
+        self.redis_client = redis_client
+        self.redis_url = redis_url
+        self.event_bus = event_bus
         self.last_updated = None
+        self._session: Optional[aiohttp.ClientSession] = None
+
+    async def _ensure_session(self):
+        """Ensure aiohttp session exists."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+
+    async def _ensure_redis(self):
+        """Ensure Redis client is connected."""
+        if self.redis_client is None:
+            self.redis_client = await redis.from_url(
+                self.redis_url,
+                encoding="utf-8",
+                decode_responses=True
+            )
+
+    async def close(self):
+        """Close connections."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+        if self.redis_client:
+            await self.redis_client.close()
 
     # ========================================================================
-    # CORE DATA FETCHING (MCP Integration Points)
+    # CACHING UTILITIES
     # ========================================================================
 
-    async def fetch_bootstrap_data(self) -> Dict[str, Any]:
+    async def _get_cached(self, key: str) -> Optional[Dict[str, Any]]:
+        """Get data from Redis cache."""
+        try:
+            await self._ensure_redis()
+            cached = await self.redis_client.get(key)
+            if cached:
+                logger.debug(f"Cache HIT for {key}")
+                return json.loads(cached)
+            logger.debug(f"Cache MISS for {key}")
+        except Exception as e:
+            logger.warning(f"Cache read error for {key}: {e}")
+        return None
+
+    async def _set_cached(self, key: str, data: Dict[str, Any], ttl: int):
+        """Store data in Redis cache with TTL."""
+        try:
+            await self._ensure_redis()
+            await self.redis_client.setex(
+                key,
+                ttl,
+                json.dumps(data)
+            )
+            logger.debug(f"Cached {key} for {ttl}s")
+        except Exception as e:
+            logger.warning(f"Cache write error for {key}: {e}")
+
+    # ========================================================================
+    # CORE DATA FETCHING
+    # ========================================================================
+
+    async def fetch_bootstrap_data(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Fetch bootstrap-static data from FPL API.
 
         This contains:
-        - All players
-        - All teams
-        - All gameweeks
+        - All players (~600)
+        - All teams (20)
+        - All gameweeks (38)
         - Current game state
 
+        Args:
+            force_refresh: Skip cache and fetch fresh data
+
         Returns:
-            Dict with keys: players, teams, events, game_settings
+            Dict with keys: elements (players), teams, events (gameweeks), etc.
         """
-        if self.mcp_client:
-            # TODO: Use MCP client when available
-            # response = await self.mcp_client.call_tool("get_bootstrap_static")
-            # return response
-            pass
+        cache_key = "fpl:bootstrap"
 
-        # Placeholder for development
-        logger.warning("MCP client not configured - using placeholder data")
-        return {
-            'players': [],
-            'teams': [],
-            'events': [],
-            'game_settings': {}
-        }
+        # Check cache first
+        if not force_refresh:
+            cached = await self._get_cached(cache_key)
+            if cached:
+                return cached
 
-    async def fetch_player_data(self, player_id: int) -> Dict[str, Any]:
+        # Fetch from API
+        logger.info("Fetching bootstrap data from FPL API...")
+        await self._ensure_session()
+
+        url = f"{self.FPL_API_BASE}/bootstrap-static/"
+
+        try:
+            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    logger.error(f"FPL API error: HTTP {response.status}")
+                    return {}
+
+                data = await response.json()
+
+                # Cache the result
+                await self._set_cached(cache_key, data, self.CACHE_TTL_BOOTSTRAP)
+
+                logger.info(
+                    f"Bootstrap data fetched: {len(data.get('elements', []))} players, "
+                    f"{len(data.get('teams', []))} teams"
+                )
+
+                return data
+
+        except asyncio.TimeoutError:
+            logger.error("FPL API timeout")
+            return {}
+        except Exception as e:
+            logger.error(f"Error fetching bootstrap data: {e}")
+            return {}
+
+    async def fetch_player_data(
+        self,
+        player_id: int,
+        force_refresh: bool = False
+    ) -> Dict[str, Any]:
         """
         Fetch detailed data for a specific player.
 
         Includes:
         - Season history
-        - Fixture history
+        - Gameweek-by-gameweek performance
         - Upcoming fixtures
+
+        Args:
+            player_id: FPL player ID
+            force_refresh: Skip cache and fetch fresh data
 
         Returns:
             Dict with player details and history
         """
-        if self.mcp_client:
-            # TODO: Use MCP client
-            # response = await self.mcp_client.call_tool("get_player_summary", {"player_id": player_id})
-            # return response
-            pass
+        cache_key = f"fpl:player:{player_id}"
 
-        logger.warning(f"MCP client not configured - cannot fetch player {player_id}")
-        return {}
+        # Check cache
+        if not force_refresh:
+            cached = await self._get_cached(cache_key)
+            if cached:
+                return cached
 
-    async def fetch_fixtures(self, gameweek: Optional[int] = None) -> List[Dict[str, Any]]:
+        # Fetch from API
+        logger.info(f"Fetching player {player_id} details from FPL API...")
+        await self._ensure_session()
+
+        url = f"{self.FPL_API_BASE}/element-summary/{player_id}/"
+
+        try:
+            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    logger.error(f"FPL API error for player {player_id}: HTTP {response.status}")
+                    return {}
+
+                data = await response.json()
+
+                # Cache the result
+                await self._set_cached(cache_key, data, self.CACHE_TTL_PLAYER_DETAIL)
+
+                logger.info(f"Player {player_id} data fetched: {len(data.get('history', []))} GWs")
+
+                return data
+
+        except asyncio.TimeoutError:
+            logger.error(f"FPL API timeout for player {player_id}")
+            return {}
+        except Exception as e:
+            logger.error(f"Error fetching player {player_id}: {e}")
+            return {}
+
+    async def fetch_fixtures(
+        self,
+        gameweek: Optional[int] = None,
+        force_refresh: bool = False
+    ) -> List[Dict[str, Any]]:
         """
         Fetch fixture data.
 
         Args:
             gameweek: Optional gameweek number (None = all fixtures)
+            force_refresh: Skip cache and fetch fresh data
 
         Returns:
             List of fixture dicts
         """
-        if self.mcp_client:
-            # TODO: Use MCP client
-            # params = {"event": gameweek} if gameweek else {}
-            # response = await self.mcp_client.call_tool("get_fixtures", params)
-            # return response
-            pass
+        cache_key = f"fpl:fixtures:{gameweek if gameweek else 'all'}"
 
-        logger.warning("MCP client not configured - cannot fetch fixtures")
-        return []
+        # Check cache
+        if not force_refresh:
+            cached = await self._get_cached(cache_key)
+            if cached:
+                return cached
 
-    async def fetch_live_gameweek_data(self, gameweek: int) -> Dict[str, Any]:
+        # Fetch from API
+        logger.info(f"Fetching fixtures from FPL API (GW: {gameweek or 'all'})...")
+        await self._ensure_session()
+
+        url = f"{self.FPL_API_BASE}/fixtures/"
+        params = {"event": gameweek} if gameweek else {}
+
+        try:
+            async with self._session.get(
+                url,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"FPL API error: HTTP {response.status}")
+                    return []
+
+                data = await response.json()
+
+                # Cache the result
+                await self._set_cached(cache_key, data, self.CACHE_TTL_FIXTURES)
+
+                logger.info(f"Fetched {len(data)} fixtures")
+
+                return data
+
+        except asyncio.TimeoutError:
+            logger.error("FPL API timeout")
+            return []
+        except Exception as e:
+            logger.error(f"Error fetching fixtures: {e}")
+            return []
+
+    async def fetch_live_gameweek_data(
+        self,
+        gameweek: int,
+        force_refresh: bool = False
+    ) -> Dict[str, Any]:
         """
         Fetch live data for a gameweek.
 
         Contains real-time player performance stats during gameweek.
 
+        Args:
+            gameweek: Gameweek number
+            force_refresh: Skip cache and fetch fresh data
+
         Returns:
             Dict with live player stats
         """
-        if self.mcp_client:
-            # TODO: Use MCP client
-            # response = await self.mcp_client.call_tool("get_event_live", {"event": gameweek})
-            # return response
-            pass
+        cache_key = f"fpl:live:gw{gameweek}"
 
-        logger.warning(f"MCP client not configured - cannot fetch live GW{gameweek}")
-        return {}
+        # Check cache (short TTL - data changes frequently during matches)
+        if not force_refresh:
+            cached = await self._get_cached(cache_key)
+            if cached:
+                return cached
+
+        # Fetch from API
+        logger.info(f"Fetching live GW{gameweek} data from FPL API...")
+        await self._ensure_session()
+
+        url = f"{self.FPL_API_BASE}/event/{gameweek}/live/"
+
+        try:
+            async with self._session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    logger.error(f"FPL API error: HTTP {response.status}")
+                    return {}
+
+                data = await response.json()
+
+                # Cache with short TTL (1 minute during live matches)
+                await self._set_cached(cache_key, data, self.CACHE_TTL_LIVE)
+
+                logger.info(f"Live GW{gameweek} data fetched")
+
+                return data
+
+        except asyncio.TimeoutError:
+            logger.error("FPL API timeout")
+            return {}
+        except Exception as e:
+            logger.error(f"Error fetching live GW{gameweek}: {e}")
+            return {}
 
     # ========================================================================
     # PROCESSED DATA METHODS
@@ -194,7 +413,8 @@ class DataCollector:
         return [
             p for p in players
             if p.get('status') == 'a' and
-            p.get('chance_of_playing_next_round', 100) == 100
+            (p.get('chance_of_playing_next_round') is None or
+             p.get('chance_of_playing_next_round', 0) >= 75)
         ]
 
     def get_price_changers(
@@ -331,22 +551,28 @@ class DataCollector:
         return total_difficulty / len(fixtures)
 
     # ========================================================================
-    # UPDATE METHODS
+    # HIGH-LEVEL UPDATE METHODS
     # ========================================================================
 
-    async def update_all_data(self) -> Dict[str, Any]:
+    async def update_all_data(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Fetch and return all current FPL data.
 
         This is the main method called by other agents to get fresh data.
 
+        Args:
+            force_refresh: Skip cache and fetch fresh data
+
         Returns:
             Dict with all FPL data
         """
-        logger.info("Fetching all FPL data...")
+        logger.info("Updating all FPL data...")
 
-        bootstrap = await self.fetch_bootstrap_data()
-        fixtures = await self.fetch_fixtures()
+        # Fetch in parallel for speed
+        bootstrap_task = self.fetch_bootstrap_data(force_refresh)
+        fixtures_task = self.fetch_fixtures(force_refresh=force_refresh)
+
+        bootstrap, fixtures = await asyncio.gather(bootstrap_task, fixtures_task)
 
         players = self.get_all_players(bootstrap)
         teams = self.get_all_teams(bootstrap)
@@ -360,7 +586,7 @@ class DataCollector:
             f"{len(teams)} teams, {len(fixtures)} fixtures"
         )
 
-        return {
+        result = {
             'players': players,
             'teams': teams,
             'gameweeks': gameweeks,
@@ -369,19 +595,60 @@ class DataCollector:
             'updated_at': self.last_updated
         }
 
-    async def update_player_details(self, player_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        # Publish event if event bus is connected
+        if self.event_bus:
+            await self._publish_data_updated_event(result)
+
+        return result
+
+    async def _publish_data_updated_event(self, data: Dict[str, Any]):
+        """Publish DATA_UPDATED event to notify other agents."""
+        try:
+            event = Event(
+                event_type=EventType.DATA_UPDATED,
+                payload={
+                    'num_players': len(data['players']),
+                    'num_teams': len(data['teams']),
+                    'num_fixtures': len(data['fixtures']),
+                    'current_gameweek': data['current_gameweek']['id'] if data['current_gameweek'] else None,
+                    'updated_at': data['updated_at'].isoformat()
+                },
+                priority=EventPriority.NORMAL,
+                source='maggie'
+            )
+
+            await self.event_bus.publish(event)
+            logger.info("Published DATA_UPDATED event")
+
+        except Exception as e:
+            logger.warning(f"Failed to publish event: {e}")
+
+    async def update_player_details(
+        self,
+        player_ids: List[int],
+        force_refresh: bool = False
+    ) -> Dict[int, Dict[str, Any]]:
         """
         Fetch detailed data for specific players.
 
         Used when we need in-depth stats for decision-making.
 
+        Args:
+            player_ids: List of FPL player IDs
+            force_refresh: Skip cache and fetch fresh data
+
         Returns:
             Dict mapping player_id to detailed data
         """
-        player_details = {}
+        # Fetch in parallel
+        tasks = [
+            self.fetch_player_data(player_id, force_refresh)
+            for player_id in player_ids
+        ]
 
-        for player_id in player_ids:
-            details = await self.fetch_player_data(player_id)
-            player_details[player_id] = details
+        results = await asyncio.gather(*tasks)
 
-        return player_details
+        return {
+            player_id: data
+            for player_id, data in zip(player_ids, results)
+        }

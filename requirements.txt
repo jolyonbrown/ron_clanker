@@ -5,6 +5,11 @@ python>=3.11
 
 # Database
 sqlite3  # Built-in with Python
+psycopg2-binary>=2.9.9  # PostgreSQL adapter
+redis>=5.0.0  # Redis client for event bus
+
+# Event-driven architecture
+celery>=5.3.4  # Task queue and scheduler
 
 # Async support
 asyncio  # Built-in with Python

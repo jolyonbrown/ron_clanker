@@ -1,6 +1,50 @@
 version: '3.8'
 
 services:
+  # ========================================
+  # INFRASTRUCTURE SERVICES
+  # ========================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: ron_redis
+    command: redis-server --maxmemory 100mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ron_postgres
+    environment:
+      POSTGRES_DB: ron_clanker
+      POSTGRES_USER: ron
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-clanker123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ron"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ========================================
+  # LEGACY CONTAINER (for backward compatibility)
+  # ========================================
+
   ron_clanker:
     build: .
     container_name: ron_clanker
@@ -11,8 +55,47 @@ services:
       - DATABASE_PATH=/app/data/ron_clanker.db
       - LOG_LEVEL=INFO
       - MCP_ENABLED=false
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://ron:${DB_PASSWORD:-clanker123}@postgres:5432/ron_clanker
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     command: python -m scripts.setup_database
     restart: unless-stopped
+
+  # ========================================
+  # AGENT SERVICES (Event-Driven Architecture)
+  # ========================================
+  # Uncomment as agents are converted to event-driven pattern
+
+  # agent_manager:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.agent
+  #   container_name: ron_manager
+  #   environment:
+  #     AGENT_TYPE: manager
+  #     REDIS_URL: redis://redis:6379
+  #     POSTGRES_URL: postgresql://ron:${DB_PASSWORD:-clanker123}@postgres:5432/ron_clanker
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #   restart: unless-stopped
+  #   mem_limit: 64m
+
+  # agent_maggie:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.agent
+  #   environment:
+  #     AGENT_TYPE: data_collector
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     - redis
+  #   restart: unless-stopped
+  #   mem_limit: 64m
 
   # MCP Server (future integration)
   # fantasy_pl_mcp:
@@ -23,3 +106,7 @@ services:
   #   environment:
   #     - FPL_API_URL=https://fantasy.premierleague.com/api
   #   restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
