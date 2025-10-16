@@ -1,0 +1,130 @@
+{
+  "gameweek": 8,
+  "squad": [
+    {
+      "id": 469,
+      "name": "Pope",
+      "team": "NEW",
+      "position": 1,
+      "price": 5.1,
+      "total_points_so_far": 41
+    },
+    {
+      "id": 670,
+      "name": "Roefs",
+      "team": "SUN",
+      "position": 1,
+      "price": 4.6,
+      "total_points_so_far": 41
+    },
+    {
+      "id": 8,
+      "name": "J.Timber",
+      "team": "ARS",
+      "position": 2,
+      "price": 5.9,
+      "total_points_so_far": 48
+    },
+    {
+      "id": 5,
+      "name": "Gabriel",
+      "team": "ARS",
+      "position": 2,
+      "price": 6.3,
+      "total_points_so_far": 47
+    },
+    {
+      "id": 72,
+      "name": "Senesi",
+      "team": "BOU",
+      "position": 2,
+      "price": 5.0,
+      "total_points_so_far": 46
+    },
+    {
+      "id": 260,
+      "name": "Gu\u00e9hi",
+      "team": "CRY",
+      "position": 2,
+      "price": 4.9,
+      "total_points_so_far": 46
+    },
+    {
+      "id": 476,
+      "name": "Burn",
+      "team": "NEW",
+      "position": 2,
+      "price": 5.1,
+      "total_points_so_far": 43
+    },
+    {
+      "id": 82,
+      "name": "Semenyo",
+      "team": "BOU",
+      "position": 3,
+      "price": 7.9,
+      "total_points_so_far": 66
+    },
+    {
+      "id": 241,
+      "name": "Caicedo",
+      "team": "CHE",
+      "position": 3,
+      "price": 5.8,
+      "total_points_so_far": 45
+    },
+    {
+      "id": 21,
+      "name": "Rice",
+      "team": "ARS",
+      "position": 3,
+      "price": 6.5,
+      "total_points_so_far": 40
+    },
+    {
+      "id": 390,
+      "name": "Gravenberch",
+      "team": "LIV",
+      "position": 3,
+      "price": 5.7,
+      "total_points_so_far": 37
+    },
+    {
+      "id": 205,
+      "name": "Cullen",
+      "team": "BUR",
+      "position": 3,
+      "price": 5.0,
+      "total_points_so_far": 37
+    },
+    {
+      "id": 430,
+      "name": "Haaland",
+      "team": "MCI",
+      "position": 4,
+      "price": 14.5,
+      "total_points_so_far": 70
+    },
+    {
+      "id": 499,
+      "name": "Isak",
+      "team": "LIV",
+      "position": 4,
+      "price": 10.6,
+      "total_points_so_far": 8
+    },
+    {
+      "id": 136,
+      "name": "Thiago",
+      "team": "BRE",
+      "position": 4,
+      "price": 6.1,
+      "total_points_so_far": 32
+    }
+  ],
+  "total_cost": 99.0,
+  "budget_remaining": 1.0,
+  "formation": "4-4-2",
+  "captain": "Haaland",
+  "vice_captain": "Salah"
+}
