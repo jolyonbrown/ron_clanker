@@ -1,334 +1,192 @@
-# Development Session Notes - October 4th 2025
+# Session Notes - Ron Clanker Development
 
-## Session Summary
+## Session: 2025-10-16 (Phase 1 Complete + Daily Monitoring)
 
-**Date**: Saturday, October 4th 2025
-**Duration**: Full evening session
-**Status**: Phase 1 Complete + MCP Integration Tested ✅
+### Summary
+Completed Phase 1 foundation (9/9 issues), built daily monitoring system, discovered critical data integrity lesson with Isak transfer. System ready for GW8 entry.
 
 ---
 
-## What We Accomplished Today
+## Key Accomplishments
 
-### 1. Phase 1 Implementation - COMPLETE ✅
+### 1. Introduced Beads Issue Tracker
+- Installed beads plugin for issue tracking
+- Created 9 Phase 1 issues with dependency graphs
+- ALL FUTURE PLANNING MUST USE BEADS (not markdown files)
+- Commands: `bd create`, `bd ready`, `bd close`, `bd dep add`
+- Issues stored in `.beads/issues.jsonl` (git committed)
 
-Built the complete foundation of Ron Clanker's FPL Management System:
+### 2. Phase 1 Foundation - ALL COMPLETE (9/9 ✅)
+- **Docker Infrastructure**: Redis + Postgres for event-driven architecture
+- **Data Collection Agent (Maggie)**: Live FPL API integration, caching works
+- **Rules Engine**: Team validation, DC scoring (defenders: 1pt/5 actions, mids: 1pt/6)
+- **Player Valuation Agent**: DC specialist identification, value ranking
+- **Manager Agent (Ron Clanker)**: Team selection, transfer logic, captain assignment
+- **Database**: SQLite schema + 743 players, 20 teams, 380 fixtures synced
+- **GW1-7 Analysis**: Identified DC specialists (Senesi £5.0m 9.2pts/£m, Guéhi £4.9m 9.4pts/£m)
+- **GW8 Squad Built**: Valid 15 players, £99m/£100m (pending refinement before deadline)
 
-**Core Components**:
-- ✅ Database layer (16 tables, SQLite schema)
-- ✅ Rules Engine (2025/26 FPL rules with Defensive Contribution)
-- ✅ Data Collection Agent (MCP-ready)
-- ✅ Player Valuation Agent (DC advantage detection)
-- ✅ Manager Agent (Ron Clanker - autonomous decision maker)
-- ✅ Ron Clanker Persona (old-school manager communication)
+### 3. Daily Monitoring System
+- **Script**: `scripts/daily_monitor.py` detects price changes, injuries, squad impact
+- **Cron Setup**: `scripts/setup_cron.sh` for 3 AM automation
+- **Reports**: Saved to `data/daily_reports/report_YYYYMMDD.txt`
+- **Documentation**: `DAILY_MONITORING.md` (user docs are OK, planning must be beads)
 
-**Testing & Validation**:
-- ✅ 17 unit tests written and passing (100%)
-- ✅ Rules verified against official FPL 2025/26 documentation
-- ✅ Two rule fixes applied:
-  - GK goals: 6 → 10 points
-  - Max banked transfers: 2 → 5
+---
 
-**Documentation**:
-- ✅ Phase 1 complete summary
-- ✅ Full rules verification report
-- ✅ README with quick start guide
+## Critical Learning - THE ISAK INCIDENT
 
-### 2. Season Situation Clarified
+**What Happened:**
+I wrote GW8 announcement calling Isak "Newcastle's main goal threat" but user spotted error - Isak actually plays for Liverpool now (mid-season transfer). API data was CORRECT showing team_id=12 (Liverpool), I was working from outdated football knowledge.
 
-**Key Understanding**:
-- Ron is starting a **FRESH team at Gameweek 8** (not inheriting existing squad)
-- Starting budget: **£100m**
-- Starting points: **0** (new team)
-- All chips available: **2 of each** (one per half-season)
-- **6 gameweeks of real data** available for analysis (GW1-7)
-- International break provides **extended prep time**
+**The Problem:**
+- Isak at Liverpool: Only 8 points in 7 games at £10.6m = TERRIBLE value (0.75 pts/£m)
+- Our squad included him based on flawed logic
+- I mixed real-world knowledge with 2025/26 game data
 
-**This is the DREAM scenario** - fresh start with real performance data!
+**THE RULE GOING FORWARD:**
+```
+RON MUST ONLY WORK FROM API DATA
+NO REAL-WORLD FOOTBALL KNOWLEDGE
+IF API SAYS ISAK IS AT LIVERPOOL WITH 8 POINTS, THAT'S THE TRUTH
+```
 
-### 3. FPL MCP Integration - TESTED ✅
-
-**Installation**:
-- ✅ `fpl-mcp` package installed successfully
-- ✅ MCP server confirmed working
-
-**API Testing**:
-- ✅ Created `scripts/test_fpl_data.py` test script
-- ✅ Successfully fetched FPL data:
-  - 743 players available
-  - Current gameweek: 7 (in progress)
-  - All 20 teams, 38 gameweeks
-
-**Critical Discovery - Defensive Stats ARE Available**:
-- ✅ `tackles`
-- ✅ `clearances_blocks_interceptions` (CBI)
-- ✅ `recoveries`
-- ✅ **`defensive_contribution`** - FPL calculates it for us!
-- ✅ Per-gameweek history accessible (can see GW1-7 for each player)
-
-### 4. Early DC Insights
-
-**Top Defenders** (likely DC performers):
-- Gabriel - £6.2m, 47 points
-- Timber - £5.8m, 48 points
-- Senesi - £4.9m, 46 points
-- Guéhi - £4.8m, 43 points
-
-**Top Defensive Midfielders**:
-- **Caicedo** - £5.7m, 45 points ⭐
-- **Rice** - £6.5m, 40 points ⭐
-- **Gravenberch** - £5.7m, 37 points ⭐
-
-These are EXACTLY the type of players Ron's strategy targets!
-
-### 5. Documentation Created
-
-**New Files**:
-- `SEASON_SITUATION.md` - Full GW8 tactical briefing
-- `MCP_SETUP.md` - FPL MCP server installation guide
-- `QUICKSTART.md` - Step-by-step guide to run Ron
-- `RULES_VERIFICATION.md` - Complete rules compliance report
-- `PHASE1_COMPLETE.md` - Phase 1 summary
-- `scripts/test_fpl_data.py` - FPL API test script
-
-**Updated Files**:
-- `CLAUDE.md` - Added current season status and gameweek workflow requirements
-- `requirements.txt` - Added fpl-mcp package
-- `README.md` - Phase 1 features and quick start
-
-### 6. Gameweek Workflow Defined
-
-**Ron Must Deliver Every Gameweek**:
-1. Team selection (15 players)
-2. Captain & Vice-Captain
-3. Formation (starting XI + bench order)
-4. **Team announcement in Ron's voice** with:
-   - Player selection reasoning
-   - Tactical approach
-   - Captain reasoning
-   - Transfer explanations
-   - Overall strategy
-
-Example format documented in `CLAUDE.md`.
+This is why pre-deadline optimizer (ron_clanker-11) is critical - need to rebuild squad from FRESH API data only.
 
 ---
 
 ## Current State
 
-### What's Working
-- ✅ Full Phase 1 codebase
-- ✅ All tests passing
-- ✅ Rules engine 100% accurate
-- ✅ FPL API accessible and providing all needed data
-- ✅ Defensive stats confirmed available
-
-### What's Ready to Use
-- Database schema initialized
-- Rules engine validates teams/transfers/chips
-- Player valuation logic (needs real data connection)
-- Ron's persona and communication style
-- All documentation
-
-### What's Not Yet Connected
-- ⏳ DataCollector agent needs MCP integration
-- ⏳ No scripts to analyze GW1-7 data yet
-- ⏳ No scripts to select GW8 squad yet
-- ⏳ Ron hasn't made his first team selection
-
----
-
-## Tomorrow's Plan
-
-### Priority 1: Build GW1-7 Analysis Script
-
-**File**: `scripts/analyze_dc_performers.py`
-
-**Purpose**:
-- Fetch detailed GW1-7 data for all players
-- Calculate DC consistency for each player:
-  - Defenders: How many GWs hit 10+ CBI+tackles?
-  - Midfielders: How many GWs hit 12+ defensive actions?
-- Generate rankings by:
-  - DC consistency (% of weeks hitting threshold)
-  - Total DC points earned
-  - Points per million (value)
-
-**Output**:
-- CSV/JSON with player rankings
-- Top 20 defenders by DC consistency
-- Top 20 midfielders by DC consistency
-- Recommended DC specialists for GW8 squad
-
-### Priority 2: Build GW8 Squad Selection Script
-
-**File**: `scripts/select_gw8_squad.py`
-
-**Purpose**:
-- Use Ron's agents to select optimal 15-player squad
-- Integrate analysis results
-- Apply £100m budget constraint
-- Prioritize proven DC performers
-- Select captain based on GW8 fixtures
-
-**Output**:
-- 15-player squad (starting XI + bench)
-- Captain & Vice-Captain
-- **Ron's team announcement** in his voice
-- Reasoning for each key selection
-- Save squad to database
-
-### Priority 3: Integration Updates
-
-**Files to Update**:
-- `agents/data_collector.py` - Connect to real FPL API
-- Add method to fetch GW1-7 history
-- Add method to calculate DC stats
-
-**Testing**:
-- Verify DC calculations match FPL's
-- Test squad selection end-to-end
-- Verify Ron's announcement generation
-
----
-
-## Technical Notes
-
-### FPL API Endpoints Used
-```python
-# Main data
-GET https://fantasy.premierleague.com/api/bootstrap-static/
-
-# Player details
-GET https://fantasy.premierleague.com/api/element-summary/{player_id}/
-
-# Fixtures
-GET https://fantasy.premierleague.com/api/fixtures/
+### Beads Status
+```
+Total Issues:  12
+Closed:        9  (Phase 1)
+Open:          3  (GW8 prep)
+Ready:         2  (ron_clanker-10, ron_clanker-11)
+Blocked:       1  (ron_clanker-12 waits on 11)
 ```
 
-### Key Data Fields
+### Ready to Work (Tomorrow)
+1. **ron_clanker-11** (P0): Build pre-deadline squad optimizer
+   - Fetch latest API data (injuries, prices, news)
+   - Rebuild optimal squad from scratch
+   - FIX ISAK PROBLEM (replace with Watkins £8.7m/20pts or similar)
+   - Validate all players available
+   - Run 48hrs before GW8 deadline
 
-**Player Bootstrap Data**:
-- `total_points`, `form`, `now_cost`, `element_type`
-- `tackles`, `clearances_blocks_interceptions`, `recoveries`
-- `defensive_contribution`, `defensive_contribution_per_90`
-- `minutes`, `starts`, `selected_by_percent`
+2. **ron_clanker-10** (P1): Set up cron job
+   - Run `./scripts/setup_cron.sh`
+   - Verify daily monitoring runs at 3 AM
+   - Check logs in `logs/daily_monitor.log`
 
-**Player History** (per gameweek):
-- `round` (gameweek number)
-- `total_points`, `minutes`, `bonus`
-- `tackles`, `clearances_blocks_interceptions`, `recoveries`
-- `defensive_contribution` (2 or 0)
-- `goals_scored`, `assists`, `clean_sheets`
-
-### DC Calculation Logic
-
-**Defenders** (position = 2):
-```python
-if (tackles + clearances_blocks_interceptions) >= 10:
-    defensive_contribution = 2
-```
-
-**Midfielders** (position = 3):
-```python
-if (tackles + clearances_blocks_interceptions + recoveries) >= 12:
-    defensive_contribution = 2
-```
+### Blocked
+- **ron_clanker-12**: Final GW8 squad selection + Ron's announcement
+  - Depends on optimizer finishing
+  - Will run 24-48hrs before deadline
+  - Generates `data/squads/gw8_team_announcement.txt`
 
 ---
 
-## Outstanding Questions
+## Technical Context
 
-1. **Fixture Data**: Need to fetch GW8+ fixtures to inform captain choice
-2. **Double Gameweeks**: Are there any DGWs coming up?
-3. **Price Changes**: Should we track predicted price rises for squad value?
-4. **Template Analysis**: Should Ron care about template teams or go full contrarian?
+### GW8 Entry Context
+- **Current GW**: 7 (in progress)
+- **Ron's Entry**: GW8 (fresh start, £100m budget)
+- **Deadline**: ~2 days away (exact deadline in FPL API current_gameweek data)
+- **Strategy**: Exploit DC (Defensive Contribution) rule inefficiency
+  - 5 DC defenders + 3 DC midfielders = 16pt floor before goals/assists/clean sheets
 
----
+### Squad Issues to Fix
+- **Isak problem**: Liverpool, £10.6m, only 8 points = awful value
+- **No premium mid**: Dropped Salah/Saka to fit Haaland + balanced squad
+- **Need verification**: Check all players available (no injuries from internationals)
 
-## Key Insights for Tomorrow
-
-### The DC Advantage is REAL
-
-From initial data:
-- Top defenders are earning DC points
-- Caicedo, Rice, Gravenberch are getting them in midfield
-- Market is still undervaluing these players (low ownership for points scored)
-
-### Ron's Edge
-
-Building a team around **5-6 consistent DC performers** gives:
-- **10-12 guaranteed points per gameweek** before goals/assists
-- High floor, consistent scoring
-- Market inefficiency to exploit
-
-### Strategy for GW8
-
-1. **Foundation**: 3 defenders + 2 midfielders hitting DC thresholds consistently
-2. **Premiums**: 2-3 attacking players for ceiling (Haaland, Salah, etc.)
-3. **Value**: Budget enablers in good form
-4. **Balance**: Don't neglect attacking returns for pure DC strategy
+### Data Sources
+- **FPL API**: `https://fantasy.premierleague.com/api/bootstrap-static/`
+- **Database**: `data/ron_clanker.db` (743 players synced)
+- **Daily Monitoring**: Tracks changes between syncs
+- **Press conferences**: NOT automated (manual check Friday)
 
 ---
 
-## Tomorrow's Session Checklist
+## Key Files
 
-- [ ] Build `scripts/analyze_dc_performers.py`
-- [ ] Run analysis on all 743 players
-- [ ] Identify top 20 DC specialists by position
-- [ ] Build `scripts/select_gw8_squad.py`
-- [ ] Generate Ron's first draft team
-- [ ] Get Ron's team announcement in his voice
-- [ ] Review and refine squad if needed
-- [ ] Save to database
-- [ ] Commit everything to git
+### Core Agents
+- `agents/data_collector.py` - Maggie (FPL API client)
+- `agents/rules_engine.py` - Validation, DC scoring
+- `agents/player_valuation.py` - Value ranking, DC specialists
+- `agents/manager.py` - Ron Clanker orchestrator
+
+### Scripts
+- `scripts/sync_fpl_data.py` - Initial DB population
+- `scripts/daily_monitor.py` - Price changes, injuries, alerts
+- `scripts/setup_cron.sh` - Automate daily monitoring
+- `build_gw8_squad.py` - Initial squad builder (needs refinement)
+- `analyze_gw1_7_dc_specialists.py` - DC analysis results
+
+### Data
+- `data/ron_clanker.db` - SQLite database
+- `data/gw1_7_dc_analysis.json` - DC specialist analysis
+- `data/gw8_squad.json` - Current squad (needs optimization)
+- `data/daily_reports/` - Daily monitoring reports
+
+### Documentation
+- `CLAUDE.md` - Main project instructions (READ THIS FIRST)
+- `SEASON_SITUATION.md` - GW8 entry context
+- `DOCKER_SETUP.md` - Infrastructure setup
+- `DAILY_MONITORING.md` - Daily monitoring user guide
 
 ---
 
-## Commands to Remember
+## Important Decisions Made
 
-```bash
-# Test FPL data access
-python scripts/test_fpl_data.py
+1. **Beads for Planning**: All task tracking uses beads, no markdown TODO files
+2. **Data Over Knowledge**: Ron works ONLY from API data, never real-world football knowledge
+3. **Daily Monitoring**: Automated at 3 AM for price changes / injuries
+4. **Press Conferences**: NOT automated (too complex), manual check if needed
+5. **GW8 Timing**: Optimize 48hrs before deadline, finalize 24hrs before
+6. **DC Strategy**: Foundation first - 8 players earning consistent DC points
 
-# Run analysis (tomorrow)
-python scripts/analyze_dc_performers.py
+---
 
-# Select GW8 squad (tomorrow)
-python scripts/select_gw8_squad.py
+## Tomorrow's Priorities
 
-# Run tests
-pytest
+### Immediate (Before Deadline)
+1. Build pre-deadline optimizer (ron_clanker-11)
+2. Fix Isak issue with better value forward
+3. Verify no injuries from internationals
+4. Finalize squad and generate announcement
 
-# Database setup
-python scripts/setup_database.py
-```
+### Nice to Have
+- Set up cron job for daily monitoring (ron_clanker-10)
+- Test daily monitoring runs correctly
+
+---
+
+## Quotes to Remember
+
+**On Data Integrity:**
+> "VERY important for ron and the team to work from the data and not from knowledge and opinions you and I have"
+
+**On Timing:**
+> "Never announce early - injuries from internationals, press conferences, late team news. Ron should finalize the squad 24-48 hours before deadline, not now."
+
+**On Planning:**
+> "we should use the beads plugin and not markdown for all new work"
 
 ---
 
 ## Git Status
+Branch: `feature/event-driven-architecture`
+Recent commits:
+- Complete Phase 1 foundation
+- Database persistence + data sync
+- Daily monitoring system
+- Beads issues for GW8 prep
 
-**Commits Today**:
-1. Phase 1 Complete: Ron Clanker FPL Management System Foundation
-2. Add GW8 fresh start scenario and FPL MCP integration
-
-**Branch**: main
-**All changes committed**: ✅
-**Pushed to remote**: ✅
-
----
-
-## Ron's Status
-
-> "Right lads, we've built the foundations. Database is set up, rules engine is spot on, and we can see all the data we need. Those defensive contribution numbers are there in black and white - Caicedo, Rice, Gabriel, Timber. Exactly what we're looking for.
->
-> Tomorrow we analyze the full six weeks, find out who's delivering week in week out, and build the squad properly. International break gives us time to do this right.
->
-> Get some rest. Tomorrow we start building something special."
->
-> *- Ron Clanker*
+All work committed. Ready to pick up tomorrow with `bd ready`.
 
 ---
 
-**Session End**: Saturday October 4th, 22:30
-**Next Session**: Sunday October 5th (morning)
-**Status**: Ready to build analysis scripts and select GW8 squad
+*Session ended: ~00:15 GMT, 2025-10-17*
+*Next session: Pick up with ron_clanker-11 (optimizer) or ron_clanker-10 (cron)*
