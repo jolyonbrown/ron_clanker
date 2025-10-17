@@ -46,7 +46,11 @@ async def demo_autonomous_selection():
     print("synthesize their recommendations, and select his team.")
     print("\nNo human input. Ron makes the call.\n")
 
-    input("Press ENTER to watch Ron work...")
+    # Skip interactive prompt when running non-interactively
+    if sys.stdin.isatty():
+        input("Press ENTER to watch Ron work...")
+    else:
+        print("Running in non-interactive mode...\n")
 
     event_bus = get_event_bus()
     agents = []
