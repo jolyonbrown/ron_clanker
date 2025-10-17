@@ -16,6 +16,7 @@ from .manager import ManagerAgent
 from .transfer_strategy import TransferStrategyAgent
 from .chip_strategist import ChipStrategistAgent
 from .learning_agent import LearningAgent
+from .scout import ScoutAgent
 
 __version__ = "0.1.0"
 
@@ -31,4 +32,5 @@ __all__ = [
     'TransferStrategyAgent',
     'ChipStrategistAgent',
     'LearningAgent',
+    'ScoutAgent',
 ]

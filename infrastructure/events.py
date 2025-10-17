@@ -79,6 +79,17 @@ class EventType(Enum):
     NOTIFICATION_WARNING = "notification.warning"
     NOTIFICATION_ERROR = "notification.error"
 
+    # Intelligence events (Scout agent)
+    INTELLIGENCE_DETECTED = "intelligence.detected"  # Generic intelligence event
+    INJURY_INTELLIGENCE = "intelligence.injury"  # Injury detected from external source
+    ROTATION_RISK = "intelligence.rotation_risk"  # Rotation warning
+    SUSPENSION_INTELLIGENCE = "intelligence.suspension"  # Suspension detected
+    LINEUP_LEAK = "intelligence.lineup_leak"  # Early team news
+    PRESS_CONFERENCE_UPDATE = "intelligence.press_conference"  # Manager quotes
+
+    # Chip events
+    CHIP_RECOMMENDATION = "chip.recommendation"  # Terry's chip timing advice
+
 
 @dataclass
 class Event:
