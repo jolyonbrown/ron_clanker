@@ -1,0 +1,99 @@
+================================================================================
+CLANKER'S CLOGGERS - GW8 TEAM REGISTERED
+================================================================================
+
+Team ID: 12222054
+Team Name: Clanker's Cloggers
+Gameweek: 8
+Registered: October 17, 2025
+
+================================================================================
+STARTING XI
+================================================================================
+
+GKP: Roefs (£4.6m) - Bournemouth
+
+DEF: Senesi (£5.0m) - Bournemouth
+     Guéhi (£4.9m) - Crystal Palace
+     Gabriel (£6.3m) - Arsenal
+
+MID: Semenyo (C) (£7.9m) - Bournemouth
+     Sarr (£6.5m) - Crystal Palace
+     Cullen (£5.0m) - Burnley
+     Ndiaye (£6.5m) - Everton
+     Garner (£5.0m) - Everton
+
+FWD: Haaland (VC) (£14.5m) - Man City
+     Thiago (£6.1m) - Brentford
+
+================================================================================
+BENCH
+================================================================================
+
+1. Pope (£5.1m) - Newcastle - GKP
+2. Richards (£4.5m) - Crystal Palace - DEF
+3. Burn (£5.1m) - Newcastle - DEF
+4. João Pedro (£7.7m) - Brighton - FWD
+
+================================================================================
+SQUAD SUMMARY
+================================================================================
+
+Formation: 3-5-2
+Total Cost: £94.7m / £100.0m
+Remaining: £5.3m
+
+Captain: Semenyo
+Vice-Captain: Haaland
+
+Strategy: DC specialists in defense (Senesi, Guéhi, Gabriel)
+          Balanced midfield (DC + attacking)
+          Premium striker (Haaland) + budget forward (Thiago)
+
+================================================================================
+RON'S COMMENTARY
+================================================================================
+
+Right lads, here's how we're lining up for Gameweek 8...
+
+BETWEEN THE STICKS: Roefs
+Solid keeper. £4.6m well spent.
+
+THE BACK LINE: Senesi, Guéhi, Gabriel
+This is where we're different. These lads do the dirty work - tackles,
+blocks, clearances. Defensive contribution points every week. That's a
+high floor. Foundation first.
+
+MIDFIELD ENGINE ROOM: Semenyo, Sarr, Cullen, Ndiaye, Garner
+Mix of defensive graft and attacking threat. Some of these will earn DC
+points, others are there for goals and assists. Balanced.
+
+UP FRONT: Haaland, Thiago
+Semenyo gets the armband.
+
+THE GAFFER'S LOGIC:
+Jimmy's given me the rankings. Digger's found the DC specialists. Priya's
+checked the fixtures. Sophia's identified the threats. I've weighed it all
+up and made the call.
+
+We're building for the long haul. High floors, smart picks, within budget.
+
+Squad value: £94.7m
+
+- Ron
+
+================================================================================
+CONFIGURATION
+================================================================================
+
+Team details stored in: .env (not committed to git)
+  FPL_TEAM_ID=12222054
+  FPL_TEAM_NAME=Clanker's Cloggers
+
+Next Steps:
+  1. Install cron jobs after GW8 deadline (ron_clanker-44)
+  2. System runs autonomously for GW9+
+  3. Price prediction model trains after 7 days
+  4. Future: FPL API submission (ron_clanker-40)
+
+================================================================================
