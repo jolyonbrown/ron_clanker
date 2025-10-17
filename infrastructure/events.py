@@ -31,6 +31,7 @@ class EventType(Enum):
 
     # Gameweek events
     GAMEWEEK_DEADLINE_APPROACHING = "gameweek.deadline_approaching"
+    GAMEWEEK_PLANNING = "gameweek.planning"  # Triggered at 48h/24h/6h before deadline
     GAMEWEEK_STARTED = "gameweek.started"
     GAMEWEEK_COMPLETED = "gameweek.completed"
 
@@ -41,6 +42,7 @@ class EventType(Enum):
     FIXTURE_DATA_UPDATED = "data.fixture_updated"
 
     # Price events
+    PRICE_CHECK = "price.check"  # Daily price monitoring
     PRICE_CHANGE_DETECTED = "price.change_detected"
     PRICE_RISE_PREDICTED = "price.rise_predicted"
     PRICE_FALL_PREDICTED = "price.fall_predicted"

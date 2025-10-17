@@ -64,6 +64,46 @@ services:
     restart: unless-stopped
 
   # ========================================
+  # SCHEDULER SERVICES (Celery)
+  # ========================================
+
+  celery_worker:
+    build: .
+    container_name: ron_celery_worker
+    command: celery -A infrastructure.celery_app worker --loglevel=info
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_PATH=/app/data/ron_clanker.db
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 256m
+
+  celery_beat:
+    build: .
+    container_name: ron_celery_beat
+    command: celery -A infrastructure.celery_app beat --loglevel=info
+    volumes:
+      - ./:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_PATH=/app/data/ron_clanker.db
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 128m
+
+  # ========================================
   # AGENT SERVICES (Event-Driven Architecture)
   # ========================================
   # Uncomment as agents are converted to event-driven pattern
