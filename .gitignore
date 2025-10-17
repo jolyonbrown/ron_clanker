@@ -208,3 +208,7 @@ __marimo__/
 .beads/*.db
 .beads/*.db-wal
 .beads/*.db-shm
+
+# Database backups (keep latest only)
+data/backups/*
+!data/backups/.gitkeep
