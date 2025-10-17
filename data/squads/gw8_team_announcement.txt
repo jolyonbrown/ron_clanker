@@ -1,111 +1,34 @@
+GAMEWEEK 8 - RON'S TEAM SELECTION
 
-================================================================================
-RON CLANKER'S GAMEWEEK 8 SQUAD ANNOUNCEMENT
-================================================================================
+Right lads, here's how we're lining up for Gameweek 8...
 
-Right lads, here's how we're setting up for Gameweek 8.
+BETWEEN THE STICKS: Roefs
+Solid keeper. £4.6m well spent.
 
-Fresh start. Clean slate. £100m to build something proper.
+THE BACK LINE: Senesi, Guéhi, Gabriel
+This is where we're different. These lads do the dirty work - tackles,
+blocks, clearances. Defensive contribution points every week. That's a
+high floor. Foundation first.
 
-I've spent the last week analyzing the data - all seven gameweeks worth.
-And I'll tell you what I've found: while everyone else is chasing last
-week's goals, there's points being left on the table every single week
-from defensive work. Those new rules about tackles and clearances? That's
-our edge.
+MIDFIELD ENGINE ROOM: Semenyo, Caicedo, Sarr, Cullen, Ndiaye
+Mix of defensive graft and attacking threat. Some of these will earn DC
+points, others are there for goals and assists. Balanced.
 
-================================================================================
-THE SQUAD
-================================================================================
+UP FRONT: Haaland, Thiago
+Semenyo gets the armband.
 
-BETWEEN THE STICKS:
+THE GAFFER'S LOGIC:
+Jimmy's given me the rankings. Digger's found the DC specialists. Priya's
+checked the fixtures. Sophia's identified the threats. I've weighed it all
+up and made the call.
 
-  1. Vicario (£5.1m) - AVL (at home)
-     35 points so far. Solid.
-  2. Petrović (£4.5m) - CRY (away)
+We're building for the long haul. High floors, smart picks, within budget.
 
-THE BACK LINE:
-
-  1. Gabriel (£6.2m) - FUL (A) ⭐
-     DC specialist. 47 points. 10 tackles, 55 clearances.
-  2. Senesi (£4.9m) - CRY (A) ⭐
-     DC specialist. 46 points. 12 tackles, 76 clearances.
-  3. Andersen (£4.5m) - ARS (H) ⭐
-     DC specialist. 29 points. 15 tackles, 66 clearances.
-  4. Tarkowski (£5.5m) - MCI (A) ⭐
-     DC specialist. 27 points. 10 tackles, 58 clearances.
-  5. Alderete (£4.1m) - WOL (H) ✓
-     DC specialist. 39 points. 11 tackles, 53 clearances.
-
-MIDFIELD ENGINE ROOM:
-
-  1. Caicedo (£5.7m) - NFO (A) ⭐
-     45 pts. Defensive work: 28 tackles, 30 CBI, 38 recoveries.
-  2. Garner (£5.0m) - MCI (A) ⭐
-     32 pts. Defensive work: 17 tackles, 29 CBI, 27 recoveries.
-  3. Xhaka (£5.0m) - WOL (H) ⭐
-     32 pts. Defensive work: 12 tackles, 41 CBI, 36 recoveries.
-  4. Cullen (£5.0m) - LEE (H) ⭐
-     31 pts. Defensive work: 7 tackles, 37 CBI, 22 recoveries.
-  5. L.Paquetá (£5.9m) - BRE (H) ⭐
-     31 pts. Defensive work: 19 tackles, 13 CBI, 34 recoveries.
-
-UP FRONT:
-
-  1. Haaland (£14.5m) - EVE (H) (C)
-     62 points, 8 goals. Main man.
-  2. João Pedro (£7.7m) - NFO (A)
-  3. Foster (£5.0m) - LEE (H)
-
-================================================================================
-THE GAFFER'S LOGIC
-================================================================================
-
-This team is built on a simple principle: foundation first, fancy stuff second.
-
-**10 DEFENSIVE CONTRIBUTION SPECIALISTS** in the squad. That's players who
-are earning 2 points from tackles and clearances nearly every week. The market
-hasn't caught on yet - they're still pricing them on goals and assists.
-
-Do the math: 10 players x 2 DC points = 20 points per gameweek BEFORE we've
-even counted goals, assists, or clean sheets. That's our floor. Our baseline.
-
-Meanwhile, we've got Haaland leading the line. 62 points
-in 7 games. He gets the armband for Gameweek 8.
-
-CAPTAIN: Haaland (C)
-VICE-CAPTAIN: Gabriel (VC)
-
-Reasoning: Haaland's fixture looks favorable. If he can't score this
-week, we've got bigger problems.
-
-FORMATION: 3-5-2
-- Three at the back, all earning defensive contribution points
-- Five in midfield - mix of workers and creators
-- Two up top for the goals
-
-BUDGET: £88.6m spent, £11.4m remaining
-CHIPS AVAILABLE: All chips available (2 Wildcards, 2 Bench Boosts, 2 Free Hits, 2 Triple Captains)
-CHIP USAGE THIS WEEK: None - saving for when we need it
-
-================================================================================
-THE STRATEGY
-================================================================================
-
-While everyone else is template-chasing and reacting to last week's hauls,
-we're building something sustainable. High floor from defensive work,
-high ceiling from premium attackers.
-
-Six gameweeks of data don't lie. The players in this squad have PROVEN
-they can deliver. Now it's time to see if the strategy holds up.
-
-Fortune favours the brave, but championships are won with discipline.
-
-Let's get to work.
+Squad value: £95.5m
 
 - Ron
 
-================================================================================
-Generated: 2025-10-05 08:10
-Squad value: £88.6m
-DC specialists: 10/15 players
-================================================================================
+
+Generated: 2025-10-17 13:07:23
+Using GW1-7 data for GW8 selection
+System: Ron Clanker Autonomous FPL Manager v0.1

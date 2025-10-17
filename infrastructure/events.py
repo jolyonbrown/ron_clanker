@@ -64,6 +64,9 @@ class EventType(Enum):
     ANALYSIS_COMPLETED = "analysis.completed"
     FIXTURE_ANALYSIS_COMPLETED = "analysis.fixture_completed"
     VALUATION_ANALYSIS_COMPLETED = "analysis.valuation_completed"
+    DC_ANALYSIS_COMPLETED = "analysis.dc_completed"
+    XG_ANALYSIS_COMPLETED = "analysis.xg_completed"
+    VALUE_RANKINGS_COMPLETED = "analysis.value_rankings_completed"
 
     # Decision events
     DECISION_REQUIRED = "decision.required"

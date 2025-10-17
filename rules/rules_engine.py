@@ -104,7 +104,7 @@ class RulesEngine:
         # Max 3 players per team check
         team_counts = {}
         for player in team:
-            team_id = player.get('team_id')
+            team_id = player.get('team')  # FPL API uses 'team' field
             team_counts[team_id] = team_counts.get(team_id, 0) + 1
             if team_counts[team_id] > self.constraints.MAX_PLAYERS_PER_TEAM:
                 return False, f"Cannot have more than {self.constraints.MAX_PLAYERS_PER_TEAM} players from same team"
@@ -201,10 +201,10 @@ class RulesEngine:
                 return False, f"Transfer would violate team constraints: {msg}"
 
         # Check max 3 players per team
-        player_in_team_id = player_in['team_id']
+        player_in_team_id = player_in.get('team')  # FPL API uses 'team' field
         same_team_count = sum(
             1 for p in current_team
-            if p['team_id'] == player_in_team_id and p['id'] != player_out_id
+            if p.get('team') == player_in_team_id and p['id'] != player_out_id
         )
         if same_team_count >= self.constraints.MAX_PLAYERS_PER_TEAM:
             return False, f"Already have {self.constraints.MAX_PLAYERS_PER_TEAM} players from this team"

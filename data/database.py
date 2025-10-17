@@ -153,7 +153,7 @@ class Database:
         """
         params_list = [
             (
-                player['player_id'], gameweek, player['position'],
+                player['id'], gameweek, player['position'],
                 player['purchase_price'], player['selling_price'],
                 player.get('is_captain', False), player.get('is_vice_captain', False),
                 player.get('multiplier', 1)
