@@ -99,10 +99,11 @@ class ScoutAgent(BaseAgent):
         # Components
         from intelligence.website_monitor import WebsiteMonitor
         from intelligence.rss_monitor import RSSMonitor
+        from intelligence.intelligence_classifier import IntelligenceClassifier
 
         self.website_monitor = WebsiteMonitor()
         self.rss_monitor = RSSMonitor()
-        self.classifier = None  # Issue ron_clanker-28
+        self.classifier = IntelligenceClassifier()  # Will be loaded with players on start
 
         # Player name cache for fuzzy matching
         self._player_cache: Dict[str, int] = {}
@@ -162,22 +163,27 @@ class ScoutAgent(BaseAgent):
             # Combine all raw intelligence
             raw_intelligence = rss_intel + website_intel
 
-            # Convert raw intelligence to IntelligenceItems
-            # TODO (ron_clanker-28): Use classifier for this
+            # Convert raw intelligence to IntelligenceItems using classifier
             all_intelligence: List[IntelligenceItem] = []
 
             for raw in raw_intelligence:
-                # Basic conversion without classification for now
+                # Classify intelligence (confidence, severity, player matching)
+                classified = self.classifier.classify(
+                    raw,
+                    base_confidence=raw.get('base_reliability', 0.8)
+                )
+
+                # Build IntelligenceItem with classified data
                 intel = IntelligenceItem(
                     type=raw['type'],
-                    player_id=self._match_player_name(raw['player_name']),
-                    player_name=raw['player_name'],
+                    player_id=classified.player_id,
+                    player_name=classified.matched_name or raw['player_name'],
                     details=raw['details'],
-                    confidence=raw.get('base_reliability', 0.8),
-                    severity='HIGH',  # Default, classifier will improve this
+                    confidence=classified.confidence,
+                    severity=classified.severity,
                     source=raw['source'],
                     timestamp=raw['timestamp'],
-                    actionable=True,
+                    actionable=classified.actionable,
                     raw_data=raw
                 )
                 all_intelligence.append(intel)
@@ -339,7 +345,11 @@ class ScoutAgent(BaseAgent):
                 # Just surname
                 self._player_cache[player['second_name'].lower()] = player['id']
 
-            logger.info(f"Scout: Loaded {len(players)} players into cache")
+            # Update classifier with player cache
+            from intelligence.intelligence_classifier import IntelligenceClassifier
+            self.classifier = IntelligenceClassifier(self._player_cache)
+
+            logger.info(f"Scout: Loaded {len(players)} players into cache and classifier")
 
         except Exception as e:
             logger.error(f"Scout: Error loading player cache: {e}")
