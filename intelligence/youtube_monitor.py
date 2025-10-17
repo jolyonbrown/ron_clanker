@@ -86,9 +86,17 @@ class YouTubeMonitor:
         'knee', 'hamstring', 'ankle', 'muscle', 'strain'
     ]
 
-    def __init__(self):
+    def __init__(self, database=None):
         """Initialize YouTube monitor."""
         self._last_check: Dict[str, datetime] = {}
+
+        # Database for caching transcripts
+        if database:
+            self.db = database
+        else:
+            from data.database import Database
+            self.db = Database()
+
         logger.info("YouTubeMonitor initialized")
 
     async def check_all(self, max_age_hours: int = 24) -> List[Dict[str, Any]]:
@@ -186,7 +194,7 @@ class YouTubeMonitor:
                 logger.warning(f"YouTubeMonitor: Could not extract video ID from {video_url}")
                 return []
 
-            # Fetch transcript
+            # Fetch transcript (uses cache automatically)
             transcript_text = await self._fetch_transcript(video_id)
             if not transcript_text:
                 logger.debug(f"YouTubeMonitor: No transcript for {video_id}")
@@ -195,8 +203,32 @@ class YouTubeMonitor:
             # Extract intelligence from transcript
             mentions = self._extract_intelligence(transcript_text, "")
 
-            # Build intelligence items
+            # Store intelligence in database for team analysis
             for mention in mentions:
+                # Try to match player ID
+                player_id = None
+                try:
+                    player_match = self.db.execute_query("""
+                        SELECT id FROM players
+                        WHERE LOWER(web_name) = LOWER(?)
+                           OR LOWER(first_name || ' ' || second_name) = LOWER(?)
+                        LIMIT 1
+                    """, (mention['player_name'], mention['player_name']))
+
+                    if player_match:
+                        player_id = player_match[0]['id']
+                except:
+                    pass
+
+                # Store in database
+                self.db.execute_update("""
+                    INSERT INTO youtube_intelligence
+                    (video_id, player_id, player_name, intelligence_type, details, context, confidence, extracted_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (video_id, player_id, mention['player_name'], mention['type'],
+                      mention['details'], mention['details'], reliability))
+
+                # Build intelligence item for return
                 intelligence.append({
                     'type': mention['type'],
                     'player_name': mention['player_name'],
@@ -207,6 +239,14 @@ class YouTubeMonitor:
                     'base_reliability': reliability,
                     'timestamp': datetime.now()
                 })
+
+            # Mark transcript as processed
+            if intelligence:
+                self.db.execute_update("""
+                    UPDATE youtube_transcripts
+                    SET intelligence_extracted = 1
+                    WHERE video_id = ?
+                """, (video_id,))
 
         except Exception as e:
             logger.error(f"YouTubeMonitor: Error checking video URL {video_url}: {e}")
@@ -340,7 +380,9 @@ class YouTubeMonitor:
 
     async def _fetch_transcript(self, video_id: str) -> Optional[str]:
         """
-        Fetch transcript for a YouTube video.
+        Fetch transcript for a YouTube video with caching.
+
+        Checks cache first (7-day TTL), fetches if needed.
 
         Args:
             video_id: YouTube video ID
@@ -349,11 +391,33 @@ class YouTubeMonitor:
             Transcript text or None if unavailable
         """
         try:
-            # Fetch transcript (synchronous API, but fast)
+            # Check cache first
+            cached = self.db.execute_query("""
+                SELECT transcript_text, expires_at
+                FROM youtube_transcripts
+                WHERE video_id = ? AND expires_at > CURRENT_TIMESTAMP
+            """, (video_id,))
+
+            if cached:
+                logger.debug(f"YouTubeMonitor: Using cached transcript for {video_id}")
+                return cached[0]['transcript_text']
+
+            # Cache miss - fetch from YouTube
+            logger.debug(f"YouTubeMonitor: Fetching transcript for {video_id} (cache miss)")
             transcript = YouTubeTranscriptApi.get_transcript(video_id)
 
             # Combine all text segments
             text = ' '.join([entry['text'] for entry in transcript])
+
+            # Cache transcript with 7-day TTL
+            word_count = len(text.split())
+            self.db.execute_update("""
+                INSERT OR REPLACE INTO youtube_transcripts
+                (video_id, transcript_text, word_count, fetched_at, expires_at, intelligence_extracted)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+7 days'), 0)
+            """, (video_id, text, word_count))
+
+            logger.info(f"YouTubeMonitor: Cached transcript for {video_id} ({word_count} words)")
 
             return text
 
