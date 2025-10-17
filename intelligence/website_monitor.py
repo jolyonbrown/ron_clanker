@@ -35,6 +35,12 @@ class WebsiteMonitor:
             'parser': 'parse_premier_league_injuries',
             'enabled': True
         },
+        'premier_fantasy_tools_presser': {
+            'url': 'https://www.premierfantasytools.com/premier-league-press-conferences/',
+            'reliability': 0.95,  # Aggregated press conference quotes
+            'parser': 'parse_premier_fantasy_tools_presser',
+            'enabled': True
+        },
         'premier_injuries_newsroom': {
             'url': 'https://premierinjuries.com/newsroom/epl',
             'reliability': 0.95,  # Very accurate
@@ -459,6 +465,156 @@ class WebsiteMonitor:
 
         except Exception as e:
             logger.error(f"WebsiteMonitor: Error parsing Premier League injuries: {e}")
+            return []
+
+    def parse_premier_fantasy_tools_presser(self, html: str) -> List[Dict[str, Any]]:
+        """
+        Parse Premier Fantasy Tools press conferences page.
+
+        This page aggregates quotes from manager press conferences,
+        which are gold for injury/team news intelligence.
+
+        Args:
+            html: HTML content
+
+        Returns:
+            List of intelligence items
+        """
+        intelligence = []
+
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Look for press conference quotes/sections
+            # This site typically has structured press conference data
+
+            # Method 1: Look for quote blocks or conference sections
+            sections = (
+                soup.find_all('div', class_=re.compile('press|conference|quote|update')) +
+                soup.find_all('article') +
+                soup.find_all('section')
+            )
+
+            injury_keywords = [
+                'injury', 'injured', 'out', 'sidelined', 'ruled out',
+                'doubtful', 'fitness', 'concern', 'suspended', 'ban',
+                'rotation', 'rested', 'returns', 'comeback', 'recovery',
+                'unavailable', 'miss', 'weeks', 'months', 'doubt'
+            ]
+
+            for section in sections:
+                try:
+                    # Get text content
+                    text = section.get_text(strip=True)
+                    text_lower = text.lower()
+
+                    # Check if relevant
+                    if not any(keyword in text_lower for keyword in injury_keywords):
+                        continue
+
+                    # Extract manager name (usually in heading or strong tag)
+                    manager_elem = (
+                        section.find('h2') or
+                        section.find('h3') or
+                        section.find('strong') or
+                        section.find('b')
+                    )
+                    manager = manager_elem.get_text(strip=True) if manager_elem else "Manager"
+
+                    # Extract player names from the text
+                    # Pattern: Capitalized words (likely player names)
+                    words = text.split()
+                    player_names = []
+
+                    for i, word in enumerate(words):
+                        # Skip common non-player words
+                        if word in ['The', 'A', 'An', 'In', 'On', 'At', 'For', 'To', 'Manager', 'Coach', 'Team']:
+                            continue
+
+                        # Look for capitalized names (first + last)
+                        if i + 1 < len(words) and word and word[0].isupper():
+                            next_word = words[i + 1]
+                            if next_word and len(next_word) > 1 and next_word[0].isupper():
+                                full_name = f"{word} {next_word}"
+                                # Filter out team names
+                                if full_name not in ['Manchester United', 'Manchester City', 'Liverpool FC',
+                                                      'Chelsea FC', 'Arsenal FC', 'Tottenham Hotspur',
+                                                      'Premier League', 'Fantasy Premier']:
+                                    player_names.append(full_name)
+
+                    # Deduplicate player names
+                    player_names = list(dict.fromkeys(player_names))
+
+                    # Create intelligence items for each player mentioned
+                    for player_name in player_names[:10]:  # Limit to 10 per section
+                        # Find context around player name
+                        player_pos = text.find(player_name)
+                        if player_pos == -1:
+                            continue
+
+                        # Get surrounding context (100 chars before and after)
+                        context_start = max(0, player_pos - 100)
+                        context_end = min(len(text), player_pos + len(player_name) + 100)
+                        context = text[context_start:context_end].strip()
+
+                        intelligence.append({
+                            'type': self._classify_type(context.lower()),
+                            'player_name': player_name,
+                            'details': f"{manager}: {context}",
+                            'raw_text': context,
+                            'manager': manager,
+                            'timestamp': datetime.now()
+                        })
+
+                except Exception as e:
+                    logger.debug(f"WebsiteMonitor: Error parsing press conference section: {e}")
+                    continue
+
+            # Method 2: Look for tables with press conference data
+            tables = soup.find_all('table')
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:  # Skip header
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) >= 2:
+                        # Typical structure: Team/Manager | Quote/Update
+                        team_cell = cells[0].get_text(strip=True)
+                        quote_cell = cells[1].get_text(strip=True)
+
+                        # Check if quote mentions injury
+                        if any(keyword in quote_cell.lower() for keyword in injury_keywords):
+                            # Extract player names from quote
+                            words = quote_cell.split()
+                            for i, word in enumerate(words):
+                                if i + 1 < len(words) and word and word[0].isupper():
+                                    next_word = words[i + 1]
+                                    if next_word and len(next_word) > 1 and next_word[0].isupper():
+                                        player_name = f"{word} {next_word}"
+
+                                        intelligence.append({
+                                            'type': self._classify_type(quote_cell.lower()),
+                                            'player_name': player_name,
+                                            'details': f"{team_cell}: {quote_cell}",
+                                            'raw_text': quote_cell,
+                                            'manager': team_cell,
+                                            'timestamp': datetime.now()
+                                        })
+
+            # Deduplicate by player name + details
+            seen = set()
+            unique_intelligence = []
+            for item in intelligence:
+                key = (item['player_name'], item['details'][:50])
+                if key not in seen:
+                    seen.add(key)
+                    unique_intelligence.append(item)
+
+            logger.info(f"WebsiteMonitor: Parsed {len(unique_intelligence)} items from Premier Fantasy Tools")
+
+            return unique_intelligence
+
+        except Exception as e:
+            logger.error(f"WebsiteMonitor: Error parsing Premier Fantasy Tools press conferences: {e}")
             return []
 
     def _classify_type(self, text: str) -> str:
