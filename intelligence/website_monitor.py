@@ -29,11 +29,17 @@ class WebsiteMonitor:
 
     # Source configurations
     SOURCES = {
+        'premier_league_injuries': {
+            'url': 'https://www.premierleague.com/en/latest-player-injuries',
+            'reliability': 1.0,  # Official source - highest reliability
+            'parser': 'parse_premier_league_injuries',
+            'enabled': True
+        },
         'premier_injuries_newsroom': {
             'url': 'https://premierinjuries.com/newsroom/epl',
             'reliability': 0.95,  # Very accurate
             'parser': 'parse_premier_injuries_newsroom',
-            'enabled': True
+            'enabled': False  # Currently returns 403, disabled
         },
         'bbc_sport_football': {
             'url': 'https://www.bbc.com/sport/football',
@@ -341,6 +347,119 @@ class WebsiteMonitor:
             logger.error(f"WebsiteMonitor: Error parsing BBC Sport: {e}")
 
         return intelligence
+
+    def parse_premier_league_injuries(self, html: str) -> List[Dict[str, Any]]:
+        """
+        Parse official Premier League injuries page.
+
+        The official PL page has structured injury data for all teams.
+        This is the most reliable source as it's direct from the league.
+
+        Args:
+            html: HTML content
+
+        Returns:
+            List of intelligence items
+        """
+        intelligence = []
+
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Look for injury table or list items
+            # The PL site typically has a structured layout
+            # Try various selectors to find injury data
+
+            # Method 1: Look for player injury cards/items
+            injury_items = (
+                soup.find_all('div', class_=re.compile('injury|player|item')) +
+                soup.find_all('li', class_=re.compile('injury|player|item')) +
+                soup.find_all('tr', class_=re.compile('injury|player'))
+            )
+
+            # Method 2: Look for tables with injury data
+            tables = soup.find_all('table')
+
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:  # Skip header
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) >= 2:
+                        # Typical structure: Player Name | Team | Injury | Return Date
+                        player_text = cells[0].get_text(strip=True)
+                        injury_text = ' '.join(cell.get_text(strip=True) for cell in cells[1:])
+
+                        # Extract player name (usually in format "First Last")
+                        if player_text and not player_text.lower() in ['player', 'name']:
+                            intelligence.append({
+                                'type': 'INJURY',
+                                'player_name': player_text,
+                                'details': f"{player_text}: {injury_text}",
+                                'raw_text': injury_text,
+                                'timestamp': datetime.now()
+                            })
+
+            # Method 3: Parse injury cards (if page uses card layout)
+            for item in injury_items:
+                try:
+                    # Find player name
+                    name_elem = (
+                        item.find('h2') or
+                        item.find('h3') or
+                        item.find('span', class_=re.compile('name|player')) or
+                        item.find('a', class_=re.compile('name|player'))
+                    )
+
+                    if not name_elem:
+                        continue
+
+                    player_name = name_elem.get_text(strip=True)
+
+                    # Find injury details
+                    detail_elem = (
+                        item.find('p') or
+                        item.find('span', class_=re.compile('injury|status|detail')) or
+                        item.find('div', class_=re.compile('injury|status|detail'))
+                    )
+
+                    details = detail_elem.get_text(strip=True) if detail_elem else ''
+
+                    # Find return date if available
+                    date_elem = item.find(['span', 'div'], class_=re.compile('date|return'))
+                    return_date = date_elem.get_text(strip=True) if date_elem else ''
+
+                    full_details = f"{player_name}: {details}"
+                    if return_date:
+                        full_details += f" (Return: {return_date})"
+
+                    intelligence.append({
+                        'type': 'INJURY',
+                        'player_name': player_name,
+                        'details': full_details,
+                        'raw_text': details,
+                        'return_date': return_date if return_date else None,
+                        'timestamp': datetime.now()
+                    })
+
+                except Exception as e:
+                    logger.debug(f"WebsiteMonitor: Error parsing injury item: {e}")
+                    continue
+
+            # Deduplicate by player name
+            seen_players = set()
+            unique_intelligence = []
+            for item in intelligence:
+                if item['player_name'] not in seen_players:
+                    seen_players.add(item['player_name'])
+                    unique_intelligence.append(item)
+
+            logger.info(f"WebsiteMonitor: Parsed {len(unique_intelligence)} unique injuries from Premier League")
+
+            return unique_intelligence
+
+        except Exception as e:
+            logger.error(f"WebsiteMonitor: Error parsing Premier League injuries: {e}")
+            return []
 
     def _classify_type(self, text: str) -> str:
         """
