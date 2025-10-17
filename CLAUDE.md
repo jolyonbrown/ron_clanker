@@ -956,3 +956,4 @@ GIT WORKFLOW (AUTO-SYNC)
 
 Ready to start!
 Run bd create "My first issue" to create your first issue.
+- docker-compose command has been replaced by docker compose (no hyphen)
