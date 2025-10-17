@@ -98,7 +98,10 @@ class ScoutAgent(BaseAgent):
 
         # Components
         from intelligence.website_monitor import WebsiteMonitor
+        from intelligence.rss_monitor import RSSMonitor
+
         self.website_monitor = WebsiteMonitor()
+        self.rss_monitor = RSSMonitor()
         self.classifier = None  # Issue ron_clanker-28
 
         # Player name cache for fuzzy matching
@@ -147,15 +150,23 @@ class ScoutAgent(BaseAgent):
         logger.info("Scout: Running daily intelligence monitoring")
 
         try:
-            # Check website sources
+            # Check RSS feeds (fastest and most reliable)
+            rss_intel = await self.rss_monitor.check_all(max_age_hours=24)
+            logger.info(f"Scout: Found {len(rss_intel)} items from RSS feeds")
+
+            # Check website sources (with polite delays)
             async with self.website_monitor as monitor:
                 website_intel = await monitor.check_all()
+            logger.info(f"Scout: Found {len(website_intel)} items from websites")
+
+            # Combine all raw intelligence
+            raw_intelligence = rss_intel + website_intel
 
             # Convert raw intelligence to IntelligenceItems
             # TODO (ron_clanker-28): Use classifier for this
             all_intelligence: List[IntelligenceItem] = []
 
-            for raw in website_intel:
+            for raw in raw_intelligence:
                 # Basic conversion without classification for now
                 intel = IntelligenceItem(
                     type=raw['type'],
@@ -171,11 +182,10 @@ class ScoutAgent(BaseAgent):
                 )
                 all_intelligence.append(intel)
 
+            logger.info(f"Scout: Processed {len(all_intelligence)} total intelligence items")
+
             # TODO: Add YouTube monitoring
             # youtube_intel = await self.youtube_monitor.check_channels()
-
-            # TODO: Add RSS monitoring
-            # rss_intel = await self.rss_monitor.check_feeds()
 
             # Process and publish intelligence
             for intel in all_intelligence:

@@ -6,5 +6,6 @@ and other critical information that provides competitive advantage.
 """
 
 from .website_monitor import WebsiteMonitor
+from .rss_monitor import RSSMonitor
 
-__all__ = ['WebsiteMonitor']
+__all__ = ['WebsiteMonitor', 'RSSMonitor']

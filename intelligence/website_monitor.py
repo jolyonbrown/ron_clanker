@@ -29,10 +29,10 @@ class WebsiteMonitor:
 
     # Source configurations
     SOURCES = {
-        'premier_injuries': {
-            'url': 'https://www.premierinjuries.com/injury-table.php',
+        'premier_injuries_newsroom': {
+            'url': 'https://premierinjuries.com/newsroom/epl',
             'reliability': 0.95,  # Very accurate
-            'parser': 'parse_premier_injuries',
+            'parser': 'parse_premier_injuries_newsroom',
             'enabled': True
         },
         'bbc_sport_football': {
@@ -144,16 +144,12 @@ class WebsiteMonitor:
             logger.error(f"WebsiteMonitor: Error fetching {url}: {e}")
             return None
 
-    def parse_premier_injuries(self, html: str) -> List[Dict[str, Any]]:
+    def parse_premier_injuries_newsroom(self, html: str) -> List[Dict[str, Any]]:
         """
-        Parse premierinjuries.com injury table.
+        Parse premierinjuries.com newsroom page.
 
-        This site has a structured table with:
-        - Player name
-        - Club
-        - Injury type
-        - Return date
-        - Status (out/doubtful)
+        The newsroom has an "EPL TEAM INJURIES" section with links to team-specific
+        injury pages. We'll parse the main listings and team-specific content.
 
         Args:
             html: HTML content
@@ -166,46 +162,84 @@ class WebsiteMonitor:
         try:
             soup = BeautifulSoup(html, 'html.parser')
 
-            # Find injury table
-            # Note: Actual selectors need to be inspected from the live site
-            # This is a template that will need adjustment
+            # Look for articles/headlines about injuries
+            # The newsroom typically has article cards or list items
 
-            injury_rows = soup.find_all('tr', class_=re.compile('injury|player'))
+            # Try multiple selectors for robustness
+            articles = (
+                soup.find_all('article') +
+                soup.find_all('div', class_=re.compile('post|article|news|injury|item')) +
+                soup.find_all('li', class_=re.compile('post|article|news'))
+            )
 
-            for row in injury_rows[:50]:  # Limit to 50 to avoid noise
+            injury_keywords = [
+                'injury', 'injured', 'out', 'sidelined', 'ruled out',
+                'doubtful', 'fitness', 'concern', 'suspended',
+                'returns', 'comeback', 'recovery'
+            ]
+
+            for article in articles[:30]:  # Limit to recent items
                 try:
-                    # Extract data from row
-                    # This needs to be adjusted based on actual site structure
-                    cells = row.find_all('td')
+                    # Get headline/title
+                    title_elem = (
+                        article.find('h1') or
+                        article.find('h2') or
+                        article.find('h3') or
+                        article.find('a', class_=re.compile('title|headline'))
+                    )
 
-                    if len(cells) < 4:
+                    if not title_elem:
                         continue
 
-                    player_name = cells[0].get_text(strip=True)
-                    club = cells[1].get_text(strip=True) if len(cells) > 1 else ''
-                    injury_type = cells[2].get_text(strip=True) if len(cells) > 2 else ''
-                    return_date = cells[3].get_text(strip=True) if len(cells) > 3 else ''
+                    title = title_elem.get_text(strip=True)
+                    title_lower = title.lower()
 
-                    if not player_name:
+                    # Check if relevant
+                    if not any(keyword in title_lower for keyword in injury_keywords):
                         continue
 
-                    # Build intelligence item
-                    intelligence.append({
-                        'type': 'INJURY',
-                        'player_name': player_name,
-                        'details': f"{injury_type} - expected back {return_date}".strip(),
-                        'club': club,
-                        'return_date': return_date,
-                        'raw_text': row.get_text(strip=True),
-                        'timestamp': datetime.now()
-                    })
+                    # Extract player names from title
+                    # Pattern: Capitalized words (likely player names)
+                    words = title.split()
+                    potential_names = []
+
+                    for i, word in enumerate(words):
+                        if word and word[0].isupper() and word not in ['Team', 'The', 'A', 'An', 'In', 'On', 'For', 'To']:
+                            # Check if next word is also capitalized (full name)
+                            if i + 1 < len(words) and words[i+1] and words[i+1][0].isupper():
+                                potential_names.append(f"{word} {words[i+1]}")
+
+                    # Get article text for more context
+                    text_elem = article.find('p') or article.find('div', class_=re.compile('content|summary|excerpt'))
+                    details = text_elem.get_text(strip=True) if text_elem else title
+
+                    # Get link
+                    link_elem = article.find('a')
+                    link = link_elem.get('href', '') if link_elem else ''
+                    if link and not link.startswith('http'):
+                        link = f"https://premierinjuries.com{link}"
+
+                    # Create intelligence item for each player
+                    for player_name in potential_names:
+                        # Filter out team names
+                        if player_name in ['Manchester United', 'Manchester City', 'Liverpool', 'Chelsea', 'Arsenal']:
+                            continue
+
+                        intelligence.append({
+                            'type': 'INJURY',
+                            'player_name': player_name,
+                            'details': details[:200],  # Limit details length
+                            'link': link,
+                            'raw_text': title,
+                            'timestamp': datetime.now()
+                        })
 
                 except Exception as e:
-                    logger.debug(f"WebsiteMonitor: Error parsing row: {e}")
+                    logger.debug(f"WebsiteMonitor: Error parsing article: {e}")
                     continue
 
         except Exception as e:
-            logger.error(f"WebsiteMonitor: Error parsing Premier Injuries: {e}")
+            logger.error(f"WebsiteMonitor: Error parsing Premier Injuries newsroom: {e}")
 
         return intelligence
 
