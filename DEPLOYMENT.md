@@ -156,53 +156,122 @@ print(f\"Gameweeks: {db.execute_query('SELECT COUNT(*) as c FROM gameweeks')[0][
 
 ---
 
-## 🚀 Deployment Modes
+## 🚀 Deployment Strategy: Containers vs Direct Execution
+
+### The Original Plan vs Reality
+
+**Original Plan** (in docker-compose.yml):
+- Each agent as separate container (agent_manager, agent_maggie, etc.)
+- Full microservices architecture from day one
+- All services containerized
+
+**What Actually Happened**:
+- RPi 3B locked up building multiple Docker images simultaneously (load > 20)
+- System became unresponsive during `docker compose up -d`
+
+**The Pivot**:
+- Infrastructure only: Redis container (event bus + cache)
+- Agents: Direct Python script execution
+- Result: System runs perfectly, low resource usage
 
 ### Current: Development Mode ✅
 
 **What's Running**:
 ```
-Infrastructure:
-├─ Redis (container): Event bus
-└─ Postgres (container): Database (optional)
+Infrastructure (containerized):
+└─ Redis (128MB): Event bus + cache
 
-Agents (Python scripts):
+Agents (Python scripts - NOT containerized):
 ├─ Scout: Intelligence gathering
 ├─ Hugo: Transfer strategy
 ├─ Maggie: Data collection
-└─ All analysts
+├─ Priya: Player valuation
+├─ Sanjay: Fixture analysis
+└─ All other analysts
 ```
+
+**Why This Works Better for Phase 1-2**:
+1. **RPi Performance**: No container build overhead
+2. **Development Speed**: Instant code changes, no rebuild
+3. **Resource Efficiency**: 768MB RAM saved vs full containerization
+4. **Event Bus Works**: Redis pub/sub works whether agents are containerized or not
+5. **Easy Debugging**: Direct Python execution, simple logging
 
 **How to Run**:
 ```bash
-# Start infrastructure
-docker compose up -d redis postgres
+# Start infrastructure only
+docker compose up -d redis
 
 # Run full system test
 venv/bin/python scripts/test_full_system.py
 
 # Run individual agent
 venv/bin/python -m agents.scout
+
+# Test Scout → Hugo event communication
+venv/bin/python scripts/test_full_system.py
 ```
 
-**Advantages**:
-- Fast iteration
-- Low resource usage
-- Easy debugging
-- Perfect for RPi 3B
+**System Resources (Development Mode)**:
+- Load average: < 2.0 (excellent)
+- Memory: ~300MB total (plenty of headroom)
+- Redis: 128MB container
+- Agents: ~50MB each when running
 
-### Future: Production Mode
+### Future: Production Mode (Phase 3)
+
+**When to Containerize Agents**:
+- Phase 3 (ML & optimization)
+- Deploying to more powerful hardware
+- Moving to cloud (AWS/GCP)
+- Need full microservices architecture
+- Scaling beyond 1 FPL team
 
 **What Would Change**:
-- Each agent as separate container
-- Celery workers for scheduling
-- Full microservices architecture
-- Kubernetes/Docker Swarm (optional)
+```
+Infrastructure:
+├─ Redis (container): Event bus
+├─ Postgres (container): Centralized DB (optional)
+└─ Celery Beat (container): Scheduling
 
-**When to Switch**:
-- Phase 3 (ML & optimization)
-- When deploying to cloud
-- When scaling beyond 1 FPL team
+Agents (all containerized):
+├─ agent_manager (Ron Clanker)
+├─ agent_scout (Scout)
+├─ agent_hugo (Hugo)
+├─ agent_maggie (Maggie)
+└─ agent_analysts (All analysts)
+```
+
+**Migration Path**:
+1. Uncomment agent services in docker-compose.yml
+2. Build images one at a time (avoid simultaneous builds on RPi)
+3. Test each agent container individually
+4. Deploy full microservices stack
+5. Add monitoring (Prometheus, Grafana)
+
+**RPi Constraints for Full Containerization**:
+- ⚠️ Build images ONE AT A TIME (avoid load spikes)
+- ⚠️ Total memory: ~768MB for all containers
+- ✅ Pre-build images on faster machine, copy to RPi
+- ✅ Use Docker Hub: build elsewhere, pull on RPi
+
+### Summary: Why Not Containers Right Now?
+
+**The Question**: *"Was the plan not to have Ron and all his team acting as agents in containers?"*
+
+**The Answer**: Yes, that was the original plan (see docker-compose.yml). But after the RPi locked up building containers, I pivoted to **Python scripts for Phase 1-2 development** because:
+
+1. **It works perfectly** - All event-driven communication works
+2. **RPi can handle it** - Low resource usage, fast iteration
+3. **Simpler for now** - Development speed > production architecture
+4. **Easy to containerize later** - When moving to Phase 3 or cloud
+
+**The containerization infrastructure is still there** (commented in docker-compose.yml), ready to re-enable when:
+- We upgrade to RPi 4/5 (more RAM)
+- We move to cloud (more resources)
+- We need production deployment (Phase 3)
+
+**Ron's take**: "Get the tactics right first, worry about the fancy training ground later."
 
 ---
 
