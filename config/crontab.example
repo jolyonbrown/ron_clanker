@@ -1,0 +1,117 @@
+# Ron Clanker - Autonomous FPL Management System
+# Cron jobs for automated operation
+#
+# INSTALLATION:
+#   1. Copy this file: cp config/crontab.example config/crontab
+#   2. Edit PROJECT_PATH to match your installation
+#   3. Install: crontab config/crontab
+#   4. Verify: crontab -l
+#
+# IMPORTANT: Update PROJECT_PATH to your actual installation directory
+
+PROJECT_PATH=/home/jolyon/ron_clanker
+
+# ============================================================================
+# DAILY INTELLIGENCE GATHERING
+# ============================================================================
+
+# Daily at 03:00 - Scout gathers intelligence from all sources
+# Runs after FPL price changes (typically ~02:00 AM UK time)
+0 3 * * * cd $PROJECT_PATH && venv/bin/python scripts/daily_scout.py >> logs/cron_scout.log 2>&1
+
+# Daily at 04:00 - Cleanup expired YouTube transcripts (7-day TTL)
+0 4 * * * cd $PROJECT_PATH && venv/bin/python scripts/cleanup_expired_transcripts.py >> logs/cron_cleanup.log 2>&1
+
+# ============================================================================
+# DATA COLLECTION
+# ============================================================================
+
+# Daily at 02:30 - Fetch latest FPL data (before Scout runs)
+30 2 * * * cd $PROJECT_PATH && venv/bin/python scripts/collect_fpl_data.py >> logs/cron_data.log 2>&1
+
+# ============================================================================
+# PRICE MONITORING
+# ============================================================================
+
+# Every hour - Check for price changes and update predictions
+0 * * * * cd $PROJECT_PATH && venv/bin/python scripts/monitor_prices.py >> logs/cron_prices.log 2>&1
+
+# ============================================================================
+# PRE-DEADLINE TEAM SELECTION
+# ============================================================================
+
+# IMPORTANT: This needs to be calculated dynamically from FPL API deadlines
+# For now, typical FPL deadlines are:
+#   - Friday 18:30 (for early Saturday matches)
+#   - Saturday 11:00 (for normal gameweeks)
+#
+# Run 6 hours before deadline:
+#   Friday 12:30 for Friday evening deadlines
+#   Saturday 05:00 for Saturday morning deadlines
+
+# Friday 12:30 - Pre-deadline selection (6h before 18:30 deadline)
+30 12 * * 5 cd $PROJECT_PATH && venv/bin/python scripts/pre_deadline_selection.py >> logs/cron_deadline.log 2>&1
+
+# Saturday 05:00 - Pre-deadline selection (6h before 11:00 deadline)
+0 5 * * 6 cd $PROJECT_PATH && venv/bin/python scripts/pre_deadline_selection.py >> logs/cron_deadline.log 2>&1
+
+# TODO: Implement dynamic deadline calculation
+#   venv/bin/python scripts/schedule_deadline_job.py
+#   This should calculate actual deadline time and schedule one-off job
+
+# ============================================================================
+# WEEKLY REVIEW
+# ============================================================================
+
+# Monday 08:00 - Weekly performance review (after gameweek finishes)
+0 8 * * 1 cd $PROJECT_PATH && venv/bin/python scripts/weekly_review.py >> logs/cron_review.log 2>&1
+
+# ============================================================================
+# DATABASE MAINTENANCE
+# ============================================================================
+
+# Daily at 05:00 - Database cleanup and optimization
+0 5 * * * cd $PROJECT_PATH && venv/bin/python scripts/db_maintenance.py >> logs/cron_db.log 2>&1
+
+# Weekly on Sunday 03:00 - Database backup
+0 3 * * 0 cd $PROJECT_PATH && venv/bin/python scripts/backup_database.py >> logs/cron_backup.log 2>&1
+
+# ============================================================================
+# LOG ROTATION
+# ============================================================================
+
+# Weekly on Sunday 04:00 - Rotate and compress old logs
+0 4 * * 0 cd $PROJECT_PATH && venv/bin/python scripts/rotate_logs.py >> logs/cron_rotate.log 2>&1
+
+# ============================================================================
+# HEALTH CHECK
+# ============================================================================
+
+# Every 6 hours - Health check (verify system is operational)
+0 */6 * * * cd $PROJECT_PATH && venv/bin/python scripts/health_check.py >> logs/cron_health.log 2>&1
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# Cron format: minute hour day month dayofweek command
+#   minute: 0-59
+#   hour: 0-23
+#   day: 1-31
+#   month: 1-12
+#   dayofweek: 0-7 (0 and 7 are Sunday)
+#
+# Cron will use the system timezone. For UK time (FPL timezone):
+#   - Ensure system is set to Europe/London
+#   - Or adjust times for your timezone
+#
+# Logging:
+#   - All cron output goes to logs/cron_*.log
+#   - Check these files if jobs fail silently
+#   - Logs rotate weekly to prevent disk space issues
+#
+# Testing:
+#   - Run each script manually first to verify it works
+#   - Check logs after each cron run
+#   - Use: venv/bin/python scripts/test_cron_jobs.py
+#
