@@ -14,6 +14,8 @@ from .data_collector import DataCollector
 from .player_valuation import PlayerValuationAgent
 from .manager import ManagerAgent
 from .transfer_strategy import TransferStrategyAgent
+from .chip_strategist import ChipStrategistAgent
+from .learning_agent import LearningAgent
 
 __version__ = "0.1.0"
 
@@ -27,4 +29,6 @@ __all__ = [
     'PlayerValuationAgent',
     'ManagerAgent',
     'TransferStrategyAgent',
+    'ChipStrategistAgent',
+    'LearningAgent',
 ]
