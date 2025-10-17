@@ -60,26 +60,51 @@ async def collect_snapshots():
 
         print(f"Current Gameweek: {current_gw}")
 
-        # Store snapshots
-        print("\n💾 Storing snapshots...")
+        # Check if snapshots already exist for today (batch check)
+        existing_players = set()
+        existing_check = db.execute_query("""
+            SELECT player_id FROM player_transfer_snapshots
+            WHERE snapshot_date = ?
+        """, (today,))
 
-        snapshot_count = 0
-        skipped_count = 0
+        for row in existing_check:
+            existing_players.add(row['player_id'])
 
-        for player in players:
-            # Check if snapshot already exists for today
-            existing = db.execute_query("""
-                SELECT id FROM player_transfer_snapshots
-                WHERE player_id = ? AND snapshot_date = ?
-            """, (player['id'], today))
+        # Store snapshots (batch insert for efficiency)
+        print(f"\n💾 Storing snapshots (batched for RPi3 efficiency)...")
 
-            if existing:
-                skipped_count += 1
+        snapshots_to_insert = []
+        skipped_count = len(existing_players)
+
+        for i, player in enumerate(players):
+            if (i + 1) % 100 == 0:
+                print(f"  Processing {i + 1}/{len(players)}...")
+
+            if player['id'] in existing_players:
                 continue
 
-            # Insert snapshot
+            # Prepare snapshot data
+            snapshots_to_insert.append((
+                player['id'], today,
+                player.get('transfers_in', 0),
+                player.get('transfers_out', 0),
+                player.get('transfers_in', 0) - player.get('transfers_out', 0),
+                player.get('transfers_in_event', 0),
+                player.get('transfers_out_event', 0),
+                float(player.get('selected_by_percent', 0.0)),
+                float(player.get('form', 0.0)),
+                float(player.get('points_per_game', 0.0)),
+                player.get('total_points', 0),
+                player.get('now_cost', 0),
+                player.get('cost_change_event', 0),
+                player.get('cost_change_start', 0),
+                current_gw
+            ))
+
+        # Batch insert all snapshots at once (much faster than individual inserts)
+        if snapshots_to_insert:
             try:
-                db.execute_update("""
+                db.execute_many("""
                     INSERT INTO player_transfer_snapshots (
                         player_id, snapshot_date,
                         transfers_in, transfers_out, net_transfers,
@@ -89,29 +114,17 @@ async def collect_snapshots():
                         now_cost, cost_change_event, cost_change_start,
                         gameweek
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    player['id'], today,
-                    player.get('transfers_in', 0),
-                    player.get('transfers_out', 0),
-                    player.get('transfers_in', 0) - player.get('transfers_out', 0),
-                    player.get('transfers_in_event', 0),
-                    player.get('transfers_out_event', 0),
-                    float(player.get('selected_by_percent', 0.0)),
-                    float(player.get('form', 0.0)),
-                    float(player.get('points_per_game', 0.0)),
-                    player.get('total_points', 0),
-                    player.get('now_cost', 0),
-                    player.get('cost_change_event', 0),
-                    player.get('cost_change_start', 0),
-                    current_gw
-                ))
+                """, snapshots_to_insert)
 
-                snapshot_count += 1
-
+                snapshot_count = len(snapshots_to_insert)
+                print(f"✓ Stored {snapshot_count} new snapshots")
             except Exception as e:
-                logger.error(f"Error storing snapshot for player {player['id']}: {e}")
+                logger.error(f"Error storing snapshots: {e}")
+                snapshot_count = 0
+        else:
+            snapshot_count = 0
+            print("✓ No new snapshots to store")
 
-        print(f"✓ Stored {snapshot_count} new snapshots")
         if skipped_count > 0:
             print(f"⚠️  Skipped {skipped_count} existing snapshots")
 
@@ -124,12 +137,13 @@ async def collect_snapshots():
             SELECT
                 pts.player_id,
                 p.web_name,
-                p.team_name,
+                t.name as team_name,
                 pts.net_transfers,
                 pts.now_cost / 10.0 as price,
                 pts.selected_by_percent
             FROM player_transfer_snapshots pts
             JOIN players p ON pts.player_id = p.id
+            JOIN teams t ON p.team_id = t.id
             WHERE pts.snapshot_date = ?
             ORDER BY pts.net_transfers DESC
             LIMIT 10
@@ -147,12 +161,13 @@ async def collect_snapshots():
             SELECT
                 pts.player_id,
                 p.web_name,
-                p.team_name,
+                t.name as team_name,
                 pts.net_transfers,
                 pts.now_cost / 10.0 as price,
                 pts.selected_by_percent
             FROM player_transfer_snapshots pts
             JOIN players p ON pts.player_id = p.id
+            JOIN teams t ON p.team_id = t.id
             WHERE pts.snapshot_date = ?
             ORDER BY pts.net_transfers ASC
             LIMIT 10
