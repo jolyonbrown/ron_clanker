@@ -13,6 +13,7 @@ from .value_analyst import ValueAnalyst
 from .data_collector import DataCollector
 from .player_valuation import PlayerValuationAgent
 from .manager import ManagerAgent
+from .transfer_strategy import TransferStrategyAgent
 
 __version__ = "0.1.0"
 
@@ -24,5 +25,6 @@ __all__ = [
     'ValueAnalyst',
     'DataCollector',
     'PlayerValuationAgent',
-    'ManagerAgent'
+    'ManagerAgent',
+    'TransferStrategyAgent',
 ]
