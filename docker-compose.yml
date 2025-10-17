@@ -2,6 +2,14 @@ services:
   # ========================================
   # INFRASTRUCTURE SERVICES
   # ========================================
+  #
+  # CURRENT SETUP (Phase 1-2):
+  #   - SQLite: Primary database (file-based, data/ron_clanker.db)
+  #   - Redis: Event bus + cache (required)
+  #   - Postgres: Not used yet (commented out to save resources)
+  #
+  # See ARCHITECTURE.md for full database strategy explanation.
+  # ========================================
 
   redis:
     image: redis:7-alpine
@@ -19,109 +27,124 @@ services:
       timeout: 3s
       retries: 3
 
-  postgres:
-    image: postgres:15-alpine
-    container_name: ron_postgres
-    environment:
-      POSTGRES_DB: ron_clanker
-      POSTGRES_USER: ron
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./data/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-    restart: unless-stopped
-    mem_limit: 256m
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ron"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-
   # ========================================
-  # LEGACY CONTAINER (for backward compatibility)
+  # POSTGRES (OPTIONAL - Not currently used)
+  # ========================================
+  # Postgres is NOT required for Phase 1-2. SQLite handles all data storage.
+  # Uncomment if you need:
+  #   - Multiple FPL teams (concurrent access)
+  #   - Multi-server deployment
+  #   - Advanced analytics (millions of rows)
+  #
+  # To enable: uncomment the section below and update volumes at bottom
   # ========================================
 
-  ron_clanker:
-    build: .
-    container_name: ron_clanker
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    environment:
-      - DATABASE_PATH=/app/data/ron_clanker.db
-      - LOG_LEVEL=INFO
-      - MCP_ENABLED=false
-      - REDIS_URL=redis://redis:6379
-      - POSTGRES_URL=postgresql://ron:${DB_PASSWORD}@postgres:5432/ron_clanker
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    command: python -m scripts.setup_database
-    restart: unless-stopped
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: ron_postgres
+  #   environment:
+  #     POSTGRES_DB: ron_clanker
+  #     POSTGRES_USER: ron
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./data/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+  #   restart: unless-stopped
+  #   mem_limit: 256m
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ron"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
 
   # ========================================
-  # SCHEDULER SERVICES (Celery)
+  # LEGACY CONTAINER (DISABLED - not needed)
+  # ========================================
+  # This was for early testing. Agents now run as Python scripts directly.
+  # Uncomment only if you want to test containerized agents.
   # ========================================
 
-  celery_worker:
-    build: .
-    container_name: ron_celery_worker
-    command: celery -A infrastructure.celery_app worker --loglevel=info
-    volumes:
-      - ./:/app
-      - ./data:/app/data
-      - ./logs:/app/logs
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_PATH=/app/data/ron_clanker.db
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    mem_limit: 256m
-
-  celery_beat:
-    build: .
-    container_name: ron_celery_beat
-    command: celery -A infrastructure.celery_app beat --loglevel=info
-    volumes:
-      - ./:/app
-      - ./data:/app/data
-      - ./logs:/app/logs
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_PATH=/app/data/ron_clanker.db
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    mem_limit: 128m
+  # ron_clanker:
+  #   build: .
+  #   container_name: ron_clanker
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./logs:/app/logs
+  #   environment:
+  #     - DATABASE_PATH=/app/data/ron_clanker.db
+  #     - LOG_LEVEL=INFO
+  #     - MCP_ENABLED=false
+  #     - REDIS_URL=redis://redis:6379
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   command: python -m scripts.setup_database
+  #   restart: unless-stopped
 
   # ========================================
-  # MONITORING SERVICES
+  # SCHEDULER SERVICES (DISABLED - not needed yet)
+  # ========================================
+  # Celery for scheduled tasks - will be enabled in Phase 3
+  # For now, use cron for scheduled backups and monitoring
   # ========================================
 
-  decision_logger:
-    build: .
-    container_name: ron_decision_logger
-    command: python scripts/decision_logger.py
-    volumes:
-      - ./:/app
-      - ./logs:/app/logs
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    mem_limit: 128m
+  # celery_worker:
+  #   build: .
+  #   container_name: ron_celery_worker
+  #   command: celery -A infrastructure.celery_app worker --loglevel=info
+  #   volumes:
+  #     - ./:/app
+  #     - ./data:/app/data
+  #     - ./logs:/app/logs
+  #   environment:
+  #     - REDIS_URL=redis://redis:6379/0
+  #     - DATABASE_PATH=/app/data/ron_clanker.db
+  #     - PYTHONUNBUFFERED=1
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   mem_limit: 256m
+
+  # celery_beat:
+  #   build: .
+  #   container_name: ron_celery_beat
+  #   command: celery -A infrastructure.celery_app beat --loglevel=info
+  #   volumes:
+  #     - ./:/app
+  #     - ./data:/app/data
+  #     - ./logs:/app/logs
+  #   environment:
+  #     - REDIS_URL=redis://redis:6379/0
+  #     - DATABASE_PATH=/app/data/ron_clanker.db
+  #     - PYTHONUNBUFFERED=1
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   mem_limit: 128m
+
+  # ========================================
+  # MONITORING SERVICES (DISABLED - not needed yet)
+  # ========================================
+
+  # decision_logger:
+  #   build: .
+  #   container_name: ron_decision_logger
+  #   command: python scripts/decision_logger.py
+  #   volumes:
+  #     - ./:/app
+  #     - ./logs:/app/logs
+  #   environment:
+  #     - REDIS_URL=redis://redis:6379/0
+  #     - PYTHONUNBUFFERED=1
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   mem_limit: 128m
 
   # ========================================
   # AGENT SERVICES (Event-Driven Architecture)
@@ -167,4 +190,4 @@ services:
 
 volumes:
   redis_data:
-  postgres_data:
+  # postgres_data:  # Commented out - not needed for Phase 1-2
