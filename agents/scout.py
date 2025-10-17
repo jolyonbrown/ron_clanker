@@ -51,12 +51,12 @@ class ScoutAgent(BaseAgent):
 
     Monitors external sources for team news, injuries, rotation risks.
 
-    Sources (Phase 2A):
-    - Website scraping: Premier Injuries, BBC Sport
-    - YouTube transcripts: FPL content creators
-    - RSS feeds: Club news, FPL sites
+    Sources (Phase 2):
+    - RSS feeds: BBC Sport, Sky Sports (fastest, most reliable)
+    - YouTube transcripts: FPL content creators (FPL Harry, etc.)
+    - Website scraping: Premier Injuries, BBC Sport (backup)
 
-    Future (Phase 2B):
+    Future:
     - Email parsing: LazyFPL newsletters
     - Twitter alternatives: Nitter RSS, manual webhooks
 
@@ -99,10 +99,12 @@ class ScoutAgent(BaseAgent):
         # Components
         from intelligence.website_monitor import WebsiteMonitor
         from intelligence.rss_monitor import RSSMonitor
+        from intelligence.youtube_monitor import YouTubeMonitor
         from intelligence.intelligence_classifier import IntelligenceClassifier
 
         self.website_monitor = WebsiteMonitor()
         self.rss_monitor = RSSMonitor()
+        self.youtube_monitor = YouTubeMonitor()
         self.classifier = IntelligenceClassifier()  # Will be loaded with players on start
 
         # Player name cache for fuzzy matching
@@ -160,8 +162,12 @@ class ScoutAgent(BaseAgent):
                 website_intel = await monitor.check_all()
             logger.info(f"Scout: Found {len(website_intel)} items from websites")
 
+            # Check YouTube videos (if any configured)
+            youtube_intel = await self.youtube_monitor.check_all(max_age_hours=24)
+            logger.info(f"Scout: Found {len(youtube_intel)} items from YouTube")
+
             # Combine all raw intelligence
-            raw_intelligence = rss_intel + website_intel
+            raw_intelligence = rss_intel + website_intel + youtube_intel
 
             # Convert raw intelligence to IntelligenceItems using classifier
             all_intelligence: List[IntelligenceItem] = []
@@ -189,9 +195,6 @@ class ScoutAgent(BaseAgent):
                 all_intelligence.append(intel)
 
             logger.info(f"Scout: Processed {len(all_intelligence)} total intelligence items")
-
-            # TODO: Add YouTube monitoring
-            # youtube_intel = await self.youtube_monitor.check_channels()
 
             # Process and publish intelligence
             for intel in all_intelligence:
