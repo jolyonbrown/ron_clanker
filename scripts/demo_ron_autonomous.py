@@ -86,7 +86,11 @@ async def demo_autonomous_selection():
         current_gw = data['current_gameweek']['id']
         await data_collector.close()
 
+        # Ron selects for NEXT gameweek (target)
+        target_gw = current_gw + 1
+
         print(f"  ✅ Data loaded: {len(data['players'])} players, GW{current_gw}")
+        print(f"  ✅ Target: Selecting FOR GW{target_gw} using GW1-{current_gw} data")
 
         print("\n[Phase 3] Triggering analysis pipeline...")
         print("  Ron: 'Right lads, get me the analysis. I need to pick the team.'\n")
@@ -96,7 +100,7 @@ async def demo_autonomous_selection():
             event_type=EventType.DATA_UPDATED,
             payload={
                 'data_type': 'all',
-                'gameweek': current_gw,
+                'gameweek': target_gw,
                 'players_count': len(data['players'])
             },
             source='demo'
@@ -119,7 +123,7 @@ async def demo_autonomous_selection():
         # Trigger Ron's team selection
         selection_request = Event(
             event_type=EventType.TEAM_SELECTION_REQUESTED,
-            payload={'gameweek': current_gw},
+            payload={'gameweek': target_gw},
             source='demo'
         )
         await event_bus.publish(selection_request)
