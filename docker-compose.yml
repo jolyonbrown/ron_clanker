@@ -104,6 +104,26 @@ services:
     mem_limit: 128m
 
   # ========================================
+  # MONITORING SERVICES
+  # ========================================
+
+  decision_logger:
+    build: .
+    container_name: ron_decision_logger
+    command: python scripts/decision_logger.py
+    volumes:
+      - ./:/app
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 128m
+
+  # ========================================
   # AGENT SERVICES (Event-Driven Architecture)
   # ========================================
   # Uncomment as agents are converted to event-driven pattern
