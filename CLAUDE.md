@@ -873,3 +873,5 @@ All code should include:
 **Last Updated**: October 2025  
 **Status**: Foundation Phase  
 **Next Review**: After Phase 1 completion
+- we should use the beads plugin and not markdown files for planning
+- don't give estimated durations for task completions - e.g. week 1 for this, week 2 for that, 4-6 weeks for the other
