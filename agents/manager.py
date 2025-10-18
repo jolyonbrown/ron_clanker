@@ -12,8 +12,10 @@ from datetime import datetime
 from rules.rules_engine import RulesEngine
 from agents.data_collector import DataCollector
 from agents.player_valuation import PlayerValuationAgent
+from agents.synthesis.engine import DecisionSynthesisEngine
 from ron_clanker.persona import RonClanker
 from data.database import Database
+from utils.gameweek import get_current_gameweek
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,8 @@ class ManagerAgent:
     def __init__(
         self,
         database: Optional[Database] = None,
-        data_collector: Optional[DataCollector] = None
+        data_collector: Optional[DataCollector] = None,
+        use_ml: bool = True
     ):
         """Initialize the Manager Agent."""
         self.db = database or Database()
@@ -44,6 +47,19 @@ class ManagerAgent:
         self.rules_engine = RulesEngine()
         self.valuation_agent = PlayerValuationAgent()
         self.ron = RonClanker()
+
+        # ML-powered Decision Synthesis Engine (NEW!)
+        self.use_ml = use_ml
+        if use_ml:
+            try:
+                self.synthesis_engine = DecisionSynthesisEngine(database=self.db)
+                logger.info("Decision Synthesis Engine loaded - ML predictions ENABLED")
+            except Exception as e:
+                logger.warning(f"Could not load synthesis engine: {e}. Falling back to basic valuation.")
+                self.synthesis_engine = None
+                self.use_ml = False
+        else:
+            self.synthesis_engine = None
 
         self.current_team = None
         self.available_budget = 0
@@ -290,26 +306,49 @@ class ManagerAgent:
         fpl_data = await self.data_collector.update_all_data()
         all_players = fpl_data['players']
 
-        # Analyze transfer opportunities
-        transfer_opportunities = self.valuation_agent.identify_transfer_targets(
-            current_team,
-            all_players
-        )
+        # ===== NEW: ML-POWERED DECISION MAKING =====
+        recommendations = None
+        if self.use_ml and self.synthesis_engine:
+            try:
+                logger.info("Running Decision Synthesis Engine...")
+                recommendations = self.synthesis_engine.synthesize_recommendations(gameweek)
+                logger.info(f"Synthesis complete: {len(recommendations.get('top_players', []))} players ranked")
+            except Exception as e:
+                logger.error(f"Synthesis engine failed: {e}. Falling back to basic valuation.", exc_info=True)
+                recommendations = None
 
-        # Decide on transfers
-        transfers = self._decide_transfers(
-            transfer_opportunities,
-            gameweek
-        )
+        # Decide on transfers (ML-powered if available)
+        if recommendations:
+            transfers = self._decide_transfers_ml(
+                current_team,
+                recommendations,
+                gameweek
+            )
+        else:
+            # Fallback to basic valuation
+            transfer_opportunities = self.valuation_agent.identify_transfer_targets(
+                current_team,
+                all_players
+            )
+            transfers = self._decide_transfers(
+                transfer_opportunities,
+                gameweek
+            )
 
         # Execute transfers
         new_team = self._execute_transfers(current_team, transfers)
 
-        # Update captain for new gameweek
-        new_team = self._assign_captain(new_team)
+        # Update captain for new gameweek (ML-powered if available)
+        if recommendations and recommendations.get('captain_recommendation'):
+            new_team = self._assign_captain_ml(new_team, recommendations['captain_recommendation'])
+        else:
+            new_team = self._assign_captain(new_team)
 
-        # Decide on chip usage
-        chip_used = self._decide_chip_usage(gameweek, new_team)
+        # Decide on chip usage (ML-powered if available)
+        if recommendations and recommendations.get('chip_recommendation'):
+            chip_used = self._decide_chip_usage_ml(gameweek, new_team, recommendations['chip_recommendation'])
+        else:
+            chip_used = self._decide_chip_usage(gameweek, new_team)
 
         # Save decisions
         self.db.set_team(gameweek, new_team)
@@ -323,18 +362,171 @@ class ManagerAgent:
                 transfer.get('reasoning', '')
             )
 
-        # Generate announcement
+        # Generate announcement (with ML insights if available)
         if transfers:
-            reasoning = self._generate_transfer_reasoning(transfers)
+            reasoning = self._generate_transfer_reasoning(transfers, recommendations)
             announcement = self.ron.announce_transfers(transfers, gameweek, reasoning)
         else:
             reasoning = {
-                'strategy': f"Team looks solid for GW{gameweek}. No changes needed.",
-                'chip_used': chip_used
+                'strategy': recommendations.get('strategy', {}).get('reasoning', f"Team looks solid for GW{gameweek}. No changes needed.") if recommendations else f"Team looks solid for GW{gameweek}. No changes needed.",
+                'chip_used': chip_used,
+                'ml_insights': recommendations.get('strategy') if recommendations else None
             }
             announcement = self.ron.announce_team_selection(new_team, gameweek, reasoning)
 
         return transfers, chip_used, announcement
+
+    def _decide_transfers_ml(
+        self,
+        current_team: List[Dict[str, Any]],
+        recommendations: Dict[str, Any],
+        gameweek: int
+    ) -> List[Dict[str, Any]]:
+        """
+        ML-POWERED: Decide transfers using synthesis recommendations.
+
+        Considers:
+        - Top value players from ML predictions
+        - Template risks to cover
+        - League position and competitive context
+        - Multi-gameweek value
+        """
+        transfers = []
+
+        # Get top recommended players by position
+        top_players = recommendations.get('top_players', [])[:20]
+        template_risks = recommendations.get('risks_to_cover', [])
+        strategy = recommendations.get('strategy', {})
+
+        # Identify weakest player in current team
+        current_team_ids = {p['id'] for p in current_team}
+
+        # Find players in current team
+        current_team_with_predictions = []
+        for player in current_team:
+            player_pred = next((p for p in top_players if p.get('player_id') == player['id']), None)
+            if player_pred:
+                current_team_with_predictions.append({
+                    **player,
+                    'xp': player_pred['xp'],
+                    'value_score': player_pred['value_score']
+                })
+            else:
+                # Player not in top recommendations - likely weak
+                current_team_with_predictions.append({
+                    **player,
+                    'xp': 0.0,
+                    'value_score': 0.0
+                })
+
+        # Sort by value score to find weakest
+        current_team_with_predictions.sort(key=lambda x: x['value_score'])
+
+        # Consider transfers for weakest player
+        weakest = current_team_with_predictions[0] if current_team_with_predictions else None
+
+        if weakest and weakest['value_score'] < 0.5:
+            # Find best replacement in same position
+            position = weakest['element_type']
+            replacements = [p for p in top_players
+                           if p['position'] == position
+                           and p['player_id'] not in current_team_ids
+                           and p['price'] <= weakest['now_cost'] / 10 + 1.0]  # Allow 1m upgrade
+
+            if replacements:
+                best_replacement = replacements[0]
+                expected_gain = best_replacement['xp'] - weakest.get('xp', 0.0)
+
+                if expected_gain >= 2.0:  # Worth a free transfer
+                    transfers.append({
+                        'player_out': weakest,
+                        'player_in': self._get_player_details(best_replacement['player_id']),
+                        'expected_gain': expected_gain,
+                        'is_free': True,
+                        'cost': 0,
+                        'reasoning': (
+                            f"ML predicts {best_replacement['name']} will score "
+                            f"{best_replacement['xp']:.1f} xP vs {weakest.get('xp', 0):.1f} for "
+                            f"{weakest['web_name']}. {strategy.get('approach', 'Value upgrade')}."
+                        )
+                    })
+
+        return transfers
+
+    def _assign_captain_ml(
+        self,
+        team: List[Dict[str, Any]],
+        captain_rec: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        ML-POWERED: Assign captain using synthesis recommendation.
+
+        Considers:
+        - ML predicted points
+        - Ownership (template vs differential)
+        - League position context
+        """
+        primary = captain_rec.get('primary', {})
+        differential = captain_rec.get('differential_option', {})
+
+        captain_id = primary.get('player_id') if primary else None
+        vice_captain_id = differential.get('player_id') if differential else None
+
+        # Find captain and vice in team
+        for player in team:
+            if player['id'] == captain_id:
+                player['is_captain'] = True
+                player['is_vice_captain'] = False
+                player['multiplier'] = 2
+                logger.info(f"Captain (ML): {player['web_name']} ({primary.get('xp', 0):.2f} xP)")
+            elif player['id'] == vice_captain_id:
+                player['is_captain'] = False
+                player['is_vice_captain'] = True
+                player['multiplier'] = 1
+            else:
+                player['is_captain'] = False
+                player['is_vice_captain'] = False
+                player['multiplier'] = 1
+
+        # If no captain set (player not in team), fallback to basic method
+        if not any(p.get('is_captain') for p in team):
+            logger.warning("ML captain not in team, using fallback")
+            return self._assign_captain(team)
+
+        return team
+
+    def _decide_chip_usage_ml(
+        self,
+        gameweek: int,
+        team: List[Dict[str, Any]],
+        chip_rec: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        ML-POWERED: Decide chip usage using synthesis recommendation.
+
+        Considers:
+        - Optimal timing from chip analyzer
+        - League position and competitive context
+        - Expected gain vs alternatives
+        """
+        recommended_chip = chip_rec.get('recommended_chip')
+        reasoning = chip_rec.get('reasoning', '')
+
+        if recommended_chip and recommended_chip != 'none':
+            logger.info(f"Chip recommendation: {recommended_chip} - {reasoning}")
+            # For now, be conservative - still don't use chips in early phase
+            # TODO: Enable chip usage when confidence is high
+            return None
+
+        return None
+
+    def _get_player_details(self, player_id: int) -> Dict[str, Any]:
+        """Fetch full player details from database."""
+        player_data = self.db.execute_query(
+            "SELECT * FROM players WHERE id = ?",
+            (player_id,)
+        )
+        return player_data[0] if player_data else None
 
     def _decide_transfers(
         self,
@@ -406,7 +598,8 @@ class ManagerAgent:
 
     def _generate_transfer_reasoning(
         self,
-        transfers: List[Dict[str, Any]]
+        transfers: List[Dict[str, Any]],
+        recommendations: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate Ron's reasoning for transfers."""
         reasoning_parts = []
@@ -416,10 +609,17 @@ class ManagerAgent:
             player_in = transfer['player_in']['web_name']
             gain = transfer['expected_gain']
 
-            reasoning_parts.append(
+            base_reasoning = (
                 f"{player_out} hasn't delivered. {player_in} is the better option. "
                 f"Expect {gain:.1f} extra points per week."
             )
+
+            # Add ML context if available
+            if recommendations and recommendations.get('strategy'):
+                strategy = recommendations['strategy']
+                base_reasoning += f" {strategy.get('reasoning', '')}"
+
+            reasoning_parts.append(base_reasoning)
 
         return " ".join(reasoning_parts)
 
