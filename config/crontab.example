@@ -26,6 +26,9 @@ PROJECT_PATH=/home/jolyon/ron_clanker
 # DATA COLLECTION
 # ============================================================================
 
+# Every hour - Sync gameweek status from FPL API (ensures GW tracking stays accurate)
+0 * * * * cd $PROJECT_PATH && venv/bin/python scripts/sync_gameweek_status.py >> logs/cron_gameweek.log 2>&1
+
 # Daily at 02:30 - Fetch latest FPL data (before Scout runs)
 30 2 * * * cd $PROJECT_PATH && venv/bin/python scripts/collect_fpl_data.py >> logs/cron_data.log 2>&1
 
@@ -72,11 +75,24 @@ PROJECT_PATH=/home/jolyon/ron_clanker
 #   This should calculate actual deadline time and schedule one-off job
 
 # ============================================================================
-# WEEKLY REVIEW
+# LEAGUE INTELLIGENCE & COMPETITIVE ANALYSIS
+# ============================================================================
+
+# Daily at 06:00 - Track mini-league standings and rivals
+0 6 * * * cd $PROJECT_PATH && venv/bin/python scripts/track_mini_league.py >> logs/cron_league.log 2>&1
+
+# Daily at 07:00 - Generate league intelligence report (chip usage, differentials)
+0 7 * * * cd $PROJECT_PATH && venv/bin/python scripts/generate_league_intelligence.py >> logs/cron_intelligence.log 2>&1
+
+# ============================================================================
+# WEEKLY REVIEW & REPORTING
 # ============================================================================
 
 # Monday 08:00 - Weekly performance review (after gameweek finishes)
-0 8 * * 1 cd $PROJECT_PATH && venv/bin/python scripts/weekly_review.py >> logs/cron_review.log 2>&1
+0 8 * * 1 cd $PROJECT_PATH && venv/bin/python scripts/analyze_gw_results.py >> logs/cron_review.log 2>&1
+
+# Monday 09:00 - Staff meeting report (full team analysis)
+0 9 * * 1 cd $PROJECT_PATH && venv/bin/python scripts/staff_meeting_report.py >> logs/cron_staff.log 2>&1
 
 # ============================================================================
 # DATABASE MAINTENANCE
@@ -127,3 +143,13 @@ PROJECT_PATH=/home/jolyon/ron_clanker
 #   - Check logs after each cron run
 #   - Use: venv/bin/python scripts/test_cron_jobs.py
 #
+
+# ============================================================================
+# LEARNING & IMPROVEMENT
+# ============================================================================
+
+# Monday at 08:00 - Post-gameweek performance review (after GW completes Sunday)
+0 8 * * 1 cd $PROJECT_PATH && venv/bin/python scripts/post_gameweek_review.py --gw \$(date +\%V) --save-report >> logs/cron_learning.log 2>&1
+
+# Monday at 09:00 - Check if model retraining needed  
+0 9 * * 1 cd $PROJECT_PATH && venv/bin/python scripts/auto_retrain_models.py >> logs/cron_retrain.log 2>&1
