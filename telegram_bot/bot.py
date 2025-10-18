@@ -239,7 +239,7 @@ class RonClankerBot:
     # COMMAND HANDLERS
     # =================================================================
 
-    def cmd_start(self, update: Update, context: CallbackContext):
+    def cmd_start(self, update: 'Update', context: 'CallbackContext'):
         """Handle /start command."""
         message = (
             "⚽ *Ron Clanker's FPL Bot*\n\n"
@@ -256,11 +256,11 @@ class RonClankerBot:
         )
         update.message.reply_text(message, parse_mode='Markdown')
 
-    def cmd_help(self, update: Update, context: CallbackContext):
+    def cmd_help(self, update: 'Update', context: 'CallbackContext'):
         """Handle /help command."""
         self.cmd_start(update, context)
 
-    def cmd_status(self, update: Update, context: CallbackContext):
+    def cmd_status(self, update: 'Update', context: 'CallbackContext'):
         """Handle /status command - current team overview."""
         if not self.db:
             update.message.reply_text("Database not available")
@@ -302,7 +302,7 @@ class RonClankerBot:
             logger.error(f"Status command error: {e}")
             update.message.reply_text(f"Error getting status: {e}")
 
-    def cmd_team(self, update: Update, context: CallbackContext):
+    def cmd_team(self, update: 'Update', context: 'CallbackContext'):
         """Handle /team command - full squad."""
         if not self.db:
             update.message.reply_text("Database not available")
@@ -357,7 +357,7 @@ class RonClankerBot:
             logger.error(f"Team command error: {e}")
             update.message.reply_text(f"Error getting team: {e}")
 
-    def cmd_league(self, update: Update, context: CallbackContext):
+    def cmd_league(self, update: 'Update', context: 'CallbackContext'):
         """Handle /league command - mini-league standings."""
         if not self.db:
             update.message.reply_text("Database not available")
@@ -397,7 +397,7 @@ class RonClankerBot:
             logger.error(f"League command error: {e}")
             update.message.reply_text(f"Error getting league: {e}")
 
-    def cmd_chips(self, update: Update, context: CallbackContext):
+    def cmd_chips(self, update: 'Update', context: 'CallbackContext'):
         """Handle /chips command - available chips."""
         message = (
             "💎 *AVAILABLE CHIPS*\n\n"
@@ -415,7 +415,7 @@ class RonClankerBot:
         )
         update.message.reply_text(message, parse_mode='Markdown')
 
-    def cmd_predictions(self, update: Update, context: CallbackContext):
+    def cmd_predictions(self, update: 'Update', context: 'CallbackContext'):
         """Handle /predictions command - next GW predictions."""
         update.message.reply_text(
             "🔮 *PREDICTIONS*\n\n"
