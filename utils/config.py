@@ -21,6 +21,12 @@ except ImportError:
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# Load .env file when module is imported (so os.getenv() works everywhere)
+if DOTENV_AVAILABLE:
+    env_path = PROJECT_ROOT / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+
 
 def load_config() -> Dict[str, Any]:
     """
