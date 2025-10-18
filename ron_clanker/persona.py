@@ -218,6 +218,191 @@ class RonClanker:
 
         return "\n".join(review)
 
+    def post_match_analysis(
+        self,
+        gameweek: int,
+        ron_points: int,
+        ron_rank: int,
+        average_score: int,
+        league_data: Dict[str, Any],
+        premier_league_stories: List[str],
+        team_performance: Dict[str, Any]
+    ) -> str:
+        """
+        Generate Ron's POST-MATCH analysis - after a few pints and a cigar.
+
+        This is Ron unwinding after the gameweek, more candid and colorful.
+        Reflects on PL results, mini-league drama, and his own team.
+
+        Args:
+            gameweek: Gameweek number
+            ron_points: Ron's points this week
+            ron_rank: Ron's current overall rank
+            average_score: Average FPL score this week
+            league_data: Mini-league standings and movements
+            premier_league_stories: Key PL results/talking points
+            team_performance: Ron's team analysis (captain, differentials, etc.)
+
+        Returns:
+            Post-match analysis text (sweary, honest, Ron with a cigar)
+        """
+        analysis = []
+
+        # Header - time and setting
+        analysis.append("=" * 70)
+        analysis.append(f"RON'S POST-MATCH THOUGHTS - GAMEWEEK {gameweek}")
+        analysis.append("=" * 70)
+        analysis.append("*Lights cigar, pours a pint, settles into the chair*\n")
+
+        diff = ron_points - average_score
+
+        # Opening - mood depends on results
+        if diff >= 15:
+            analysis.append(f"Right. {ron_points} bloody points. THAT'S how you do it!")
+            analysis.append(f"{diff} above average. The plan worked, lads. Absolutely worked.\n")
+        elif diff >= 5:
+            analysis.append(f"{ron_points} points. Not bad at all. Beat the average by {diff}.")
+            analysis.append("Can't complain with that. Solid gameweek.\n")
+        elif diff >= -5:
+            analysis.append(f"{ron_points} points. Right around average.")
+            analysis.append("Not thrilling, but we're ticking along. Could be worse.\n")
+        elif diff >= -15:
+            analysis.append(f"{ron_points} points. Fuck sake.")
+            analysis.append(f"{abs(diff)} below average. That's not good enough, is it?\n")
+        else:
+            analysis.append(f"{ron_points} bloody points. Absolute shambles.")
+            analysis.append(f"{abs(diff)} below average. I need another drink after that.\n")
+
+        # Premier League commentary
+        if premier_league_stories:
+            analysis.append("=" * 70)
+            analysis.append("THE PREMIER LEAGUE")
+            analysis.append("=" * 70)
+            for story in premier_league_stories:
+                analysis.append(f"• {story}")
+            analysis.append("")
+
+        # Mini-league drama
+        analysis.append("=" * 70)
+        analysis.append("MINI-LEAGUE SITUATION")
+        analysis.append("=" * 70)
+
+        league_name = league_data.get('name', 'the league')
+        ron_league_rank = league_data.get('ron_rank', 0)
+        total_managers = league_data.get('total_managers', 0)
+        leader = league_data.get('leader', {})
+        gap_to_leader = league_data.get('gap_to_leader', 0)
+
+        analysis.append(f"League: {league_name}")
+        analysis.append(f"Position: {ron_league_rank} of {total_managers}")
+
+        if ron_league_rank == 1:
+            analysis.append("\nTop of the league. Damn right.")
+            analysis.append("Rest of you lot can try and catch me. Good luck with that.\n")
+        elif ron_league_rank <= 3:
+            analysis.append(f"\n{gap_to_leader} points behind {leader.get('name', 'the leader')}.")
+            analysis.append("Right in the mix. This is ours for the taking.\n")
+        elif ron_league_rank <= total_managers // 2:
+            analysis.append(f"\nMid-table. {gap_to_leader} points off the top.")
+            analysis.append("Need to start climbing. Not here for mid-table obscurity.\n")
+        else:
+            analysis.append(f"\n{gap_to_leader} points off the pace. Bollocks.")
+            analysis.append("This is embarrassing. Need some serious changes.\n")
+
+        # League movements
+        movers = league_data.get('big_movers', [])
+        if movers:
+            analysis.append("Big movers this week:")
+            for mover in movers[:3]:
+                direction = "↑" if mover['change'] > 0 else "↓"
+                analysis.append(f"  {direction} {mover['name']}: {mover['change']:+d} places ({mover['points']} pts)")
+            analysis.append("")
+
+        # Ron's team performance
+        analysis.append("=" * 70)
+        analysis.append("MY LOT - THE BRUTALLY HONEST ASSESSMENT")
+        analysis.append("=" * 70)
+
+        captain_data = team_performance.get('captain', {})
+        captain_name = captain_data.get('name', 'Unknown')
+        captain_points = captain_data.get('points', 0)
+
+        if captain_points >= 10:
+            analysis.append(f"✓ Captain {captain_name}: {captain_points} points")
+            analysis.append("  That's what I'm talking about. Captain choice was spot on.\n")
+        elif captain_points >= 6:
+            analysis.append(f"○ Captain {captain_name}: {captain_points} points")
+            analysis.append("  Okay. Not brilliant, but did the job.\n")
+        else:
+            analysis.append(f"✗ Captain {captain_name}: {captain_points} points")
+            analysis.append(f"  Fucking hell. {captain_name} was supposed to deliver. That's on me.\n")
+
+        # Heroes and villains
+        heroes = team_performance.get('heroes', [])
+        if heroes:
+            analysis.append("HEROES:")
+            for hero in heroes[:3]:
+                analysis.append(f"  • {hero['name']}: {hero['points']} points - {hero['reason']}")
+            analysis.append("")
+
+        villains = team_performance.get('villains', [])
+        if villains:
+            analysis.append("VILLAINS:")
+            for villain in villains[:3]:
+                analysis.append(f"  • {villain['name']}: {villain['points']} points - {villain['reason']}")
+            analysis.append("")
+
+        # Differentials performance
+        differentials = team_performance.get('differentials', [])
+        if differentials:
+            analysis.append("DIFFERENTIALS:")
+            for diff_player in differentials:
+                if diff_player['points'] >= 6:
+                    analysis.append(f"  ✓ {diff_player['name']}: {diff_player['points']} pts ({diff_player['ownership']}% owned)")
+                    analysis.append(f"    That's the edge right there. While everyone else missed him.\n")
+                else:
+                    analysis.append(f"  ✗ {diff_player['name']}: {diff_player['points']} pts ({diff_player['ownership']}% owned)")
+                    analysis.append(f"    Tried to be clever. Didn't work out.\n")
+
+        # Overall rank
+        analysis.append("=" * 70)
+        rank_formatted = f"{ron_rank:,}"
+        analysis.append(f"Overall Rank: {rank_formatted}")
+
+        if ron_rank <= 100000:
+            analysis.append("Top 100k. That's the standard.\n")
+        elif ron_rank <= 500000:
+            analysis.append("Needs improvement, but we're in the mix.\n")
+        else:
+            analysis.append("Not where we want to be. Long season ahead.\n")
+
+        # Closing thoughts - depends on mood
+        analysis.append("=" * 70)
+        analysis.append("THE VERDICT")
+        analysis.append("=" * 70)
+
+        if diff >= 10:
+            analysis.append("Good weekend. The data worked, the picks delivered, job done.")
+            analysis.append("This is what happens when you trust the fundamentals.")
+            analysis.append("\n*Takes satisfied puff of cigar*")
+        elif diff >= 0:
+            analysis.append("Alright weekend. Nothing spectacular, but solid enough.")
+            analysis.append("We move forward. One gameweek at a time.")
+            analysis.append("\n*Sips pint thoughtfully*")
+        else:
+            analysis.append("Disappointing. No other word for it.")
+            analysis.append("Need to have a hard look at the numbers and make some changes.")
+            analysis.append("This is the game - you get it wrong, you pay for it.")
+            analysis.append("\n*Drains pint in frustration*")
+
+        # Sign off
+        analysis.append("\nRight. That's enough analysis for one night.")
+        analysis.append("Next gameweek is what matters now.")
+        analysis.append("\n- Ron Clanker")
+        analysis.append("*" + datetime.now().strftime("%A night, %d %B %Y, %H:%M") + "*")
+
+        return "\n".join(analysis)
+
     def _get_tactical_phrase(self) -> str:
         """Get a random Ron Clanker tactical phrase."""
         import random
