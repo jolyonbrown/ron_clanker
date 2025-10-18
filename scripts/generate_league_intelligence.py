@@ -1,273 +1,468 @@
 #!/usr/bin/env python3
 """
-Weekly League Intelligence Report
+Generate League Intelligence Report
 
-Generates Ron's Monday morning intelligence brief on the mini-league.
-Combines data from all staff members for competitive decision-making.
+Produces daily competitive analysis report for Ron:
+- League standings and gaps
+- Rival chip status (who has what remaining)
+- Differential analysis (Ron vs rivals)
+- Transfer trends in the league
+- Competitive recommendations
 
-Usage:
-    python scripts/generate_league_intelligence.py --league 160968
-    python scripts/generate_league_intelligence.py --league 160968 --save
+Runs daily at 07:00 via cron (after league tracking at 06:00)
 """
 
 import sys
 from pathlib import Path
-import argparse
-import json
-import requests
 from datetime import datetime
-from collections import defaultdict
+import json
+import logging
 
-# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-FPL_BASE_URL = "https://fantasy.premierleague.com/api"
-POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
+from data.database import Database
+from intelligence.league_intel import LeagueIntelligenceService
+from intelligence.chip_strategy import ChipStrategyAnalyzer
+from intelligence.fixture_optimizer import FixtureOptimizer
+
+logger = logging.getLogger('ron_clanker.league_intelligence')
+
+CONFIG_FILE = project_root / 'config' / 'ron_config.json'
 
 
 def load_config():
-    """Load Ron's config"""
-    config_file = project_root / 'config' / 'ron_config.json'
-    if config_file.exists():
-        with open(config_file, 'r') as f:
+    """Load Ron's config."""
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE, 'r') as f:
             return json.load(f)
     return {}
 
 
-def fetch_all_data(league_id):
-    """Fetch all required data"""
-    print("📥 Gathering intelligence...")
+def generate_standings_report(league_service, league_id, gameweek):
+    """Generate league standings section."""
 
-    # Bootstrap data
-    bootstrap = requests.get(f"{FPL_BASE_URL}/bootstrap-static/").json()
+    standings = league_service.db.execute_query("""
+        SELECT
+            lsh.entry_id,
+            lr.player_name,
+            lr.team_name,
+            lsh.rank,
+            lsh.last_rank,
+            lsh.total_points,
+            lsh.event_points,
+            lsh.rank - COALESCE(lsh.last_rank, lsh.rank) as rank_change
+        FROM league_standings_history lsh
+        JOIN league_rivals lr ON lsh.entry_id = lr.entry_id AND lsh.league_id = lr.league_id
+        WHERE lsh.league_id = ? AND lsh.gameweek = ?
+        ORDER BY lsh.rank
+    """, (league_id, gameweek))
 
-    # League data
-    league = requests.get(
-        f"{FPL_BASE_URL}/leagues-classic/{league_id}/standings/"
-    ).json()
-
-    return bootstrap, league
-
-
-def generate_intelligence_report(league_id, bootstrap, league_data, ron_team_id=None):
-    """Generate comprehensive intelligence report"""
-
-    current_gw = next(e['id'] for e in bootstrap['events'] if e['is_current'])
-    gws_remaining = 38 - current_gw + 1
-    standings = league_data['standings']['results']
-    league_info = league_data['league']
-
-    report_lines = []
-
-    # Header
-    report_lines.append("=" * 100)
-    report_lines.append("WEEKLY LEAGUE INTELLIGENCE BRIEF")
-    report_lines.append("=" * 100)
-    report_lines.append(f"League: {league_info['name']}")
-    report_lines.append(f"Date: {datetime.now().strftime('%A, %d %B %Y')}")
-    report_lines.append(f"Current Gameweek: {current_gw}")
-    report_lines.append(f"Gameweeks Remaining: {gws_remaining}")
-    report_lines.append("=" * 100)
-
-    # MAGGIE - League Table Analysis
-    report_lines.append("\n" + "=" * 100)
-    report_lines.append("📊 MAGGIE'S LEAGUE TABLE ANALYSIS")
-    report_lines.append("=" * 100)
+    if not standings:
+        return "No standings data available"
 
     leader = standings[0]
-    report_lines.append(f"\n🏆 LEADER: {leader['player_name']} ({leader['entry_name']})")
-    report_lines.append(f"   Total: {leader['total']} pts | Last GW: {leader['event_total']} pts")
 
-    report_lines.append(f"\n📈 TOP 5:")
-    for team in standings[:5]:
-        gap = team['total'] - leader['total']
-        gap_str = f"{gap:+d}" if gap != 0 else "LEADER"
-        report_lines.append(f"   {team['rank']}. {team['player_name']:25s} {team['total']:4d} pts ({gap_str:>7s})")
-
-    if ron_team_id:
-        ron_team = next((t for t in standings if t['entry'] == ron_team_id), None)
-        if ron_team:
-            report_lines.append(f"\n🤖 RON'S POSITION: {ron_team['rank']}/{len(standings)}")
-            report_lines.append(f"   Total: {ron_team['total']} pts")
-            report_lines.append(f"   Gap to leader: {ron_team['total'] - leader['total']:+d} pts")
-
-    avg_total = sum(t['total'] for t in standings) / len(standings)
-    avg_gw = sum(t['event_total'] for t in standings) / len(standings)
-    report_lines.append(f"\n📊 LEAGUE AVERAGES:")
-    report_lines.append(f"   Total: {avg_total:.1f} pts")
-    report_lines.append(f"   Last GW: {avg_gw:.1f} pts")
-
-    # TERRY - Chip Intelligence
-    report_lines.append("\n" + "=" * 100)
-    report_lines.append("🎴 TERRY'S CHIP INTELLIGENCE")
-    report_lines.append("=" * 100)
-
-    chip_usage = defaultdict(list)
-    chips_remaining = {}
+    report = []
+    report.append("\n" + "=" * 80)
+    report.append("LEAGUE STANDINGS")
+    report.append("=" * 80)
+    report.append(f"\n{'Rank':5s} {'Manager':25s} {'Points':7s} {'Gap':7s} {'Form':6s}")
+    report.append("-" * 80)
 
     for team in standings:
-        try:
-            history = requests.get(f"{FPL_BASE_URL}/entry/{team['entry']}/history/").json()
-            chips = history.get('chips', [])
+        gap = team['total_points'] - leader['total_points']
+        gap_str = f"{gap:+d}" if gap != 0 else "-"
 
-            for chip in chips:
-                chip_usage[chip['name']].append({
-                    'manager': team['player_name'],
-                    'gameweek': chip['event'],
-                    'rank': team['rank']
-                })
+        # Rank change arrow
+        rc = team['rank_change']
+        form = "↑" if rc < 0 else ("↓" if rc > 0 else "→")
 
-            # Calculate remaining chips
-            used_chips = {c['name'] for c in chips}
-            remaining = 8 - len(chips)  # Simplified - assumes 8 total
-            chips_remaining[team['player_name']] = {
-                'remaining': remaining,
-                'used': list(used_chips)
-            }
-        except:
-            pass
+        report.append(
+            f"{team['rank']:5d} {team['player_name']:25s} "
+            f"{team['total_points']:7d} {gap_str:>7s} {form:>6s}"
+        )
 
-    report_lines.append("\n🎯 CHIPS USED SO FAR:")
-    for chip_name in ['wildcard', 'bboost', 'freehit', '3xc']:
-        if chip_name in chip_usage:
-            users = chip_usage[chip_name]
-            report_lines.append(f"\n{chip_name.upper()}: {len(users)} teams")
-            for u in sorted(users, key=lambda x: x['rank'])[:5]:
-                report_lines.append(f"   - {u['manager']} (Rank {u['rank']}) - GW{u['gameweek']}")
+    return "\n".join(report)
 
-    report_lines.append("\n📋 TOP 5 CHIPS REMAINING:")
-    top_5_chips = [(name, data) for name, data in chips_remaining.items()]
-    top_5_chips.sort(key=lambda x: standings.index(
-        next(t for t in standings if t['player_name'] == x[0])
-    ))
-    for name, data in top_5_chips[:5]:
-        team_rank = next(t['rank'] for t in standings if t['player_name'] == name)
-        report_lines.append(f"   Rank {team_rank}: {name} - {data['remaining']}/8 chips left")
 
-    # ELLIE - Catch-Up Scenarios
-    report_lines.append("\n" + "=" * 100)
-    report_lines.append("🎯 ELLIE'S CATCH-UP ANALYSIS")
-    report_lines.append("=" * 100)
+def generate_chip_status_report(league_service, ron_entry_id):
+    """Generate chip usage analysis."""
 
-    if ron_team_id:
-        ron_team = next((t for t in standings if t['entry'] == ron_team_id), None)
-        if ron_team:
-            gap = leader['total'] - ron_team['total']
-            pts_per_gw_needed = gap / gws_remaining if gws_remaining > 0 else 0
+    chip_status = league_service.get_rival_chip_status()
 
-            report_lines.append(f"\n📊 CURRENT SITUATION:")
-            report_lines.append(f"   Ron's points: {ron_team['total']}")
-            report_lines.append(f"   Leader's points: {leader['total']}")
-            report_lines.append(f"   Gap: {gap} pts")
-            report_lines.append(f"   GWs remaining: {gws_remaining}")
-            report_lines.append(f"   Points/GW advantage needed: +{pts_per_gw_needed:.1f}")
+    report = []
+    report.append("\n" + "=" * 80)
+    report.append("CHIP ARSENAL ANALYSIS")
+    report.append("=" * 80)
 
-            report_lines.append(f"\n🎲 SCENARIOS:")
-            gws_played = current_gw
-            leader_avg = leader['total'] / gws_played
-            ron_avg = ron_team['total'] / gws_played if gws_played > 0 else 0
+    # Find Ron's chips
+    ron_chips = next((c for c in chip_status if c['entry_id'] == ron_entry_id), None)
 
-            for ron_future_avg in [60, 65, 70, 75, 80]:
-                ron_final = ron_team['total'] + (ron_future_avg * gws_remaining)
-                leader_final = leader['total'] + (leader_avg * gws_remaining)
-                margin = ron_final - leader_final
+    if ron_chips:
+        report.append(f"\n🤖 RON'S CHIPS REMAINING:")
+        report.append(f"   Wildcards: {ron_chips['wildcards_remaining']}/2")
+        report.append(f"   Bench Boosts: {ron_chips['bench_boosts_remaining']}/2")
+        report.append(f"   Triple Captains: {ron_chips['triple_captains_remaining']}/2")
+        report.append(f"   Free Hits: {ron_chips['free_hits_remaining']}/2")
 
-                outcome = "🏆 WINS" if margin > 0 else "📉 LOSES"
-                report_lines.append(f"   Ron @ {ron_future_avg} pts/GW: {ron_final:.0f} vs {leader_final:.0f} = {outcome}")
+        total_remaining = (
+            ron_chips['wildcards_remaining'] +
+            ron_chips['bench_boosts_remaining'] +
+            ron_chips['triple_captains_remaining'] +
+            ron_chips['free_hits_remaining']
+        )
+        report.append(f"\n   TOTAL: {total_remaining}/8 chips remaining")
+
+    # Rival chip status
+    report.append(f"\n👥 RIVAL CHIP STATUS (Top 5):")
+    report.append(f"\n{'Manager':25s} {'WC':4s} {'BB':4s} {'TC':4s} {'FH':4s} {'Total':6s}")
+    report.append("-" * 80)
+
+    for rival in chip_status[:5]:
+        if rival['entry_id'] == ron_entry_id:
+            continue
+
+        total = (
+            rival['wildcards_remaining'] +
+            rival['bench_boosts_remaining'] +
+            rival['triple_captains_remaining'] +
+            rival['free_hits_remaining']
+        )
+
+        report.append(
+            f"{rival['player_name']:25s} "
+            f"{rival['wildcards_remaining']}/2  "
+            f"{rival['bench_boosts_remaining']}/2  "
+            f"{rival['triple_captains_remaining']}/2  "
+            f"{rival['free_hits_remaining']}/2  "
+            f"{total:>6d}/8"
+        )
+
+    return "\n".join(report)
+
+
+def generate_differential_report(league_service, ron_entry_id, gameweek):
+    """Generate differential analysis."""
+
+    differentials = league_service.get_differentials(ron_entry_id, gameweek, rival_limit=5)
+
+    report = []
+    report.append("\n" + "=" * 80)
+    report.append("DIFFERENTIAL ANALYSIS")
+    report.append("=" * 80)
+
+    # Ron's exclusives
+    ron_exclusives = differentials['ron_exclusives']
+
+    if ron_exclusives:
+        report.append(f"\n🤖 RON'S DIFFERENTIALS ({len(ron_exclusives)} players):")
+        report.append(f"{'Player':20s} {'Price':8s} {'Global Own':12s} {'Captain':8s}")
+        report.append("-" * 80)
+
+        for player in ron_exclusives[:10]:  # Top 10
+            cap_marker = "⭐" if player['is_captain'] else ""
+            report.append(
+                f"{player['web_name']:20s} "
+                f"£{player['price']:.1f}m    "
+                f"{player['global_ownership']:>5s}%       "
+                f"{cap_marker:>8s}"
+            )
     else:
-        # Ron entering fresh
-        report_lines.append(f"\n📊 RON ENTERING AT GW{current_gw + 1}:")
-        report_lines.append(f"   Leader: {leader['total']} pts")
-        report_lines.append(f"   GWs remaining for Ron: {gws_remaining}")
+        report.append("\n🤖 RON'S DIFFERENTIALS: None (template team)")
 
-        leader_avg = leader['total'] / current_gw
-        report_lines.append(f"\n🎲 SCENARIOS:")
-        for ron_avg in [60, 65, 70, 75, 80]:
-            ron_final = ron_avg * gws_remaining
-            leader_final = leader['total'] + (leader_avg * gws_remaining)
-            margin = ron_final - leader_final
+    # Template gaps
+    template_missing = differentials['template_missing']
 
-            outcome = "🏆 WINS" if margin > 0 else "📉 LOSES"
-            report_lines.append(f"   Ron @ {ron_avg} pts/GW: {ron_final:.0f} vs {leader_final:.0f} = {outcome}")
+    if template_missing:
+        report.append(f"\n\n👥 TEMPLATE PLAYERS RON IS MISSING ({len(template_missing)} players):")
+        report.append(f"{'Player':20s} {'Price':8s} {'League Own':12s}")
+        report.append("-" * 80)
 
-    # RON'S VERDICT
-    report_lines.append("\n" + "=" * 100)
-    report_lines.append("💬 THE GAFFER'S VERDICT")
-    report_lines.append("=" * 100)
-
-    if ron_team_id:
-        ron_team = next((t for t in standings if t['entry'] == ron_team_id), None)
-        if ron_team:
-            if ron_team['rank'] == 1:
-                report_lines.append("\nTop of the league. That's where we belong.")
-                report_lines.append("But it's a marathon, not a sprint. Stay focused.")
-            elif ron_team['rank'] <= 3:
-                report_lines.append(f"\nRank {ron_team['rank']}. In touching distance of the top.")
-                report_lines.append("Keep grinding. The DC strategy will deliver over time.")
-            else:
-                gap = leader['total'] - ron_team['total']
-                report_lines.append(f"\nRank {ron_team['rank']}. {gap} points behind.")
-                report_lines.append("Long way to go, but that's fine. We play the long game.")
-
-            # Chip strategy
-            if chips_remaining.get(ron_team['player_name'], {}).get('remaining', 0) > 6:
-                report_lines.append("\nGood news: We've got all our chips. Use them wisely.")
-        else:
-            report_lines.append("\nNot in the league yet - that's the plan.")
+        for player in template_missing[:10]:  # Top 10
+            report.append(
+                f"{player['web_name']:20s} "
+                f"£{player['price']:.1f}m    "
+                f"{player['rival_count']}/5 rivals  "
+                f"({player['league_ownership_pct']:.0f}%)"
+            )
     else:
-        report_lines.append("\nEntering fresh. Clean slate. £100m to work with.")
-        report_lines.append("Everyone else has played 7 gameweeks. We've got 31 to catch them.")
-        report_lines.append(f"Leader's on {leader['total']} points. That's {leader['total']/current_gw:.1f} per week.")
-        report_lines.append("We beat that average, we win. Simple maths.")
+        report.append("\n\n👥 TEMPLATE PLAYERS RON IS MISSING: None (Ron has template)")
 
-    report_lines.append("\n" + "=" * 100)
+    return "\n".join(report)
 
-    return "\n".join(report_lines)
+
+def generate_transfer_intel_report(league_service, gameweek):
+    """Generate transfer intelligence section."""
+
+    # Get popular transfers in the league
+    popular_in = league_service.db.execute_query("""
+        SELECT
+            rt.player_in,
+            p.web_name,
+            COUNT(*) as transfer_count
+        FROM rival_transfers rt
+        JOIN players p ON rt.player_in = p.id
+        WHERE rt.gameweek = ?
+        GROUP BY rt.player_in
+        ORDER BY transfer_count DESC
+        LIMIT 5
+    """, (gameweek,))
+
+    popular_out = league_service.db.execute_query("""
+        SELECT
+            rt.player_out,
+            p.web_name,
+            COUNT(*) as transfer_count
+        FROM rival_transfers rt
+        JOIN players p ON rt.player_out = p.id
+        WHERE rt.gameweek = ?
+        GROUP BY rt.player_out
+        ORDER BY transfer_count DESC
+        LIMIT 5
+    """, (gameweek,))
+
+    # Get ITB leaders (most cash available)
+    itb_leaders = league_service.db.execute_query("""
+        SELECT
+            lsh.entry_id,
+            lr.player_name,
+            lsh.bank_value / 10.0 as itb,
+            lsh.value / 10.0 as team_value
+        FROM league_standings_history lsh
+        JOIN league_rivals lr ON lsh.entry_id = lr.entry_id
+        WHERE lsh.gameweek = ? AND lsh.bank_value IS NOT NULL
+        ORDER BY lsh.bank_value DESC
+        LIMIT 5
+    """, (gameweek,))
+
+    report = []
+    report.append("\n" + "=" * 80)
+    report.append("TRANSFER INTELLIGENCE")
+    report.append("=" * 80)
+
+    if popular_in:
+        report.append(f"\n📈 MOST TRANSFERRED IN (GW{gameweek}):")
+        for p in popular_in:
+            report.append(f"   {p['web_name']}: {p['transfer_count']} rivals brought in")
+    else:
+        report.append(f"\n📈 No transfer data available for GW{gameweek}")
+
+    if popular_out:
+        report.append(f"\n📉 MOST TRANSFERRED OUT (GW{gameweek}):")
+        for p in popular_out:
+            report.append(f"   {p['web_name']}: {p['transfer_count']} rivals sold")
+
+    if itb_leaders:
+        report.append(f"\n💰 MOST CASH IN THE BANK:")
+        for rival in itb_leaders:
+            report.append(f"   {rival['player_name']}: £{rival['itb']:.1f}m ITB (£{rival['team_value']:.1f}m total value)")
+
+    return "\n".join(report)
+
+
+def generate_competitive_advice(league_service, ron_entry_id, league_id, gameweek):
+    """Generate competitive recommendations."""
+
+    # Get Ron's position
+    standings = league_service.db.execute_query("""
+        SELECT rank, total_points
+        FROM league_standings_history
+        WHERE league_id = ? AND gameweek = ? AND entry_id = ?
+    """, (league_id, gameweek, ron_entry_id))
+
+    # Get leader
+    leader = league_service.db.execute_query("""
+        SELECT total_points
+        FROM league_standings_history
+        WHERE league_id = ? AND gameweek = ?
+        ORDER BY rank
+        LIMIT 1
+    """, (league_id, gameweek))
+
+    report = []
+    report.append("\n" + "=" * 80)
+    report.append("COMPETITIVE STRATEGY RECOMMENDATIONS")
+    report.append("=" * 80)
+
+    if not standings:
+        # Ron not in standings yet
+        report.append("\n⚠️  Ron's team not yet registered in league standings")
+        report.append("    Will appear after first gameweek completes")
+        return "\n".join(report)
+
+    ron_rank = standings[0]['rank']
+    ron_points = standings[0]['total_points']
+    leader_points = leader[0]['total_points'] if leader else ron_points
+    gap = ron_points - leader_points
+
+    gws_remaining = 38 - gameweek
+
+    report.append(f"\n📊 CURRENT POSITION:")
+    report.append(f"   Rank: {ron_rank}")
+    report.append(f"   Points: {ron_points}")
+    report.append(f"   Gap to leader: {gap:+d} pts")
+    report.append(f"   Gameweeks remaining: {gws_remaining}")
+
+    if gap < 0:
+        # Chasing
+        pts_per_gw_needed = abs(gap) / gws_remaining if gws_remaining > 0 else 0
+
+        report.append(f"\n🎯 CHASING MODE:")
+        report.append(f"   Need +{pts_per_gw_needed:.1f} pts/GW advantage to catch leader")
+        report.append(f"\n   RECOMMENDED STRATEGY:")
+        report.append(f"   • Seek differentials with high upside")
+        report.append(f"   • Consider differential captains")
+        report.append(f"   • Use chips aggressively on best opportunities")
+        report.append(f"   • Monitor template gaps - consider covering high-ownership threats")
+
+    elif gap > 0:
+        # Leading
+        report.append(f"\n👑 LEADING MODE:")
+        report.append(f"\n   RECOMMENDED STRATEGY:")
+        report.append(f"   • Maintain template coverage")
+        report.append(f"   • Safe captain picks (high ownership)")
+        report.append(f"   • Chip timing matched to rivals")
+        report.append(f"   • Avoid unnecessary risks")
+
+    return "\n".join(report)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate weekly league intelligence report")
-    parser.add_argument('--league', type=int, required=True,
-                       help='Mini-league ID')
-    parser.add_argument('--save', action='store_true',
-                       help='Save report to file')
+    """Generate comprehensive league intelligence report."""
 
-    args = parser.parse_args()
+    start_time = datetime.now()
 
-    try:
-        # Load data
-        config = load_config()
-        ron_team_id = config.get('team_id')
+    print("\n" + "=" * 80)
+    print("LEAGUE INTELLIGENCE REPORT")
+    print("=" * 80)
+    print(f"Generated: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        bootstrap, league_data = fetch_all_data(args.league)
+    logger.info(f"LeagueIntelligence: Starting report generation at {start_time}")
 
-        # Generate report
-        report = generate_intelligence_report(args.league, bootstrap, league_data, ron_team_id)
+    # Load config
+    config = load_config()
+    league_id = config.get('league_id')
+    ron_entry_id = config.get('team_id')
 
-        # Display
-        print(report)
+    if not league_id:
+        print("\n❌ ERROR: No league_id in config")
+        logger.error("LeagueIntelligence: No league_id configured")
+        return 1
 
-        # Save if requested
-        if args.save:
-            output_dir = project_root / 'data' / 'league_intelligence'
-            output_dir.mkdir(parents=True, exist_ok=True)
+    if not ron_entry_id:
+        print("\n⚠️  WARNING: No team_id in config - reports will be limited")
+        logger.warning("LeagueIntelligence: No team_id configured")
 
-            current_gw = next(e['id'] for e in bootstrap['events'] if e['is_current'])
-            timestamp = datetime.now().strftime('%Y%m%d')
-            output_file = output_dir / f'league_{args.league}_gw{current_gw}_{timestamp}.txt'
+    # Initialize services
+    db = Database()
+    league_service = LeagueIntelligenceService(db)
+    chip_analyzer = ChipStrategyAnalyzer(db, league_service)
+    fixture_optimizer = FixtureOptimizer(db)
 
-            with open(output_file, 'w') as f:
-                f.write(report)
+    # Get current gameweek - use latest from standings
+    max_gw = db.execute_query("""
+        SELECT MAX(gameweek) as gw FROM league_standings_history
+    """)
 
-            print(f"\n💾 Intelligence report saved to: {output_file}")
+    if max_gw and max_gw[0]['gw']:
+        current_gw = max_gw[0]['gw']
+    else:
+        # Fallback to gameweeks table
+        gameweek_data = db.execute_query("""
+            SELECT id FROM gameweeks
+            WHERE is_current = 1
+            LIMIT 1
+        """)
+        current_gw = gameweek_data[0]['id'] if gameweek_data else 8
+        logger.warning(f"LeagueIntelligence: No league standings found, using gameweek {current_gw}")
 
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    print(f"League ID: {league_id}")
+    print(f"Current Gameweek: {current_gw}")
+    if ron_entry_id:
+        print(f"Ron's Team ID: {ron_entry_id}")
+
+    logger.info(f"LeagueIntelligence: Generating report for league {league_id}, GW{current_gw}")
+
+    # Generate report sections
+    full_report = []
+
+    # 1. Standings
+    standings_report = generate_standings_report(league_service, league_id, current_gw)
+    full_report.append(standings_report)
+    print(standings_report)
+
+    # 2. Chip analysis
+    if ron_entry_id:
+        chip_report = generate_chip_status_report(league_service, ron_entry_id)
+        full_report.append(chip_report)
+        print(chip_report)
+
+    # 3. Differentials
+    if ron_entry_id:
+        diff_report = generate_differential_report(league_service, ron_entry_id, current_gw)
+        full_report.append(diff_report)
+        print(diff_report)
+
+    # 4. Fixture-based chip optimization
+    fixture_report = fixture_optimizer.generate_optimization_report(current_gw)
+    full_report.append(fixture_report)
+    print(fixture_report)
+
+    # 5. Chip strategy
+    if ron_entry_id:
+        chip_report = chip_analyzer.generate_chip_report(ron_entry_id, league_id, current_gw)
+        full_report.append(chip_report)
+        print(chip_report)
+
+    # 6. Transfer intelligence
+    transfer_report = generate_transfer_intel_report(league_service, current_gw)
+    full_report.append(transfer_report)
+    print(transfer_report)
+
+    # 7. Competitive advice
+    if ron_entry_id:
+        advice_report = generate_competitive_advice(league_service, ron_entry_id, league_id, current_gw)
+        full_report.append(advice_report)
+        print(advice_report)
+
+    # Save report to file
+    output_dir = project_root / 'reports' / 'league_intelligence'
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    report_file = output_dir / f'league_{league_id}_gw{current_gw}_{start_time.strftime("%Y%m%d_%H%M%S")}.txt'
+
+    with open(report_file, 'w') as f:
+        f.write("\n".join(full_report))
+
+    # Also save as latest
+    latest_file = output_dir / f'league_{league_id}_latest.txt'
+    with open(latest_file, 'w') as f:
+        f.write("\n".join(full_report))
+
+    duration = (datetime.now() - start_time).total_seconds()
+
+    print("\n" + "=" * 80)
+    print("REPORT GENERATION COMPLETE")
+    print("=" * 80)
+    print(f"Duration: {duration:.1f}s")
+    print(f"Saved to: {report_file}")
+    print(f"Latest: {latest_file}")
+
+    logger.info(f"LeagueIntelligence: Report complete - Duration: {duration:.1f}s, Saved to {report_file}")
+
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print("\n\nReport generation cancelled.")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"LeagueIntelligence: Fatal error: {e}", exc_info=True)
+        print(f"\n❌ Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

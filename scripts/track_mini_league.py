@@ -15,7 +15,7 @@ Usage:
     python scripts/track_mini_league.py --league 160968
     python scripts/track_mini_league.py --league 160968 --gameweek 7
     python scripts/track_mini_league.py --league 160968 --detailed
-    python scripts/track_mini_league.py --league 160968 --save
+    python scripts/track_mini_league.py --save (stores to database - default when run via cron)
 """
 
 import sys
@@ -23,12 +23,18 @@ from pathlib import Path
 import argparse
 import json
 import requests
+import logging
 from datetime import datetime
 from collections import defaultdict
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+from data.database import Database
+from intelligence.league_intel import LeagueIntelligenceService
+
+logger = logging.getLogger('ron_clanker.mini_league_tracker')
 
 FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
@@ -289,29 +295,45 @@ def calculate_catch_up_scenarios(standings, ron_team_id, gws_remaining):
 
 def main():
     parser = argparse.ArgumentParser(description="Track Ron's mini-league performance")
-    parser.add_argument('--league', type=int, required=True,
-                       help='Mini-league ID')
+    parser.add_argument('--league', type=int,
+                       help='Mini-league ID (default from config)')
     parser.add_argument('--gameweek', '--gw', type=int,
                        dest='gameweek', help='Gameweek for detailed analysis')
     parser.add_argument('--detailed', action='store_true',
                        help='Show detailed analysis (chips, differentials, scenarios)')
-    parser.add_argument('--save', action='store_true',
-                       help='Save league tracking data')
+    parser.add_argument('--save', action='store_true', default=True,
+                       help='Save league tracking data to database (default: True)')
 
     args = parser.parse_args()
+
+    # Load config
+    config = load_config()
+    league_id = args.league or config.get('league_id')
+
+    if not league_id:
+        print("❌ ERROR: No league ID provided")
+        print("   Use --league LEAGUE_ID or set league_id in config/ron_config.json")
+        return 1
 
     print("=" * 100)
     print("MINI-LEAGUE TRACKER")
     print("=" * 100)
-    print(f"League ID: {args.league}")
+    print(f"League ID: {league_id}")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Database tracking: {'ENABLED' if args.save else 'DISABLED'}")
     print("=" * 100)
 
     try:
+        # Initialize database and service
+        db = Database()
+        league_service = LeagueIntelligenceService(db)
+
         # Load data
         print("\n📥 Loading league data...")
+        logger.info(f"MiniLeagueTracker: Fetching league {league_id}")
+
         bootstrap = fetch_bootstrap_data()
-        league_data = fetch_league_standings(args.league)
+        league_data = fetch_league_standings(league_id)
 
         # Get current gameweek
         current_gw = next(e['id'] for e in bootstrap['events'] if e['is_current'])
@@ -340,26 +362,28 @@ def main():
             # Catch-up scenarios
             calculate_catch_up_scenarios(standings, ron_team_id, gws_remaining)
 
-        # Save if requested
+        # Save to database if requested
         if args.save:
-            output_dir = project_root / 'data' / 'mini_league_tracking'
-            output_dir.mkdir(parents=True, exist_ok=True)
+            print("\n" + "-" * 100)
+            print("STORING TO DATABASE")
+            print("-" * 100)
 
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_file = output_dir / f'league_{args.league}_gw{gameweek}_{timestamp}.json'
+            logger.info(f"MiniLeagueTracker: Storing league {league_id} data to database")
 
-            tracking_data = {
-                'league_id': args.league,
-                'gameweek': gameweek,
-                'timestamp': timestamp,
-                'league_data': league_data,
-                'ron_team_id': ron_team_id
-            }
+            # Track league with detailed data
+            stats = league_service.track_league(
+                league_id=league_id,
+                gameweek=gameweek,
+                detailed=args.detailed
+            )
 
-            with open(output_file, 'w') as f:
-                json.dump(tracking_data, f, indent=2)
+            print(f"\n✅ Database tracking complete:")
+            print(f"   Rivals tracked: {stats['rivals_tracked']}")
+            print(f"   Standings stored: {stats['standings_stored']}")
+            print(f"   Chips tracked: {stats['chips_stored']}")
+            print(f"   Team picks stored: {stats['picks_stored']}")
 
-            print(f"\n💾 League data saved to: {output_file}")
+            logger.info(f"MiniLeagueTracker: Stored {stats}")
 
         print("\n" + "=" * 100)
         print("✅ TRACKING COMPLETE")
