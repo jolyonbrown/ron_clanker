@@ -70,24 +70,30 @@ def main():
     print("\n" + "-" * 80)
     print("📋 TEST 2: Check current team...")
     try:
-        current_team = db.execute_query("""
-            SELECT p.*, rt.position, rt.is_captain, rt.is_vice_captain
-            FROM players p
-            JOIN rival_team_picks rt ON p.id = rt.player_id
-            WHERE rt.entry_id = ? AND rt.gameweek = ?
-        """, (manager.db.config.get('team_id', 12222054), current_gw))
-
-        if current_team:
-            print(f"✅ Found team for GW{current_gw}: {len(current_team)} players")
-            print("\nCurrent XI:")
-            starting = [p for p in current_team if p.get('position', 16) <= 11]
-            for p in sorted(starting, key=lambda x: x.get('position', 99))[:11]:
-                cap_mark = " (C)" if p.get('is_captain') else " (VC)" if p.get('is_vice_captain') else ""
-                print(f"   {p['web_name']}{cap_mark}")
-        else:
-            print(f"⚠️  No team found for GW{current_gw}")
-            print("   (This is expected if testing on a fresh system)")
+        team_id = manager.db.config.get('team_id')
+        if not team_id:
+            print("⚠️  No team_id configured in .env file")
+            print("   Add FPL_TEAM_ID to .env to test with your team")
             current_team = None
+        else:
+            current_team = db.execute_query("""
+                SELECT p.*, rt.position, rt.is_captain, rt.is_vice_captain
+                FROM players p
+                JOIN rival_team_picks rt ON p.id = rt.player_id
+                WHERE rt.entry_id = ? AND rt.gameweek = ?
+            """, (team_id, current_gw))
+
+            if current_team:
+                print(f"✅ Found team for GW{current_gw}: {len(current_team)} players")
+                print("\nCurrent XI:")
+                starting = [p for p in current_team if p.get('position', 16) <= 11]
+                for p in sorted(starting, key=lambda x: x.get('position', 99))[:11]:
+                    cap_mark = " (C)" if p.get('is_captain') else " (VC)" if p.get('is_vice_captain') else ""
+                    print(f"   {p['web_name']}{cap_mark}")
+            else:
+                print(f"⚠️  No team found for GW{current_gw}")
+                print("   (This is expected if testing on a fresh system)")
+                current_team = None
 
     except Exception as e:
         print(f"⚠️  Could not fetch current team: {e}")

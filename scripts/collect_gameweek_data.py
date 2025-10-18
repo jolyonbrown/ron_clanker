@@ -28,6 +28,7 @@ sys.path.insert(0, str(project_root))
 
 from data.database import Database
 from utils.gameweek import get_current_gameweek
+from utils.config import load_config
 
 
 class GameweekDataCollector:
@@ -452,10 +453,8 @@ def main():
     # Initialize
     db = Database()
 
-    # Load config
-    config_file = project_root / 'config' / 'ron_config.json'
-    with open(config_file) as f:
-        config = json.load(f)
+    # Load config (from .env and ron_config.json)
+    config = load_config()
 
     collector = GameweekDataCollector(db, config)
 

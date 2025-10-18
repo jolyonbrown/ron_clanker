@@ -24,24 +24,10 @@ from collections import defaultdict
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from utils.config import load_config
+
 FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
-CONFIG_FILE = project_root / 'config' / 'ron_config.json'
-
-
-def load_config():
-    """Load Ron's team configuration"""
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-
-def save_config(config):
-    """Save Ron's team configuration"""
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
 
 
 def get_team_id(args_team_id=None):
@@ -50,12 +36,13 @@ def get_team_id(args_team_id=None):
         return args_team_id
 
     config = load_config()
-    if 'team_id' in config:
+    if 'team_id' in config and config['team_id']:
         return config['team_id']
 
     print("\n⚠️  No team ID configured for Ron Clanker")
-    print("Once Ron's team is registered, update config/ron_config.json with:")
-    print('{"team_id": 123456}\n')
+    print("Once Ron's team is registered, add to .env file:")
+    print('FPL_TEAM_ID=123456\n')
+    print("(Do NOT add to ron_config.json - keep sensitive data in .env)")
     return None
 
 
@@ -359,8 +346,8 @@ def main():
         print("\nTo configure Ron's team ID:")
         print("1. Register Ron's team on FPL website")
         print("2. Get the team ID from the URL: fantasy.premierleague.com/entry/{TEAM_ID}/event/X")
-        print("3. Save to config/ron_config.json:")
-        print('   {"team_id": YOUR_TEAM_ID}')
+        print("3. Add to .env file (do NOT use ron_config.json for sensitive data):")
+        print('   FPL_TEAM_ID=YOUR_TEAM_ID')
         print("\nOr use: python scripts/track_ron_team.py --team-id YOUR_TEAM_ID")
         sys.exit(1)
 

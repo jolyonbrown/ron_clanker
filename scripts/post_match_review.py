@@ -24,6 +24,7 @@ from data.database import Database
 from ron_clanker.persona import RonClanker
 from intelligence.league_intel import LeagueIntelligenceService
 from utils.gameweek import get_current_gameweek
+from utils.config import load_config
 import requests
 
 
@@ -289,9 +290,8 @@ def main():
     ron = RonClanker()
     league_service = LeagueIntelligenceService(db)
 
-    # Get config
-    with open(project_root / 'config' / 'ron_config.json') as f:
-        config = json.load(f)
+    # Load config (from .env and ron_config.json)
+    config = load_config()
 
     team_id = config.get('team_id')
     league_id = config.get('league_id')

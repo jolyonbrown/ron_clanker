@@ -209,6 +209,13 @@ __marimo__/
 .beads/*.db-wal
 .beads/*.db-shm
 
+# Ron Clanker Database Files (SENSITIVE DATA!)
+# These contain team IDs, league IDs, and other sensitive information
+data/*.db
+data/*.db-wal
+data/*.db-shm
+!data/.gitkeep
+
 # Database backups (keep latest only)
 data/backups/*
 !data/backups/.gitkeep

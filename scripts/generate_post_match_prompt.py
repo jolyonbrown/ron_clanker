@@ -23,6 +23,7 @@ sys.path.insert(0, str(project_root))
 from scripts.collect_gameweek_data import GameweekDataCollector
 from data.database import Database
 from utils.gameweek import get_current_gameweek
+from utils.config import load_config
 
 
 def load_prompt_template() -> str:
@@ -66,10 +67,8 @@ def main():
     # Initialize
     db = Database()
 
-    # Load config
-    config_file = project_root / 'config' / 'ron_config.json'
-    with open(config_file) as f:
-        config = json.load(f)
+    # Load config (from .env and ron_config.json)
+    config = load_config()
 
     # Determine gameweek
     if args.gameweek:

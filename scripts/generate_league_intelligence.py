@@ -25,18 +25,9 @@ from data.database import Database
 from intelligence.league_intel import LeagueIntelligenceService
 from intelligence.chip_strategy import ChipStrategyAnalyzer
 from intelligence.fixture_optimizer import FixtureOptimizer
+from utils.config import load_config
 
 logger = logging.getLogger('ron_clanker.league_intelligence')
-
-CONFIG_FILE = project_root / 'config' / 'ron_config.json'
-
-
-def load_config():
-    """Load Ron's config."""
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    return {}
 
 
 def generate_standings_report(league_service, league_id, gameweek):

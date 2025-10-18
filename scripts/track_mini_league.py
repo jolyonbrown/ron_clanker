@@ -33,20 +33,12 @@ sys.path.insert(0, str(project_root))
 
 from data.database import Database
 from intelligence.league_intel import LeagueIntelligenceService
+from utils.config import load_config
 
 logger = logging.getLogger('ron_clanker.mini_league_tracker')
 
 FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
-CONFIG_FILE = project_root / 'config' / 'ron_config.json'
-
-
-def load_config():
-    """Load Ron's config"""
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    return {}
 
 
 def fetch_bootstrap_data():
@@ -312,7 +304,7 @@ def main():
 
     if not league_id:
         print("❌ ERROR: No league ID provided")
-        print("   Use --league LEAGUE_ID or set league_id in config/ron_config.json")
+        print("   Use --league LEAGUE_ID or set FPL_LEAGUE_ID in .env file")
         return 1
 
     print("=" * 100)
@@ -390,7 +382,7 @@ def main():
         print("=" * 100)
 
         if not ron_team_id:
-            print("\n💡 TIP: Once Ron's team is registered, add team_id to config/ron_config.json")
+            print("\n💡 TIP: Once Ron's team is registered, add FPL_TEAM_ID to .env file")
             print("    for detailed differential and chip analysis")
 
     except Exception as e:
