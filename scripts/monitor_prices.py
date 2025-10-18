@@ -28,6 +28,7 @@ def main():
     print("PRICE CHANGE MONITORING")
     print("=" * 80)
     print(f"Timestamp: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"PriceMonitor: Starting price monitoring at {start_time}")
 
     db = Database()
 
@@ -92,16 +93,21 @@ def main():
 
         # Report changes
         if price_rises:
+            logger.info(f"PriceMonitor: Detected {len(price_rises)} price rises")
             print(f"\n📈 PRICE RISES ({len(price_rises)}):")
             for p in price_rises[:10]:  # Show first 10
                 print(f"  {p['name']}: £{p['old']:.1f}m → £{p['new']:.1f}m (+£{p['change']:.1f}m)")
+                logger.info(f"PriceMonitor: RISE - {p['name']} ({p['id']}) +£{p['change']:.1f}m")
 
         if price_falls:
+            logger.info(f"PriceMonitor: Detected {len(price_falls)} price falls")
             print(f"\n📉 PRICE FALLS ({len(price_falls)}):")
             for p in price_falls[:10]:  # Show first 10
                 print(f"  {p['name']}: £{p['old']:.1f}m → £{p['new']:.1f}m ({p['change']:.1f}m)")
+                logger.info(f"PriceMonitor: FALL - {p['name']} ({p['id']}) {p['change']:.1f}m")
 
         if not price_rises and not price_falls:
+            logger.info("PriceMonitor: No price changes detected")
             print("\n✓ No price changes detected")
 
         # Update database with new prices
@@ -148,6 +154,9 @@ def main():
         return 1
 
     duration = (datetime.now() - start_time).total_seconds()
+
+    total_changes = len(price_rises) + len(price_falls)
+    logger.info(f"PriceMonitor: Complete - Duration: {duration:.1f}s, Changes detected: {total_changes} (Rises: {len(price_rises)}, Falls: {len(price_falls)})")
 
     print("\n" + "=" * 80)
     print("PRICE MONITORING COMPLETE")

@@ -1,8 +1,9 @@
 {
-  "team_id": null,
-  "team_name": "Two Points FC",
+  "team_id": 12222054,
+  "team_name": "Clanker's Cloggers",
   "manager_name": "Ron Clanker",
   "season": "2025/26",
   "entry_gameweek": 8,
-  "notes": "Update team_id once Ron's team is registered on FPL website"
+  "league_id": 160968,
+  "notes": "Ron's team is registered! Team: 12222054, League: 160968"
 }

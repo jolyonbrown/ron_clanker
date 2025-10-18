@@ -1,0 +1,102 @@
+
+================================================================================
+LEAGUE STANDINGS
+================================================================================
+
+Rank  Manager                   Points  Gap     Form  
+--------------------------------------------------------------------------------
+    1 James Crewdson                406       -      →
+    2 Tony Simons                   396     -10      →
+    3 Kyle Summersfield             392     -14      →
+    4 Andy Main                     385     -21      →
+    5 Steve Hant                    384     -22      →
+    6 Anthony Stoker                378     -28      →
+    7 Michael Maude                 372     -34      →
+    8 Jolyon Brown                  351     -55      →
+    9 Catherine Beattie             338     -68      →
+   10 ian main                      309     -97      →
+   11 Kieran Summersfield           294    -112      →
+   12 Sir Captain Daniel            274    -132      →
+   13 Peter Korenev                 243    -163      →
+
+================================================================================
+CHIP ARSENAL ANALYSIS
+================================================================================
+
+👥 RIVAL CHIP STATUS (Top 5):
+
+Manager                   WC   BB   TC   FH   Total 
+--------------------------------------------------------------------------------
+Michael Maude             2/2  2/2  2/2  2/2       8/8
+Kieran Summersfield       2/2  2/2  2/2  2/2       8/8
+James Crewdson            2/2  2/2  2/2  2/2       8/8
+Peter Korenev             2/2  2/2  2/2  2/2       8/8
+Andy Main                 2/2  2/2  2/2  2/2       8/8
+
+================================================================================
+DIFFERENTIAL ANALYSIS
+================================================================================
+
+🤖 RON'S DIFFERENTIALS: None (template team)
+
+
+👥 TEMPLATE PLAYERS RON IS MISSING: None (Ron has template)
+
+================================================================================
+CHIP STRATEGY REPORT
+================================================================================
+Gameweek: 8
+Generated: 2025-10-18 13:29:10
+
+🎯 RON'S CHIP ADVANTAGE:
+   Ron has 8 chips remaining
+   League average: 7.5 chips
+   Advantage: +0.5 chips (6%)
+
+📊 LEAGUE CHIP TRENDS:
+   Total chips used: 9
+   bboost: 3 used
+   wildcard: 6 used
+
+🃏 WILDCARD STRATEGY:
+
+   WILDCARD 1:
+      Status: AVAILABLE
+      Recommendation: HOLD
+      Reason: Still early. Wait for fixture swings or injury crisis.
+      Optimal windows: GW12-14 (pre-Christmas fixtures), GW16-18 (injury crisis period)
+
+   WILDCARD 2:
+      Status: LOCKED
+      Recommendation: WAIT
+      Reason: Not yet available. Can use from GW20 onwards.
+      Optimal windows: GW25-27 (fixture swings), GW33-35 (final push)
+
+💪 BENCH BOOST STRATEGY:
+
+   BENCH BOOST 1:
+      Status: AVAILABLE
+      Recommendation: Wait for DGW with 15 strong players
+
+   BENCH BOOST 2:
+      Status: AVAILABLE
+      Recommendation: Wait for DGW with 15 strong players
+
+⭐ TRIPLE CAPTAIN STRATEGY:
+
+   TRIPLE CAPTAIN 1:
+      Status: AVAILABLE
+      Recommendation: Save for Haaland/Salah DGW
+      Best targets: Haaland (MCI), Salah (LIV), Palmer (CHE)
+
+   TRIPLE CAPTAIN 2:
+      Status: AVAILABLE
+      Recommendation: Save for Haaland/Salah DGW
+      Best targets: Haaland (MCI), Salah (LIV), Palmer (CHE)
+
+================================================================================
+COMPETITIVE STRATEGY RECOMMENDATIONS
+================================================================================
+
+⚠️  Ron's team not yet registered in league standings
+    Will appear after first gameweek completes

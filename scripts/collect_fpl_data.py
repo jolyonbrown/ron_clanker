@@ -32,6 +32,7 @@ async def collect_data():
     print("FPL DATA COLLECTION")
     print("=" * 80)
     print(f"Timestamp: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"DataCollection: Starting FPL data collection at {start_time}")
 
     collector = DataCollector()
     db = Database()
@@ -39,20 +40,34 @@ async def collect_data():
     try:
         # Fetch FPL data
         print("\n📡 Fetching latest FPL data...")
+        logger.info("DataCollection: Fetching bootstrap data from FPL API")
         fpl_data = await collector.update_all_data()
 
         if not fpl_data:
+            logger.error("DataCollection: Failed to fetch FPL data - API returned empty response")
             print("❌ Failed to fetch FPL data")
             return 1
 
+        logger.info(f"DataCollection: Successfully fetched {len(fpl_data.get('players', []))} players, {len(fpl_data.get('teams', []))} teams")
+
         # Sync players
-        print(f"\n💾 Syncing {len(fpl_data['players'])} players...")
+        player_count = len(fpl_data['players'])
+        print(f"\n💾 Syncing {player_count} players...")
+        logger.info(f"DataCollection: Upserting {player_count} players to database")
+
+        synced = 0
         for player in fpl_data['players']:
             db.upsert_player(player)
+            synced += 1
+
+        logger.info(f"DataCollection: Successfully synced {synced} players")
         print("✅ Players synced")
 
         # Sync teams
-        print(f"\n💾 Syncing {len(fpl_data['teams'])} teams...")
+        team_count = len(fpl_data['teams'])
+        print(f"\n💾 Syncing {team_count} teams...")
+        logger.info(f"DataCollection: Upserting {team_count} teams to database")
+
         for team in fpl_data['teams']:
             team_data = {
                 'id': team['id'],
@@ -64,6 +79,8 @@ async def collect_data():
                 'strength_overall_away': team.get('strength_overall_away'),
             }
             db.upsert_team(team_data)
+
+        logger.info(f"DataCollection: Successfully synced {team_count} teams")
         print("✅ Teams synced")
 
         # Get current gameweek
@@ -71,7 +88,9 @@ async def collect_data():
         for event in fpl_data.get('events', []):
             if event.get('is_current'):
                 current_gw = event['id']
+                deadline = event.get('deadline_time')
                 print(f"\n📅 Current Gameweek: {current_gw}")
+                logger.info(f"DataCollection: Current gameweek is GW{current_gw}, deadline: {deadline}")
                 break
 
         # Show stats
@@ -94,6 +113,8 @@ async def collect_data():
         print("=" * 80)
         print(f"Duration: {duration:.1f} seconds")
         print(f"Status: SUCCESS")
+
+        logger.info(f"DataCollection: Complete - Duration: {duration:.1f}s, Players: {player_count}, Teams: {team_count}, GW: {current_gw}")
 
         return 0
 

@@ -1,0 +1,31 @@
+No standings data available
+
+================================================================================
+CHIP ARSENAL ANALYSIS
+================================================================================
+
+👥 RIVAL CHIP STATUS (Top 5):
+
+Manager                   WC   BB   TC   FH   Total 
+--------------------------------------------------------------------------------
+Michael Maude             2/2  2/2  2/2  2/2       8/8
+Kieran Summersfield       2/2  2/2  2/2  2/2       8/8
+James Crewdson            2/2  2/2  2/2  2/2       8/8
+Peter Korenev             2/2  2/2  2/2  2/2       8/8
+Andy Main                 2/2  2/2  2/2  2/2       8/8
+
+================================================================================
+DIFFERENTIAL ANALYSIS
+================================================================================
+
+🤖 RON'S DIFFERENTIALS: None (template team)
+
+
+👥 TEMPLATE PLAYERS RON IS MISSING: None (Ron has template)
+
+================================================================================
+COMPETITIVE STRATEGY RECOMMENDATIONS
+================================================================================
+
+⚠️  Ron's team not yet registered in league standings
+    Will appear after first gameweek completes

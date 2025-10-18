@@ -30,6 +30,7 @@ async def main():
     print("DAILY SCOUT INTELLIGENCE GATHERING")
     print("=" * 80)
     print(f"Timestamp: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"ScoutDaily: Starting daily intelligence gathering at {start_time}")
 
     db = Database()
     scout = ScoutAgent(database=db)
@@ -55,8 +56,10 @@ async def main():
     print("-" * 80)
 
     try:
+        logger.info("ScoutDaily: Initiating intelligence gathering from all sources")
         intelligence = await scout.gather_intelligence()
 
+        logger.info(f"ScoutDaily: Gathered {len(intelligence)} intelligence items")
         print(f"\n✓ Intelligence gathering complete")
         print(f"  Total items: {len(intelligence)}")
 
@@ -66,6 +69,7 @@ async def main():
             item_type = item['type']
             by_type[item_type] = by_type.get(item_type, 0) + 1
 
+        logger.info(f"ScoutDaily: Intelligence breakdown - {dict(by_type)}")
         print("\n  Breakdown by type:")
         for item_type, count in sorted(by_type.items()):
             print(f"    {item_type}: {count}")
@@ -115,6 +119,8 @@ async def main():
         print(f"  Valid (not expired): {youtube_stats[0]['valid']}")
 
     duration = (datetime.now() - start_time).total_seconds()
+
+    logger.info(f"ScoutDaily: Complete - Duration: {duration:.1f}s, Intelligence items: {len(intelligence)}, GW: {current_gw}")
 
     print("\n" + "=" * 80)
     print("DAILY SCOUT RUN COMPLETE")

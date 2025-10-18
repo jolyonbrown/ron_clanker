@@ -1,0 +1,50 @@
+
+================================================================================
+LEAGUE STANDINGS
+================================================================================
+
+Rank  Manager                   Points  Gap     Form  
+--------------------------------------------------------------------------------
+    1 James Crewdson                406       -      →
+    2 Tony Simons                   396     -10      →
+    3 Kyle Summersfield             392     -14      →
+    4 Andy Main                     385     -21      →
+    5 Steve Hant                    384     -22      →
+    6 Anthony Stoker                378     -28      →
+    7 Michael Maude                 372     -34      →
+    8 Jolyon Brown                  351     -55      →
+    9 Catherine Beattie             338     -68      →
+   10 ian main                      309     -97      →
+   11 Kieran Summersfield           294    -112      →
+   12 Sir Captain Daniel            274    -132      →
+   13 Peter Korenev                 243    -163      →
+
+================================================================================
+CHIP ARSENAL ANALYSIS
+================================================================================
+
+👥 RIVAL CHIP STATUS (Top 5):
+
+Manager                   WC   BB   TC   FH   Total 
+--------------------------------------------------------------------------------
+Michael Maude             2/2  2/2  2/2  2/2       8/8
+Kieran Summersfield       2/2  2/2  2/2  2/2       8/8
+James Crewdson            2/2  2/2  2/2  2/2       8/8
+Peter Korenev             2/2  2/2  2/2  2/2       8/8
+Andy Main                 2/2  2/2  2/2  2/2       8/8
+
+================================================================================
+DIFFERENTIAL ANALYSIS
+================================================================================
+
+🤖 RON'S DIFFERENTIALS: None (template team)
+
+
+👥 TEMPLATE PLAYERS RON IS MISSING: None (Ron has template)
+
+================================================================================
+COMPETITIVE STRATEGY RECOMMENDATIONS
+================================================================================
+
+⚠️  Ron's team not yet registered in league standings
+    Will appear after first gameweek completes
