@@ -26,16 +26,18 @@ Example token: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`
 
 ### 3. Configure Ron Clanker
 
-Add to `config/ron_config.json`:
+Add to `.env` file (create from `.env.example` if it doesn't exist):
 
-```json
-{
-  "telegram_bot_token": "YOUR_BOT_TOKEN_HERE",
-  "telegram_chat_id": "YOUR_CHAT_ID_HERE",
+```bash
+# Copy template
+cp .env.example .env
 
-  ... other config ...
-}
+# Edit .env and add your credentials
+TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN_HERE
+TELEGRAM_CHAT_ID=YOUR_CHAT_ID_HERE
 ```
+
+**IMPORTANT**: The `.env` file contains sensitive credentials and should NEVER be committed to git. It's already in `.gitignore`.
 
 ### 4. Install Dependencies
 

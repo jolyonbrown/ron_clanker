@@ -14,7 +14,6 @@ Usage:
 import sys
 from pathlib import Path
 import argparse
-import json
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -25,6 +24,7 @@ from telegram_bot.notifications import (
     send_transfer_alert,
     send_post_match_review
 )
+from utils.config import get_telegram_token, get_telegram_chat_id
 
 
 def test_basic_notification(bot_token: str, chat_id: str):
@@ -187,25 +187,23 @@ def main():
     print("TELEGRAM NOTIFICATION TESTS")
     print("=" * 70)
 
-    # Load config
-    config_file = project_root / 'config' / 'ron_config.json'
-    with open(config_file) as f:
-        config = json.load(f)
-
-    bot_token = config.get('telegram_bot_token')
-    chat_id = config.get('telegram_chat_id')
+    # Load config from .env
+    bot_token = get_telegram_token()
+    chat_id = get_telegram_chat_id()
 
     if not bot_token or not chat_id:
         print("\n❌ Telegram not configured!")
-        print("\nAdd to config/ron_config.json:")
-        print("  \"telegram_bot_token\": \"YOUR_BOT_TOKEN\",")
-        print("  \"telegram_chat_id\": \"YOUR_CHAT_ID\"")
+        print("\nAdd to .env file:")
+        print("  TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN")
+        print("  TELEGRAM_CHAT_ID=YOUR_CHAT_ID")
         print("\nSetup instructions:")
         print("1. Message @BotFather on Telegram, send /newbot")
         print("2. Follow prompts to create your bot")
-        print("3. Copy the bot token")
+        print("3. Copy the bot token to .env")
         print("4. Start a chat with your bot")
         print("5. Message @userinfobot to get your chat ID")
+        print("6. Add chat ID to .env")
+        print("\nSee docs/TELEGRAM_BOT_SETUP.md for detailed instructions")
         return 1
 
     print(f"Bot Token: {bot_token[:20]}...")

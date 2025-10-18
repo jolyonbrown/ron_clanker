@@ -1,9 +1,29 @@
 {
-  "team_id": 12222054,
-  "team_name": "Clanker's Cloggers",
+  "_comment": "SENSITIVE DATA MOVED TO .env FILE (team_id, league_id, telegram credentials)",
+  "_comment2": "This file only contains non-sensitive configuration that's safe to commit to git",
+
   "manager_name": "Ron Clanker",
+  "team_name": "Clanker's Cloggers",
   "season": "2025/26",
   "entry_gameweek": 8,
-  "league_id": 160968,
-  "notes": "Ron's team is registered! Team: 12222054, League: 160968"
+
+  "ml_config": {
+    "model_version": "latest",
+    "prediction_horizon_gws": 3,
+    "retrain_frequency_gws": 1
+  },
+
+  "decision_config": {
+    "transfer_threshold_points": 2.0,
+    "hit_threshold_points": 4.0,
+    "captain_safety_vs_differential_threshold": 0.7
+  },
+
+  "notification_config": {
+    "send_team_announcements": true,
+    "send_transfer_alerts": true,
+    "send_post_match_reviews": true,
+    "send_price_changes": true,
+    "send_injury_news": true
+  }
 }
