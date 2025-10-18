@@ -3,7 +3,7 @@
 Player Performance Prediction Models
 
 Position-specific models to predict expected points for next gameweek.
-Uses ensemble methods (Random Forest, Gradient Boosting) with engineered features.
+Uses STACKED ENSEMBLE: RandomForest + GradientBoosting + XGBoost + Meta-learner
 """
 
 import logging
@@ -12,27 +12,39 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import joblib
+
+try:
+    import xgboost as xgb
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+    logging.warning("XGBoost not available, falling back to RF+GB ensemble")
 
 logger = logging.getLogger('ron_clanker.ml.prediction')
 
 
 class PlayerPerformancePredictor:
     """
-    Predicts player expected points using position-specific ML models.
+    Predicts player expected points using STACKED ENSEMBLE models.
 
-    Separate models for each position:
-    - Goalkeepers (position=1)
-    - Defenders (position=2)
-    - Midfielders (position=3)
-    - Forwards (position=4)
+    Architecture:
+    - Base models: RandomForest, GradientBoosting, XGBoost (3 diverse learners)
+    - Meta-model: Ridge regression (learns optimal weights)
+    - Position-specific: Separate ensembles for GK, DEF, MID, FWD
+
+    Benefits of stacking:
+    - 5-10% accuracy improvement over single models
+    - More robust to overfitting
+    - Captures different aspects of player performance
     """
 
     def __init__(self, model_dir: Path = None):
         """
-        Initialize predictor.
+        Initialize stacked ensemble predictor.
 
         Args:
             model_dir: Directory to save/load trained models
@@ -40,18 +52,19 @@ class PlayerPerformancePredictor:
         self.model_dir = model_dir or Path('models/prediction')
         self.model_dir.mkdir(parents=True, exist_ok=True)
 
-        # Position-specific models
+        # Position-specific STACKED ensembles
+        # Each position has: {'base_models': [RF, GB, XGB], 'meta_model': Ridge}
         self.models = {
-            1: None,  # GK
-            2: None,  # DEF
-            3: None,  # MID
-            4: None   # FWD
+            1: None,  # GK ensemble
+            2: None,  # DEF ensemble
+            3: None,  # MID ensemble
+            4: None   # FWD ensemble
         }
 
         # Feature columns (will be set during training)
         self.feature_columns = None
 
-        logger.info("PlayerPerformancePredictor: Initialized")
+        logger.info(f"PlayerPerformancePredictor: Initialized with stacking ensemble (XGBoost: {XGBOOST_AVAILABLE})")
 
     def prepare_training_data(self, features_list: List[Dict], targets: List[float]) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -83,63 +96,147 @@ class PlayerPerformancePredictor:
 
     def train_position_model(self, position: int, X: np.ndarray, y: np.ndarray) -> Dict:
         """
-        Train a model for a specific position.
+        Train a STACKED ENSEMBLE for a specific position.
 
-        Uses Gradient Boosting Regressor with cross-validation.
+        Process:
+        1. Split data: 60% train, 20% validation, 20% test
+        2. Train base models (RF, GB, XGB) on train set
+        3. Generate predictions on validation set (for meta-learner)
+        4. Train meta-learner on validation predictions
+        5. Evaluate final ensemble on test set
 
         Returns:
             Dict with training metrics
         """
-        logger.info(f"Training model for position {position} with {len(X)} samples")
+        logger.info(f"Training stacked ensemble for position {position} with {len(X)} samples")
 
-        # Split train/test
-        X_train, X_test, y_train, y_test = train_test_split(
+        # Three-way split: train (60%), validation (20%), test (20%)
+        X_temp, X_test, y_temp, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_temp, y_temp, test_size=0.25, random_state=42  # 0.25 of 80% = 20% total
+        )
 
-        # Train Gradient Boosting model
-        model = GradientBoostingRegressor(
-            n_estimators=100,
-            learning_rate=0.1,
-            max_depth=5,
+        logger.info(f"Split - Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
+
+        # ============================================
+        # STEP 1: Train base models
+        # ============================================
+        base_models = []
+
+        # Model 1: Random Forest (RPi-optimized: fewer trees, shallower)
+        logger.info("Training Random Forest...")
+        rf = RandomForestRegressor(
+            n_estimators=50,  # Reduced from 100 for speed
+            max_depth=8,       # Reduced from 10
             min_samples_split=10,
             min_samples_leaf=5,
             random_state=42,
-            verbose=0
+            n_jobs=-1
         )
+        rf.fit(X_train, y_train)
+        base_models.append(('RandomForest', rf))
 
-        model.fit(X_train, y_train)
+        # Model 2: Gradient Boosting (RPi-optimized: fewer trees)
+        logger.info("Training Gradient Boosting...")
+        gb = GradientBoostingRegressor(
+            n_estimators=50,  # Reduced from 100 for speed
+            learning_rate=0.1,
+            max_depth=4,       # Reduced from 5
+            min_samples_split=10,
+            min_samples_leaf=5,
+            random_state=42
+        )
+        gb.fit(X_train, y_train)
+        base_models.append(('GradientBoosting', gb))
 
-        # Evaluate
-        y_pred_train = model.predict(X_train)
-        y_pred_test = model.predict(X_test)
+        # Model 3: XGBoost (if available, RPi-optimized)
+        if XGBOOST_AVAILABLE:
+            logger.info("Training XGBoost...")
+            xgb_model = xgb.XGBRegressor(
+                n_estimators=50,   # Reduced from 100 for speed
+                learning_rate=0.1,
+                max_depth=4,        # Reduced from 5
+                min_child_weight=5,
+                random_state=42,
+                verbosity=0,
+                n_jobs=2            # Limit parallelism on RPi
+            )
+            xgb_model.fit(X_train, y_train)
+            base_models.append(('XGBoost', xgb_model))
+
+        # ============================================
+        # STEP 2: Generate meta-features from validation set
+        # ============================================
+        meta_features_val = []
+        for name, model in base_models:
+            preds = model.predict(X_val)
+            meta_features_val.append(preds)
+
+        # Stack predictions horizontally: each column is one base model's predictions
+        meta_X_val = np.column_stack(meta_features_val)
+
+        # ============================================
+        # STEP 3: Train meta-learner
+        # ============================================
+        logger.info("Training meta-learner (Ridge regression)...")
+        meta_model = Ridge(alpha=1.0)
+        meta_model.fit(meta_X_val, y_val)
+
+        # ============================================
+        # STEP 4: Evaluate on test set
+        # ============================================
+        # Generate meta-features for test set
+        meta_features_test = []
+        for name, model in base_models:
+            preds = model.predict(X_test)
+            meta_features_test.append(preds)
+        meta_X_test = np.column_stack(meta_features_test)
+
+        # Final stacked prediction
+        y_pred_test = meta_model.predict(meta_X_test)
+
+        # Also get base model predictions for comparison
+        individual_test_preds = {}
+        for name, model in base_models:
+            preds = model.predict(X_test)
+            rmse = np.sqrt(mean_squared_error(y_test, preds))
+            individual_test_preds[name] = {
+                'rmse': rmse,
+                'mae': mean_absolute_error(y_test, preds),
+                'r2': r2_score(y_test, preds)
+            }
+
+        # ============================================
+        # STEP 5: Package ensemble and compute metrics
+        # ============================================
+        ensemble = {
+            'base_models': base_models,
+            'meta_model': meta_model
+        }
+        self.models[position] = ensemble
 
         metrics = {
             'position': position,
             'train_samples': len(X_train),
+            'val_samples': len(X_val),
             'test_samples': len(X_test),
-            'train_rmse': np.sqrt(mean_squared_error(y_train, y_pred_train)),
-            'test_rmse': np.sqrt(mean_squared_error(y_test, y_pred_test)),
-            'train_mae': mean_absolute_error(y_train, y_pred_train),
-            'test_mae': mean_absolute_error(y_test, y_pred_test),
-            'train_r2': r2_score(y_train, y_pred_train),
-            'test_r2': r2_score(y_test, y_pred_test)
+            'ensemble': {
+                'test_rmse': np.sqrt(mean_squared_error(y_test, y_pred_test)),
+                'test_mae': mean_absolute_error(y_test, y_pred_test),
+                'test_r2': r2_score(y_test, y_pred_test)
+            },
+            'base_models': individual_test_preds,
+            'meta_weights': dict(zip([name for name, _ in base_models], meta_model.coef_))
         }
 
-        # Cross-validation score
-        cv_scores = cross_val_score(
-            model, X_train, y_train, cv=5,
-            scoring='neg_mean_squared_error'
-        )
-        metrics['cv_rmse'] = np.sqrt(-cv_scores.mean())
-
-        self.models[position] = model
-
         logger.info(
-            f"Position {position} model trained - "
-            f"Test RMSE: {metrics['test_rmse']:.2f}, "
-            f"Test MAE: {metrics['test_mae']:.2f}, "
-            f"Test R²: {metrics['test_r2']:.3f}"
+            f"Position {position} stacked ensemble trained:\n"
+            f"  Final Test RMSE: {metrics['ensemble']['test_rmse']:.2f}\n"
+            f"  Final Test MAE: {metrics['ensemble']['test_mae']:.2f}\n"
+            f"  Final Test R²: {metrics['ensemble']['test_r2']:.3f}\n"
+            f"  Meta-learner weights: {metrics['meta_weights']}"
         )
 
         return metrics
@@ -180,7 +277,7 @@ class PlayerPerformancePredictor:
 
     def predict(self, features: Dict) -> float:
         """
-        Predict expected points for a single player.
+        Predict expected points for a single player using stacked ensemble.
 
         Args:
             features: Feature dict from FeatureEngineer
@@ -190,14 +287,23 @@ class PlayerPerformancePredictor:
         """
         position = features['position']
 
-        if self.models[position] is None:
-            logger.warning(f"No model trained for position {position}, returning 0")
+        ensemble = self.models[position]
+        if ensemble is None:
+            logger.warning(f"No ensemble trained for position {position}, returning 0")
             return 0.0
 
         # Convert features to numpy array
         X = np.array([[features[col] for col in self.feature_columns]])
 
-        prediction = self.models[position].predict(X)[0]
+        # Get predictions from all base models
+        base_predictions = []
+        for name, model in ensemble['base_models']:
+            pred = model.predict(X)[0]
+            base_predictions.append(pred)
+
+        # Stack predictions and use meta-learner
+        meta_features = np.array([base_predictions])
+        prediction = ensemble['meta_model'].predict(meta_features)[0]
 
         # Ensure non-negative prediction
         return max(0.0, prediction)
@@ -222,16 +328,17 @@ class PlayerPerformancePredictor:
 
     def save_models(self, version: str = 'latest'):
         """
-        Save trained models to disk.
+        Save trained stacked ensemble models to disk.
 
         Args:
             version: Version identifier for the models
         """
-        for position, model in self.models.items():
-            if model is not None:
-                model_path = self.model_dir / f'position_{position}_{version}.pkl'
-                joblib.dump(model, model_path)
-                logger.info(f"Saved position {position} model to {model_path}")
+        for position, ensemble in self.models.items():
+            if ensemble is not None:
+                # Save the entire ensemble (base_models + meta_model)
+                ensemble_path = self.model_dir / f'ensemble_{position}_{version}.pkl'
+                joblib.dump(ensemble, ensemble_path)
+                logger.info(f"Saved position {position} stacked ensemble to {ensemble_path}")
 
         # Save feature columns
         if self.feature_columns:
@@ -241,7 +348,7 @@ class PlayerPerformancePredictor:
 
     def load_models(self, version: str = 'latest'):
         """
-        Load trained models from disk.
+        Load trained stacked ensemble models from disk.
 
         Args:
             version: Version identifier for the models
@@ -254,22 +361,42 @@ class PlayerPerformancePredictor:
         else:
             logger.warning(f"Feature columns file not found: {feature_path}")
 
-        # Load models
+        # Load stacked ensembles
         loaded_count = 0
         for position in [1, 2, 3, 4]:
-            model_path = self.model_dir / f'position_{position}_{version}.pkl'
-            if model_path.exists():
-                self.models[position] = joblib.load(model_path)
-                loaded_count += 1
-                logger.info(f"Loaded position {position} model from {model_path}")
-            else:
-                logger.warning(f"Model file not found for position {position}: {model_path}")
+            ensemble_path = self.model_dir / f'ensemble_{position}_{version}.pkl'
 
-        logger.info(f"Loaded {loaded_count} position models")
+            # Try new ensemble format first
+            if ensemble_path.exists():
+                self.models[position] = joblib.load(ensemble_path)
+                loaded_count += 1
+                logger.info(f"Loaded position {position} stacked ensemble from {ensemble_path}")
+            else:
+                # Fallback: try old single-model format for backward compatibility
+                old_path = self.model_dir / f'position_{position}_{version}.pkl'
+                if old_path.exists():
+                    old_model = joblib.load(old_path)
+                    # Wrap single model in ensemble structure
+                    self.models[position] = {
+                        'base_models': [('LegacyModel', old_model)],
+                        'meta_model': Ridge(alpha=0.0)  # Identity meta-model
+                    }
+                    # Fit meta-model to pass through single prediction
+                    self.models[position]['meta_model'].coef_ = np.array([1.0])
+                    self.models[position]['meta_model'].intercept_ = 0.0
+                    loaded_count += 1
+                    logger.info(f"Loaded legacy position {position} model (converted to ensemble)")
+                else:
+                    logger.warning(f"Ensemble file not found for position {position}: {ensemble_path}")
+
+        logger.info(f"Loaded {loaded_count} position ensembles")
 
     def get_feature_importance(self, position: int, top_n: int = 10) -> List[Tuple[str, float]]:
         """
-        Get feature importance for a position's model.
+        Get aggregated feature importance for a position's stacked ensemble.
+
+        Averages feature importance across all tree-based base models (RF, GB, XGB),
+        weighted by meta-learner coefficients.
 
         Args:
             position: Position (1-4)
@@ -278,15 +405,29 @@ class PlayerPerformancePredictor:
         Returns:
             List of (feature_name, importance) tuples
         """
-        if self.models[position] is None:
-            logger.warning(f"No model for position {position}")
+        ensemble = self.models[position]
+        if ensemble is None:
+            logger.warning(f"No ensemble for position {position}")
             return []
 
-        model = self.models[position]
-        importances = model.feature_importances_
+        # Aggregate importance from tree-based models
+        aggregated_importance = np.zeros(len(self.feature_columns))
+        total_weight = 0.0
+
+        for i, (name, model) in enumerate(ensemble['base_models']):
+            # Only tree-based models have feature_importances_
+            if hasattr(model, 'feature_importances_'):
+                # Weight by meta-learner coefficient
+                meta_weight = ensemble['meta_model'].coef_[i]
+                aggregated_importance += model.feature_importances_ * abs(meta_weight)
+                total_weight += abs(meta_weight)
+
+        # Normalize
+        if total_weight > 0:
+            aggregated_importance /= total_weight
 
         # Create (feature, importance) pairs
-        feature_importance = list(zip(self.feature_columns, importances))
+        feature_importance = list(zip(self.feature_columns, aggregated_importance))
 
         # Sort by importance
         feature_importance.sort(key=lambda x: x[1], reverse=True)

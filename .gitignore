@@ -221,3 +221,8 @@ data/backups/*
 !data/backups/.gitkeep
 # Generated crontab files (user-specific)
 config/crontab
+
+# Trained ML models (regenerate with train_prediction_models.py)
+models/**/*.pkl
+ml/**/*.pkl
+*.pkl

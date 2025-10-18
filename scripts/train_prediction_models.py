@@ -165,11 +165,35 @@ def main():
     for position, pos_metrics in metrics.items():
         print(f"\n{position_names[position]}:")
         print(f"  Train samples: {pos_metrics['train_samples']}")
+        if 'val_samples' in pos_metrics:
+            print(f"  Val samples: {pos_metrics['val_samples']}")
         print(f"  Test samples: {pos_metrics['test_samples']}")
-        print(f"  Test RMSE: {pos_metrics['test_rmse']:.2f} points")
-        print(f"  Test MAE: {pos_metrics['test_mae']:.2f} points")
-        print(f"  Test R²: {pos_metrics['test_r2']:.3f}")
-        print(f"  CV RMSE: {pos_metrics['cv_rmse']:.2f} points")
+
+        # Handle both old single-model and new ensemble formats
+        if 'ensemble' in pos_metrics:
+            # New stacked ensemble format
+            print(f"  Ensemble Test RMSE: {pos_metrics['ensemble']['test_rmse']:.2f} points")
+            print(f"  Ensemble Test MAE: {pos_metrics['ensemble']['test_mae']:.2f} points")
+            print(f"  Ensemble Test R²: {pos_metrics['ensemble']['test_r2']:.3f}")
+
+            # Show base model performance
+            if 'base_models' in pos_metrics:
+                print("  Base models:")
+                for model_name, model_metrics in pos_metrics['base_models'].items():
+                    print(f"    {model_name}: RMSE={model_metrics['rmse']:.2f}, R²={model_metrics['r2']:.3f}")
+
+            # Show meta-learner weights
+            if 'meta_weights' in pos_metrics:
+                print("  Meta-learner weights:")
+                for model_name, weight in pos_metrics['meta_weights'].items():
+                    print(f"    {model_name}: {weight:.3f}")
+        else:
+            # Old single-model format (backward compatibility)
+            print(f"  Test RMSE: {pos_metrics['test_rmse']:.2f} points")
+            print(f"  Test MAE: {pos_metrics['test_mae']:.2f} points")
+            print(f"  Test R²: {pos_metrics['test_r2']:.3f}")
+            if 'cv_rmse' in pos_metrics:
+                print(f"  CV RMSE: {pos_metrics['cv_rmse']:.2f} points")
 
     # Feature importance
     print("\n" + "-" * 80)

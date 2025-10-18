@@ -44,6 +44,7 @@ python-json-logger>=2.0.7
 # ML/AI
 # torch>=2.0.0  # Future: Deep learning
 scikit-learn>=1.3.0  # Machine learning models
+xgboost>=2.0.0  # Gradient boosting (ensemble stacking)
 joblib>=1.3.0  # Model serialization
 
 # Testing
