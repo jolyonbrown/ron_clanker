@@ -38,58 +38,52 @@ def main():
     print("-" * 80)
 
     try:
-        import json
-
-        # Get latest bootstrap data
-        bootstrap = db.execute_query("""
-            SELECT data FROM bootstrap_data
-            ORDER BY fetched_at DESC LIMIT 1
+        # Get all players from database
+        players_data = db.execute_query("""
+            SELECT id, web_name, now_cost FROM players
+            ORDER BY id
         """)
 
-        if not bootstrap:
-            print("❌ No bootstrap data available")
+        if not players_data:
+            print("❌ No players data available")
             print("Run: venv/bin/python scripts/collect_fpl_data.py")
             return 1
 
-        data = json.loads(bootstrap[0]['data'])
-        players = data.get('players', [])
-
-        print(f"Checking {len(players)} players...")
+        print(f"Checking {len(players_data)} players...")
 
         # Track changes
         price_rises = []
         price_falls = []
 
-        for player_data in players:
-            player_id = player_data['id']
-            new_price = player_data['now_cost']
+        # TODO: This needs to fetch from FPL API and compare to database
+        # For now, just check price_changes table for recent changes
+        recent_changes = db.execute_query("""
+            SELECT player_id, old_price, new_price, detected_at
+            FROM price_changes
+            WHERE DATE(detected_at) = DATE('now')
+            ORDER BY detected_at DESC
+        """)
 
-            # Get last known price
-            last_price = db.execute_query("""
-                SELECT now_cost FROM players
-                WHERE id = ?
-            """, (player_id,))
+        if recent_changes:
+            for change in recent_changes:
+                player = db.execute_query("""
+                    SELECT web_name FROM players WHERE id = ?
+                """, (change['player_id'],))
 
-            if last_price:
-                old_price = last_price[0]['now_cost']
+                if player:
+                    change_amount = change['new_price'] - change['old_price']
+                    change_data = {
+                        'id': change['player_id'],
+                        'name': player[0]['web_name'],
+                        'old': change['old_price'] / 10,
+                        'new': change['new_price'] / 10,
+                        'change': change_amount / 10
+                    }
 
-                if new_price > old_price:
-                    price_rises.append({
-                        'id': player_id,
-                        'name': player_data['web_name'],
-                        'old': old_price / 10,
-                        'new': new_price / 10,
-                        'change': (new_price - old_price) / 10
-                    })
-
-                elif new_price < old_price:
-                    price_falls.append({
-                        'id': player_id,
-                        'name': player_data['web_name'],
-                        'old': old_price / 10,
-                        'new': new_price / 10,
-                        'change': (new_price - old_price) / 10
-                    })
+                    if change_amount > 0:
+                        price_rises.append(change_data)
+                    else:
+                        price_falls.append(change_data)
 
         # Report changes
         if price_rises:

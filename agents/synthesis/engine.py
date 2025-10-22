@@ -104,6 +104,7 @@ class DecisionSynthesisEngine:
         except Exception as e:
             logger.warning(f"DecisionSynthesis: Could not load models: {e}")
             logger.warning("DecisionSynthesis: Will use fallback predictions")
+            print(f"\n⚠️  ML Models not available - using fallback predictions based on form")
             return self._fallback_predictions(gameweek)
 
         # Get all players
@@ -141,6 +142,7 @@ class DecisionSynthesisEngine:
                 predictions[player['id']] = 2.0  # Safe fallback
 
         logger.info(f"DecisionSynthesis: Generated {len(predictions)} predictions")
+        print(f"\n📊 ML Predictions: Generated {len(predictions)} predictions for all players")
 
         # Store to database
         self._store_predictions(predictions, gameweek)
@@ -153,6 +155,7 @@ class DecisionSynthesisEngine:
         Used when ML models aren't available.
         """
         logger.info("DecisionSynthesis: Using fallback predictions")
+        print(f"📊 Fallback Predictions: Using form-based predictions for all players")
 
         players = self.db.execute_query("""
             SELECT p.id, p.element_type, p.form,
@@ -191,8 +194,8 @@ class DecisionSynthesisEngine:
             try:
                 self.db.execute_update("""
                     INSERT OR REPLACE INTO player_predictions
-                    (player_id, gameweek, predicted_points, prediction_date, model_version)
-                    VALUES (?, ?, ?, CURRENT_TIMESTAMP, 'synthesis_v1')
+                    (player_id, gameweek, predicted_points, model_version)
+                    VALUES (?, ?, ?, 'synthesis_v1')
                 """, (player_id, gameweek, xp))
             except Exception as e:
                 logger.warning(f"DecisionSynthesis: Failed to store prediction for {player_id}: {e}")
@@ -358,7 +361,7 @@ class DecisionSynthesisEngine:
             'gameweek': gameweek,
             'generated_at': datetime.now().isoformat(),
             'strategy': self._determine_strategy(intelligence),
-            'top_players': self._rank_players_by_value(gameweek, intelligence),
+            'top_players': self._rank_players_by_value(gameweek, intelligence, top_n=999),  # Return all ranked players
             'captain_recommendation': self._recommend_captain(gameweek, intelligence),
             'chip_recommendation': intelligence.get('chips', {}),
             'transfer_targets': self._identify_transfer_targets(gameweek, intelligence),

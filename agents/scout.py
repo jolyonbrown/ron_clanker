@@ -143,14 +143,16 @@ class ScoutAgent(BaseAgent):
         except Exception as e:
             logger.error(f"Scout: Error handling event {event.event_type}: {e}")
 
-    async def _run_daily_monitoring(self) -> None:
+    async def gather_intelligence(self) -> List[Dict[str, Any]]:
         """
-        Run daily intelligence monitoring.
+        Gather intelligence from all sources and return as list of dicts.
 
-        This is triggered by PRICE_CHECK events (03:00 AM daily).
-        Monitors all sources and publishes intelligence events.
+        This is the public method used by scripts for daily intelligence gathering.
+
+        Returns:
+            List of intelligence items as dictionaries
         """
-        logger.info("Scout: Running daily intelligence monitoring")
+        logger.info("Scout: Gathering intelligence from all sources")
 
         try:
             # Check RSS feeds (fastest and most reliable)
@@ -170,7 +172,7 @@ class ScoutAgent(BaseAgent):
             raw_intelligence = rss_intel + website_intel + youtube_intel
 
             # Convert raw intelligence to IntelligenceItems using classifier
-            all_intelligence: List[IntelligenceItem] = []
+            all_intelligence: List[Dict[str, Any]] = []
 
             for raw in raw_intelligence:
                 # Classify intelligence (confidence, severity, player matching)
@@ -179,29 +181,58 @@ class ScoutAgent(BaseAgent):
                     base_confidence=raw.get('base_reliability', 0.8)
                 )
 
-                # Build IntelligenceItem with classified data
-                intel = IntelligenceItem(
-                    type=raw['type'],
-                    player_id=classified.player_id,
-                    player_name=classified.matched_name or raw['player_name'],
-                    details=raw['details'],
-                    confidence=classified.confidence,
-                    severity=classified.severity,
-                    source=raw['source'],
-                    timestamp=raw['timestamp'],
-                    actionable=classified.actionable,
-                    raw_data=raw
-                )
-                all_intelligence.append(intel)
+                # Build intelligence dict
+                intel_dict = {
+                    'type': raw['type'],
+                    'player_id': classified.player_id,
+                    'player_name': classified.matched_name or raw['player_name'],
+                    'details': raw['details'],
+                    'confidence': classified.confidence,
+                    'severity': classified.severity,
+                    'source': raw['source'],
+                    'timestamp': raw['timestamp'],
+                    'actionable': classified.actionable,
+                }
+                all_intelligence.append(intel_dict)
 
             logger.info(f"Scout: Processed {len(all_intelligence)} total intelligence items")
+            return all_intelligence
 
-            # Process and publish intelligence
-            for intel in all_intelligence:
-                if intel.actionable and intel.confidence > 0.7:
+        except Exception as e:
+            logger.error(f"Scout: Error gathering intelligence: {e}")
+            return []
+
+    async def _run_daily_monitoring(self) -> None:
+        """
+        Run daily intelligence monitoring.
+
+        This is triggered by PRICE_CHECK events (03:00 AM daily).
+        Monitors all sources and publishes intelligence events.
+        """
+        logger.info("Scout: Running daily intelligence monitoring")
+
+        try:
+            # Gather intelligence
+            all_intelligence_dicts = await self.gather_intelligence()
+
+            # Publish events for actionable intelligence
+            for intel_dict in all_intelligence_dicts:
+                if intel_dict['actionable'] and intel_dict['confidence'] > 0.7:
+                    # Convert dict back to IntelligenceItem for event publishing
+                    intel = IntelligenceItem(
+                        type=intel_dict['type'],
+                        player_id=intel_dict['player_id'],
+                        player_name=intel_dict['player_name'],
+                        details=intel_dict['details'],
+                        confidence=intel_dict['confidence'],
+                        severity=intel_dict['severity'],
+                        source=intel_dict['source'],
+                        timestamp=intel_dict['timestamp'],
+                        actionable=intel_dict['actionable'],
+                    )
                     await self._publish_intelligence(intel)
 
-            logger.info(f"Scout: Processed {len(all_intelligence)} intelligence items")
+            logger.info(f"Scout: Processed {len(all_intelligence_dicts)} intelligence items")
 
         except Exception as e:
             logger.error(f"Scout: Error in daily monitoring: {e}")

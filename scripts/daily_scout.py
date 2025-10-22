@@ -16,7 +16,10 @@ sys.path.insert(0, str(project_root))
 
 from agents.scout import ScoutAgent
 from data.database import Database
+from utils.config import get_telegram_token, get_telegram_chat_id
+from telegram_bot.notifications import send_scout_report, send_cron_failure
 import logging
+import os
 
 logger = logging.getLogger('ron_clanker.daily_scout')
 
@@ -35,19 +38,25 @@ async def main():
     db = Database()
     scout = ScoutAgent(database=db)
 
+    # Load player cache for name matching (critical for performance)
+    print("\n" + "-" * 80)
+    print("LOADING PLAYER CACHE")
+    print("-" * 80)
+    await scout.load_player_cache()
+    print("✓ Player cache loaded")
+
     # Check current gameweek
-    bootstrap = db.execute_query("""
-        SELECT data FROM bootstrap_data
-        ORDER BY fetched_at DESC LIMIT 1
+    gameweek_data = db.execute_query("""
+        SELECT id, name FROM gameweeks
+        WHERE is_current = 1
+        LIMIT 1
     """)
 
-    if bootstrap:
-        import json
-        data = json.loads(bootstrap[0]['data'])
-        current_gw = data['current_gameweek']['id']
-        print(f"Current Gameweek: {current_gw}")
+    if gameweek_data:
+        current_gw = gameweek_data[0]['id']
+        print(f"Current Gameweek: {current_gw} ({gameweek_data[0]['name']})")
     else:
-        print("⚠️  No bootstrap data available - run data collection first")
+        print("⚠️  No current gameweek found in database")
         current_gw = None
 
     # Gather intelligence
@@ -87,6 +96,22 @@ async def main():
     except Exception as e:
         logger.error(f"ScoutDaily: Error gathering intelligence: {e}", exc_info=True)
         print(f"\n❌ Error: {e}")
+
+        # Send failure notification
+        if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
+            bot_token = get_telegram_token()
+            chat_id = get_telegram_chat_id()
+            if bot_token and chat_id:
+                try:
+                    send_cron_failure(
+                        bot_token=bot_token,
+                        chat_id=chat_id,
+                        job_name="Daily Scout",
+                        error=str(e)
+                    )
+                except:
+                    pass  # Don't fail on notification failure
+
         return 1
 
     # Database statistics
@@ -94,18 +119,26 @@ async def main():
     print("DATABASE STATISTICS")
     print("-" * 80)
 
-    # Intelligence count
-    intel_count = db.execute_query("""
-        SELECT COUNT(*) as count FROM intelligence_cache
+    # Check if intelligence_cache table exists
+    tables = db.execute_query("""
+        SELECT name FROM sqlite_master WHERE type='table' AND name='intelligence_cache'
     """)
-    print(f"\nTotal intelligence in cache: {intel_count[0]['count']}")
 
-    # Recent intelligence (last 24 hours)
-    recent = db.execute_query("""
-        SELECT COUNT(*) as count FROM intelligence_cache
-        WHERE timestamp > datetime('now', '-1 day')
-    """)
-    print(f"Intelligence gathered in last 24h: {recent[0]['count']}")
+    if tables:
+        # Intelligence count
+        intel_count = db.execute_query("""
+            SELECT COUNT(*) as count FROM intelligence_cache
+        """)
+        print(f"\nTotal intelligence in cache: {intel_count[0]['count']}")
+
+        # Recent intelligence (last 24 hours)
+        recent = db.execute_query("""
+            SELECT COUNT(*) as count FROM intelligence_cache
+            WHERE timestamp > datetime('now', '-1 day')
+        """)
+        print(f"Intelligence gathered in last 24h: {recent[0]['count']}")
+    else:
+        print("\n⚠️  Intelligence cache table not yet created")
 
     # YouTube cache statistics
     youtube_stats = db.execute_query("""
@@ -127,6 +160,26 @@ async def main():
     print("=" * 80)
     print(f"Duration: {duration:.1f} seconds")
     print(f"Status: SUCCESS")
+
+    # Send Telegram notification (if configured and enabled)
+    if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
+        bot_token = get_telegram_token()
+        chat_id = get_telegram_chat_id()
+
+        if bot_token and chat_id:
+            try:
+                print("\n📱 Sending Telegram notification...")
+                send_scout_report(
+                    bot_token=bot_token,
+                    chat_id=chat_id,
+                    intel_count=len(intelligence),
+                    breakdown=by_type,
+                    top_items=intelligence[:3] if intelligence else None
+                )
+                print("   ✓ Notification sent")
+            except Exception as e:
+                logger.warning(f"Failed to send Telegram notification: {e}")
+                print(f"   ⚠️  Failed to send notification: {e}")
 
     return 0
 

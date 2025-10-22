@@ -16,9 +16,9 @@ from typing import Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from agents.manager import RonClanker
+from agents.manager import ManagerAgent
 from data.database import Database
-from utils.event_bus import EventBus
+from infrastructure.event_bus import EventBus
 import logging
 
 logger = logging.getLogger('ron_clanker.pre_deadline')
@@ -26,28 +26,23 @@ logger = logging.getLogger('ron_clanker.pre_deadline')
 
 def get_next_deadline(db: Database) -> Optional[dict]:
     """Get the next gameweek deadline from FPL data."""
-    bootstrap = db.execute_query("""
-        SELECT data FROM bootstrap_data
-        ORDER BY fetched_at DESC LIMIT 1
+    # Get next unfinished gameweek
+    next_gw = db.execute_query("""
+        SELECT id, name, deadline_time, finished
+        FROM gameweeks
+        WHERE finished = 0
+        ORDER BY id ASC
+        LIMIT 1
     """)
 
-    if not bootstrap:
+    if not next_gw:
         return None
 
-    data = json.loads(bootstrap[0]['data'])
-    current_gw = data['current_gameweek']['id']
-
-    # Find next deadline
-    events = data.get('events', [])
-    for event in events:
-        if event['id'] >= current_gw and not event['finished']:
-            return {
-                'gameweek': event['id'],
-                'deadline': event['deadline_time'],
-                'name': event['name']
-            }
-
-    return None
+    return {
+        'gameweek': next_gw[0]['id'],
+        'deadline': next_gw[0]['deadline_time'],
+        'name': next_gw[0]['name']
+    }
 
 
 async def main():
@@ -97,14 +92,7 @@ async def main():
     print("INITIALIZING RON CLANKER")
     print("-" * 80)
 
-    ron = RonClanker(event_bus=event_bus, database=db)
-
-    # Emit deadline approaching event
-    await event_bus.emit('deadline_approaching', {
-        'gameweek': gameweek,
-        'hours_remaining': max(0, time_until),
-        'deadline': deadline
-    })
+    ron = ManagerAgent(database=db)
 
     # Make team selection
     print("\n" + "-" * 80)
@@ -112,20 +100,25 @@ async def main():
     print("-" * 80)
 
     try:
-        # This will coordinate all agents and make final selection
-        await event_bus.emit('make_team_selection', {
-            'gameweek': gameweek,
-            'deadline': deadline
-        })
+        # Make weekly decision (transfers, captain, chip usage)
+        transfers, chip_used, announcement = await ron.make_weekly_decision(gameweek)
 
-        # Wait for Ron to process and make decisions
-        await asyncio.sleep(2)
+        print(f"\n✓ Team selection complete!")
+        print(f"   Transfers: {len(transfers)}")
+        print(f"   Chip used: {chip_used or 'None'}")
 
-        print("\n✓ Team selection process initiated")
+        # Show announcement
+        print("\n" + "=" * 80)
+        print("RON'S TEAM ANNOUNCEMENT")
+        print("=" * 80)
+        print(announcement)
+        print("=" * 80)
 
     except Exception as e:
         logger.error(f"PreDeadline: Error during team selection: {e}", exc_info=True)
         print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return 1
 
     # Store decision record
@@ -134,18 +127,24 @@ async def main():
     print("-" * 80)
 
     try:
-        # Get Ron's latest decision from database
-        decision = db.execute_query("""
-            SELECT * FROM team_selections
+        # Get Ron's latest decisions from database
+        transfers_logged = db.execute_query("""
+            SELECT * FROM transfers
             WHERE gameweek = ?
-            ORDER BY created_at DESC
-            LIMIT 1
+            ORDER BY executed_at DESC
         """, (gameweek,))
 
-        if decision:
-            print(f"✓ Decision stored: {len(decision)} records")
-        else:
-            print("⚠️  No decision record found in database")
+        team_stored = db.execute_query("""
+            SELECT COUNT(*) as count FROM my_team
+            WHERE gameweek = ?
+        """, (gameweek,))
+
+        if transfers_logged:
+            print(f"✓ Transfers logged: {len(transfers_logged)} transfer(s)")
+        if team_stored and team_stored[0]['count'] > 0:
+            print(f"✓ Team stored: {team_stored[0]['count']} players")
+        if not transfers_logged and not (team_stored and team_stored[0]['count'] > 0):
+            print("⚠️  No decision records found in database")
 
     except Exception as e:
         logger.warning(f"PreDeadline: Could not verify decision storage: {e}")

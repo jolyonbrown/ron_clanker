@@ -13,6 +13,8 @@ from rules.rules_engine import RulesEngine
 from agents.data_collector import DataCollector
 from agents.player_valuation import PlayerValuationAgent
 from agents.synthesis.engine import DecisionSynthesisEngine
+from agents.transfer_optimizer import TransferOptimizer
+from intelligence.chip_strategy import ChipStrategyAnalyzer
 from ron_clanker.persona import RonClanker
 from data.database import Database
 from utils.gameweek import get_current_gameweek
@@ -53,13 +55,32 @@ class ManagerAgent:
         if use_ml:
             try:
                 self.synthesis_engine = DecisionSynthesisEngine(database=self.db)
+
+                # Initialize chip strategy analyzer
+                # Note: We need league_intel_service, but for now we'll pass None
+                # and handle it gracefully in the optimizer
+                self.chip_strategy = ChipStrategyAnalyzer(
+                    database=self.db,
+                    league_intel_service=None  # Will be set when available
+                )
+
+                self.transfer_optimizer = TransferOptimizer(
+                    database=self.db,
+                    chip_strategy=self.chip_strategy
+                )
                 logger.info("Decision Synthesis Engine loaded - ML predictions ENABLED")
+                logger.info("Transfer Optimizer loaded - Multi-GW transfer analysis ENABLED")
+                logger.info("Chip Strategy Analyzer loaded - Chip vs transfer comparison ENABLED")
             except Exception as e:
                 logger.warning(f"Could not load synthesis engine: {e}. Falling back to basic valuation.")
                 self.synthesis_engine = None
+                self.transfer_optimizer = None
+                self.chip_strategy = None
                 self.use_ml = False
         else:
             self.synthesis_engine = None
+            self.transfer_optimizer = None
+            self.chip_strategy = None
 
         self.current_team = None
         self.available_budget = 0
@@ -340,15 +361,66 @@ class ManagerAgent:
 
         # Update captain for new gameweek (ML-powered if available)
         if recommendations and recommendations.get('captain_recommendation'):
-            new_team = self._assign_captain_ml(new_team, recommendations['captain_recommendation'])
+            new_team = self._assign_captain_ml(new_team, recommendations['captain_recommendation'], recommendations)
+            captain_rec = recommendations['captain_recommendation']
         else:
             new_team = self._assign_captain(new_team)
+            captain_rec = None
+
+        # Optimize starting XI based on expected points (ML-powered if available)
+        if recommendations:
+            new_team = self._optimize_starting_xi(new_team, recommendations)
+
+        # Log captain decision
+        captain = next((p for p in new_team if p.get('is_captain')), None)
+        if captain:
+            captain_reasoning = f"ML recommendation: {captain_rec.get('primary', {}).get('name', 'N/A')}" if captain_rec else "Form-based selection"
+            expected_points = captain_rec.get('primary', {}).get('xp', 0) * 2 if captain_rec else 0
+            self.db.log_decision(
+                gameweek=gameweek,
+                decision_type='captain',
+                decision_data={'player_id': captain.get('player_id', captain.get('id')), 'player_name': captain.get('web_name', 'Unknown')},
+                reasoning=captain_reasoning,
+                expected_value=expected_points,
+                agent_source='ML' if captain_rec else 'Basic',
+                confidence=captain_rec.get('primary', {}).get('confidence', 0.5) if captain_rec else 0.5
+            )
 
         # Decide on chip usage (ML-powered if available)
         if recommendations and recommendations.get('chip_recommendation'):
             chip_used = self._decide_chip_usage_ml(gameweek, new_team, recommendations['chip_recommendation'])
         else:
             chip_used = self._decide_chip_usage(gameweek, new_team)
+
+        # Log chip usage decision
+        chip_reasoning = f"Using {chip_used}" if chip_used else "No chip used - saving for better opportunity"
+        self.db.log_decision(
+            gameweek=gameweek,
+            decision_type='chip_usage',
+            decision_data={'chip': chip_used or 'none'},
+            reasoning=chip_reasoning,
+            expected_value=0,  # Hard to quantify chip value
+            agent_source='ML' if recommendations else 'Basic',
+            confidence=0.6
+        )
+
+        # Log transfer strategy decision
+        if transfers:
+            total_expected_gain = sum(t.get('expected_gain', 0) for t in transfers)
+            transfer_reasoning = f"Made {len(transfers)} transfer(s). " + '; '.join([t.get('reasoning', 'N/A') for t in transfers])
+        else:
+            total_expected_gain = 0
+            transfer_reasoning = recommendations.get('strategy', {}).get('reasoning', 'Team unchanged - no beneficial transfers identified') if recommendations else 'No transfers needed'
+
+        self.db.log_decision(
+            gameweek=gameweek,
+            decision_type='transfer_strategy',
+            decision_data={'num_transfers': len(transfers), 'transfers': [{'out': t['player_out'].get('web_name'), 'in': t['player_in'].get('web_name')} for t in transfers]},
+            reasoning=transfer_reasoning,
+            expected_value=total_expected_gain,
+            agent_source='ML' if recommendations else 'Basic',
+            confidence=0.7 if transfers else 0.8  # Higher confidence when holding
+        )
 
         # Save decisions
         self.db.set_team(gameweek, new_team)
@@ -376,6 +448,68 @@ class ManagerAgent:
 
         return transfers, chip_used, announcement
 
+    def _decide_transfers_optimized(
+        self,
+        current_team: List[Dict[str, Any]],
+        gameweek: int,
+        free_transfers: int = 1,
+        bank: float = 5.0,
+        horizon: int = 4
+    ) -> Dict[str, Any]:
+        """
+        OPTIMIZED TRANSFER DECISION ENGINE (NEW!)
+
+        Uses TransferOptimizer for intelligent multi-gameweek transfer analysis.
+
+        Features:
+        - Evaluates ALL positions independently
+        - Multi-gameweek value calculation (default 4 GW horizon)
+        - Compares options across positions
+        - Roll vs make decision logic
+        - Full data transparency
+
+        Args:
+            current_team: Current 15-player squad
+            gameweek: Current gameweek
+            free_transfers: Available free transfers (default 1)
+            bank: Money in the bank in £m (default 5.0)
+            horizon: Gameweeks to look ahead (default 4)
+
+        Returns:
+            Dict with:
+                - 'recommendation': 'MAKE', 'ROLL', or 'CHIP'
+                - 'best_transfer': TransferOption object
+                - 'top_3_transfers': List of top 3 options
+                - 'by_position': Options grouped by position
+                - 'reasoning': Text explanation
+        """
+
+        logger.info(f"Running optimized transfer analysis for GW{gameweek}")
+
+        if not self.transfer_optimizer:
+            logger.warning("TransferOptimizer not available, falling back to old method")
+            return None
+
+        # Get Ron's team and league IDs from config
+        from utils.config import load_config
+        config = load_config()
+        ron_entry_id = config.get('team_id')
+        league_id = config.get('league_id')
+
+        # Run the optimizer
+        result = self.transfer_optimizer.optimize_transfers(
+            current_team=current_team,
+            ml_predictions={},  # Generated internally
+            current_gw=gameweek,
+            free_transfers=free_transfers,
+            bank=bank,
+            horizon=horizon,
+            ron_entry_id=ron_entry_id,
+            league_id=league_id
+        )
+
+        return result
+
     def _decide_transfers_ml(
         self,
         current_team: List[Dict[str, Any]],
@@ -394,17 +528,28 @@ class ManagerAgent:
         transfers = []
 
         # Get top recommended players by position
-        top_players = recommendations.get('top_players', [])[:20]
+        all_ranked_players = recommendations.get('top_players', [])  # Full list (~50 players)
+        top_players = all_ranked_players[:20]  # Top 20 for consideration
         template_risks = recommendations.get('risks_to_cover', [])
         strategy = recommendations.get('strategy', {})
 
-        # Identify weakest player in current team
-        current_team_ids = {p['id'] for p in current_team}
+        print(f"\n🔍 TransferML: ML ranked {len(all_ranked_players)} players total")
+        print(f"🔍 TransferML: Considering top {len(top_players)} for transfers")
+        print(f"🔍 TransferML: Current team size: {len(current_team)} players")
+        if top_players:
+            print(f"🔍 TransferML: Top 3 ML recommendations:")
+            for i, p in enumerate(top_players[:3]):
+                print(f"  {i+1}. {p.get('name', 'Unknown')} - xP: {p.get('xp', 0):.1f}, value: {p.get('value_score', 0):.2f}, pos: {p.get('position', '?')}")
 
-        # Find players in current team
+        # Identify weakest player in current team
+        # Use player_id (FPL player ID), not id (my_team row ID)
+        current_team_ids = {p.get('player_id', p.get('id')) for p in current_team}
+
+        # Find players in current team - search in FULL ranked list, not just top 20
         current_team_with_predictions = []
         for player in current_team:
-            player_pred = next((p for p in top_players if p.get('player_id') == player['id']), None)
+            player_fpl_id = player.get('player_id', player.get('id'))
+            player_pred = next((p for p in all_ranked_players if p.get('player_id') == player_fpl_id), None)
             if player_pred:
                 current_team_with_predictions.append({
                     **player,
@@ -419,19 +564,46 @@ class ManagerAgent:
                     'value_score': 0.0
                 })
 
-        # Sort by value score to find weakest
-        current_team_with_predictions.sort(key=lambda x: x['value_score'])
+        # Group by position and find weakest in each position
+        print(f"\n📊 TransferML: Analyzing weakest players BY POSITION:")
 
-        # Consider transfers for weakest player
+        positions = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        weakest_by_position = {}
+
+        for pos_id, pos_name in positions.items():
+            pos_players = [p for p in current_team_with_predictions if p.get('element_type') == pos_id]
+            if pos_players:
+                pos_players.sort(key=lambda x: x['value_score'])
+                weakest_by_position[pos_id] = pos_players[0]
+                print(f"  {pos_name}: {pos_players[0].get('web_name', 'Unknown')} - xP: {pos_players[0].get('xp', 0):.1f}, value: {pos_players[0].get('value_score', 0):.2f}")
+
+        # Find overall weakest (for logging)
+        current_team_with_predictions.sort(key=lambda x: x['value_score'])
         weakest = current_team_with_predictions[0] if current_team_with_predictions else None
 
+        print(f"\n📊 TransferML: Overall weakest: {weakest.get('web_name', 'Unknown')} ({positions.get(weakest.get('element_type'), '?')})")
+
         if weakest and weakest['value_score'] < 0.5:
-            # Find best replacement in same position
+            print(f"✅ TransferML: Weakest player {weakest.get('web_name')} has value_score {weakest['value_score']:.2f} < 0.5 - considering transfer")
+            # Find best replacement in same position - search ALL players, not just top 20
             position = weakest['element_type']
-            replacements = [p for p in top_players
+            position_name = positions.get(position, '?')
+
+            print(f"🔍 TransferML: Searching ALL {len(all_ranked_players)} players for {position_name} replacements (up to £{weakest['now_cost'] / 10 + 1.0:.1f}m)...")
+
+            replacements = [p for p in all_ranked_players  # Search ALL players, not just top_players
                            if p['position'] == position
                            and p['player_id'] not in current_team_ids
                            and p['price'] <= weakest['now_cost'] / 10 + 1.0]  # Allow 1m upgrade
+
+            # Sort by value_score to get best options first
+            replacements.sort(key=lambda x: x.get('value_score', 0), reverse=True)
+
+            print(f"📊 TransferML: Found {len(replacements)} potential {position_name} replacements")
+            if replacements:
+                print(f"📊 TransferML: Top 3 replacements:")
+                for i, r in enumerate(replacements[:3]):
+                    print(f"  {i+1}. {r.get('name', 'Unknown')} - xP: {r.get('xp', 0):.1f}, value: {r.get('value_score', 0):.2f}, £{r.get('price', 0):.1f}m")
 
             if replacements:
                 best_replacement = replacements[0]
@@ -450,13 +622,23 @@ class ManagerAgent:
                             f"{weakest['web_name']}. {strategy.get('approach', 'Value upgrade')}."
                         )
                     })
+                else:
+                    print(f"⚠️  TransferML: Best replacement xP gain {expected_gain:.1f} < 2.0 - not worth free transfer")
+            else:
+                print(f"⚠️  TransferML: No suitable replacements found for {weakest.get('web_name')} in position {position}")
+        else:
+            if weakest:
+                print(f"✅ TransferML: Weakest player {weakest.get('web_name')} has value_score {weakest['value_score']:.2f} >= 0.5 - no transfer needed")
+            else:
+                print(f"⚠️  TransferML: No players in current team to evaluate")
 
         return transfers
 
     def _assign_captain_ml(
         self,
         team: List[Dict[str, Any]],
-        captain_rec: Dict[str, Any]
+        captain_rec: Dict[str, Any],
+        recommendations: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
         ML-POWERED: Assign captain using synthesis recommendation.
@@ -474,12 +656,13 @@ class ManagerAgent:
 
         # Find captain and vice in team
         for player in team:
-            if player['id'] == captain_id:
+            player_fpl_id = player.get('player_id', player.get('id'))
+            if player_fpl_id == captain_id:
                 player['is_captain'] = True
                 player['is_vice_captain'] = False
                 player['multiplier'] = 2
                 logger.info(f"Captain (ML): {player['web_name']} ({primary.get('xp', 0):.2f} xP)")
-            elif player['id'] == vice_captain_id:
+            elif player_fpl_id == vice_captain_id:
                 player['is_captain'] = False
                 player['is_vice_captain'] = True
                 player['multiplier'] = 1
@@ -492,6 +675,140 @@ class ManagerAgent:
         if not any(p.get('is_captain') for p in team):
             logger.warning("ML captain not in team, using fallback")
             return self._assign_captain(team)
+
+        # If captain is set but vice captain is not (differential not in team),
+        # set vice captain to second-best player in the actual team
+        if not any(p.get('is_vice_captain') for p in team):
+            logger.warning(f"ML vice captain {differential.get('name', 'N/A')} not in team, assigning to second-best player")
+            starting_xi = [p for p in team if p.get('position', 16) <= 11 and not p.get('is_captain')]
+
+            # Get ML xP for each player from recommendations
+            all_players_xp = {}
+            if recommendations and recommendations.get('top_players'):
+                for player_pred in recommendations['top_players']:
+                    all_players_xp[player_pred['player_id']] = player_pred.get('xp', 0)
+
+            # Calculate expected points for each using ML predictions
+            expected_points = []
+            for player in starting_xi:
+                player_fpl_id = player.get('player_id', player.get('id'))
+                exp_pts = all_players_xp.get(player_fpl_id, 0)
+                expected_points.append((player, exp_pts))
+
+            # Sort by expected points and assign vice to top player
+            expected_points.sort(key=lambda x: x[1], reverse=True)
+            if expected_points:
+                expected_points[0][0]['is_vice_captain'] = True
+                expected_points[0][0]['multiplier'] = 1
+                logger.info(f"Vice Captain (fallback): {expected_points[0][0]['web_name']} ({expected_points[0][1]:.2f} xP)")
+
+        return team
+
+    def _optimize_starting_xi(
+        self,
+        team: List[Dict[str, Any]],
+        recommendations: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        Optimize starting XI selection based on ML expected points.
+
+        Tries all valid FPL formations (3-5-2, 4-4-2, 4-5-1, etc.) and
+        selects the combination that maximizes total expected points.
+
+        Args:
+            team: Current team (15 players)
+            recommendations: ML recommendations with xP for all players
+
+        Returns:
+            Team with optimized positions (1-11 starters, 12-15 bench)
+        """
+        # Get ML xP predictions
+        all_players_xp = {}
+        if recommendations and recommendations.get('top_players'):
+            for player_pred in recommendations['top_players']:
+                all_players_xp[player_pred['player_id']] = player_pred.get('xp', 0)
+
+        # Add xP to each team player
+        for player in team:
+            player_id = player.get('player_id', player.get('id'))
+            player['ml_xp'] = all_players_xp.get(player_id, 0)
+
+        # Group players by position
+        by_position = {1: [], 2: [], 3: [], 4: []}  # GK, DEF, MID, FWD
+        for player in team:
+            pos = player.get('element_type')
+            if pos in by_position:
+                by_position[pos].append(player)
+
+        # Sort each position by xP (highest first)
+        for pos in by_position:
+            by_position[pos].sort(key=lambda x: x.get('ml_xp', 0), reverse=True)
+
+        # Try all valid formations
+        formations = [
+            ('3-5-2', 1, 3, 5, 2),
+            ('4-5-1', 1, 4, 5, 1),
+            ('4-4-2', 1, 4, 4, 2),
+            ('3-4-3', 1, 3, 4, 3),
+            ('5-4-1', 1, 5, 4, 1),
+            ('5-3-2', 1, 5, 3, 2),
+        ]
+
+        best_formation = None
+        best_total_xp = 0
+        best_starters = {}
+
+        for name, num_gk, num_def, num_mid, num_fwd in formations:
+            # Check if we have enough players for this formation
+            if (num_gk > len(by_position[1]) or
+                num_def > len(by_position[2]) or
+                num_mid > len(by_position[3]) or
+                num_fwd > len(by_position[4])):
+                continue
+
+            # Calculate total xP for this formation
+            total_xp = 0
+            total_xp += sum(p.get('ml_xp', 0) for p in by_position[1][:num_gk])
+            total_xp += sum(p.get('ml_xp', 0) for p in by_position[2][:num_def])
+            total_xp += sum(p.get('ml_xp', 0) for p in by_position[3][:num_mid])
+            total_xp += sum(p.get('ml_xp', 0) for p in by_position[4][:num_fwd])
+
+            if total_xp > best_total_xp:
+                best_total_xp = total_xp
+                best_formation = name
+                best_starters = {
+                    1: by_position[1][:num_gk],
+                    2: by_position[2][:num_def],
+                    3: by_position[3][:num_mid],
+                    4: by_position[4][:num_fwd]
+                }
+
+        if not best_formation:
+            logger.warning("No valid formation found, keeping current positions")
+            return team
+
+        logger.info(f"Optimal formation: {best_formation} ({best_total_xp:.2f} xP)")
+
+        # Clear all existing positions first
+        for player in team:
+            if 'position' in player:
+                del player['position']
+
+        # Assign positions: 1-11 for starters, 12-15 for bench
+        position_number = 1
+
+        # Assign starting XI in order: GK, DEF, MID, FWD
+        for pos_type in [1, 2, 3, 4]:
+            for player in best_starters.get(pos_type, []):
+                player['position'] = position_number
+                position_number += 1
+
+        # Assign bench (remaining players that haven't been assigned yet)
+        for pos_type in [1, 2, 3, 4]:
+            for player in by_position[pos_type]:
+                if 'position' not in player:
+                    player['position'] = position_number
+                    position_number += 1
 
         return team
 
@@ -572,14 +889,19 @@ class ManagerAgent:
             player_out = transfer['player_out']
             player_in = transfer['player_in']
 
-            # Remove player out
-            new_team = [p for p in new_team if p['id'] != player_out['id']]
+            # Remove player out (compare player_id, not my_team row id)
+            new_team = [p for p in new_team if p.get('player_id', p.get('id')) != player_out['id']]
 
             # Add player in with same position
-            player_in['position'] = player_out['position']
-            player_in['purchase_price'] = player_in['now_cost']
-            player_in['selling_price'] = player_in['now_cost']
-            new_team.append(player_in)
+            # Make a copy to avoid mutating the original player dict
+            player_in_copy = player_in.copy()
+            player_in_copy['position'] = player_out.get('position', 1)
+            player_in_copy['purchase_price'] = player_in['now_cost']
+            player_in_copy['selling_price'] = player_in['now_cost']
+            # Ensure we use 'id' for the player, not 'player_id'
+            if 'player_id' not in player_in_copy:
+                player_in_copy['player_id'] = player_in_copy['id']
+            new_team.append(player_in_copy)
 
         return new_team
 

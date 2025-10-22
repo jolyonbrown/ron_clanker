@@ -83,15 +83,26 @@ async def collect_data():
         logger.info(f"DataCollection: Successfully synced {team_count} teams")
         print("✅ Teams synced")
 
-        # Get current gameweek
+        # Sync gameweeks
+        gameweek_count = len(fpl_data.get('gameweeks', []))
+        print(f"\n💾 Syncing {gameweek_count} gameweeks...")
+        logger.info(f"DataCollection: Upserting {gameweek_count} gameweeks to database")
+
         current_gw = None
-        for event in fpl_data.get('events', []):
-            if event.get('is_current'):
-                current_gw = event['id']
-                deadline = event.get('deadline_time')
-                print(f"\n📅 Current Gameweek: {current_gw}")
-                logger.info(f"DataCollection: Current gameweek is GW{current_gw}, deadline: {deadline}")
-                break
+        for gameweek in fpl_data.get('gameweeks', []):
+            # Sync each gameweek to database
+            db.upsert_gameweek(gameweek)
+
+            # Track current gameweek for logging
+            if gameweek.get('is_current'):
+                current_gw = gameweek['id']
+                finished = gameweek.get('finished', False)
+                deadline = gameweek.get('deadline_time')
+                print(f"\n📅 Current Gameweek: {current_gw} (finished: {finished})")
+                logger.info(f"DataCollection: Current gameweek is GW{current_gw}, deadline: {deadline}, finished: {finished}")
+
+        logger.info(f"DataCollection: Successfully synced {gameweek_count} gameweeks")
+        print("✅ Gameweeks synced")
 
         # Show stats
         print("\n" + "-" * 80)

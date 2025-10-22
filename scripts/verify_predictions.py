@@ -36,8 +36,7 @@ def main():
     predictions = db.execute_query("""
         SELECT
             pp.*,
-            p.web_name,
-            p.team_name
+            p.web_name
         FROM price_predictions pp
         JOIN players p ON pp.player_id = p.id
         WHERE pp.prediction_for_date >= ? AND pp.prediction_for_date <= ?

@@ -5,23 +5,32 @@ LEAGUE STANDINGS
 
 Rank  Manager                   Points  Gap     Form  
 --------------------------------------------------------------------------------
-    1 James Crewdson                406       -      →
-    2 Tony Simons                   396     -10      →
-    3 Kyle Summersfield             392     -14      →
-    4 Andy Main                     385     -21      →
-    5 Steve Hant                    384     -22      →
-    6 Anthony Stoker                378     -28      →
-    7 Michael Maude                 372     -34      →
-    8 Jolyon Brown                  351     -55      →
-    9 Catherine Beattie             338     -68      →
-   10 ian main                      309     -97      →
-   11 Kieran Summersfield           294    -112      →
-   12 Sir Captain Daniel            274    -132      →
-   13 Peter Korenev                 243    -163      →
+    1 James Crewdson                466       -      →
+    2 Andy Main                     455     -11      ↑
+    3 Kyle Summersfield             448     -18      →
+    4 Steve Hant                    446     -20      ↑
+    5 Anthony Stoker                445     -21      ↑
+    6 Michael Maude                 441     -25      ↑
+    7 Tony Simons                   438     -28      ↓
+    8 Jolyon Brown                  383     -83      →
+    9 Catherine Beattie             379     -87      →
+   10 ian main                      366    -100      →
+   11 Sir Captain Daniel            340    -126      ↑
+   12 Kieran Summersfield           329    -137      ↓
+   13 Peter Korenev                 275    -191      →
+   14 Ron Clanker                    66    -400      ↓
 
 ================================================================================
 CHIP ARSENAL ANALYSIS
 ================================================================================
+
+🤖 RON'S CHIPS REMAINING:
+   Wildcards: 2/2
+   Bench Boosts: 2/2
+   Triple Captains: 2/2
+   Free Hits: 2/2
+
+   TOTAL: 8/8 chips remaining
 
 👥 RIVAL CHIP STATUS (Top 5):
 
@@ -55,8 +64,8 @@ FIXTURE-BASED CHIP OPTIMIZATION
 
 📊 FIXTURE SWINGS (Top 5):
    🟢 AVL: 4.0 → 2.33 (+1.7)
-   🔴 WOL: 2.33 → 3.67 (-1.3)
-   🔴 LEE: 2.33 → 3.33 (-1.0)
+   🟢 BOU: 3.67 → 2.0 (+1.7)
+   🔴 ARS: 2.33 → 3.33 (-1.0)
    🟢 MUN: 3.67 → 2.67 (+1.0)
 
 💡 FIXTURE-BASED RECOMMENDATIONS:
@@ -77,12 +86,12 @@ FIXTURE-BASED CHIP OPTIMIZATION
 CHIP STRATEGY REPORT
 ================================================================================
 Gameweek: 8
-Generated: 2025-10-18 18:50:52
+Generated: 2025-10-22 07:00:05
 
 🎯 RON'S CHIP ADVANTAGE:
    Ron has 8 chips remaining
-   League average: 7.5 chips
-   Advantage: +0.5 chips (6%)
+   League average: 7.6 chips
+   Advantage: +0.4 chips (5%)
 
 📊 LEAGUE CHIP TRENDS:
    Total chips used: 9
@@ -145,14 +154,26 @@ TRANSFER INTELLIGENCE
 
 💰 MOST CASH IN THE BANK:
    Michael Maude: £7.0m ITB (£100.5m total value)
+   Ron Clanker: £5.3m ITB (£100.1m total value)
    Andy Main: £4.1m ITB (£102.5m total value)
    Jolyon Brown: £3.2m ITB (£99.9m total value)
    James Crewdson: £2.6m ITB (£101.1m total value)
-   Kieran Summersfield: £2.0m ITB (£99.6m total value)
 
 ================================================================================
 COMPETITIVE STRATEGY RECOMMENDATIONS
 ================================================================================
 
-⚠️  Ron's team not yet registered in league standings
-    Will appear after first gameweek completes
+📊 CURRENT POSITION:
+   Rank: 14
+   Points: 66
+   Gap to leader: -400 pts
+   Gameweeks remaining: 30
+
+🎯 CHASING MODE:
+   Need +13.3 pts/GW advantage to catch leader
+
+   RECOMMENDED STRATEGY:
+   • Seek differentials with high upside
+   • Consider differential captains
+   • Use chips aggressively on best opportunities
+   • Monitor template gaps - consider covering high-ownership threats

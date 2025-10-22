@@ -25,7 +25,9 @@ from data.database import Database
 from intelligence.league_intel import LeagueIntelligenceService
 from intelligence.chip_strategy import ChipStrategyAnalyzer
 from intelligence.fixture_optimizer import FixtureOptimizer
-from utils.config import load_config
+from utils.config import load_config, get_telegram_token, get_telegram_chat_id
+from telegram_bot.notifications import send_league_intelligence, send_cron_failure
+import os
 
 logger = logging.getLogger('ron_clanker.league_intelligence')
 
@@ -441,6 +443,60 @@ def main():
     print(f"Latest: {latest_file}")
 
     logger.info(f"LeagueIntelligence: Report complete - Duration: {duration:.1f}s, Saved to {report_file}")
+
+    # Send Telegram notification (if configured and enabled)
+    if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
+        bot_token = get_telegram_token()
+        chat_id = get_telegram_chat_id()
+
+        if bot_token and chat_id and ron_entry_id:
+            try:
+                print("\n📱 Sending Telegram notification...")
+
+                # Get Ron's rank and league info
+                standings = db.execute_query("""
+                    SELECT rank
+                    FROM league_standings_history
+                    WHERE league_id = ? AND gameweek = ? AND entry_id = ?
+                """, (league_id, current_gw, ron_entry_id))
+
+                # Get league name from any rival record (they all have the same league_id)
+                league_info = db.execute_query("""
+                    SELECT lr.player_name
+                    FROM league_rivals lr
+                    WHERE lr.league_id = ?
+                    LIMIT 1
+                """, (league_id,))
+
+                total_managers = db.execute_query("""
+                    SELECT COUNT(*) as count
+                    FROM league_standings_history
+                    WHERE league_id = ? AND gameweek = ?
+                """, (league_id, current_gw))
+
+                ron_rank = standings[0]['rank'] if standings else 0
+                # Use a simple league identifier instead of name
+                league_name = f"Mini-League {league_id}"
+                total = total_managers[0]['count'] if total_managers else 0
+
+                # Extract key insights
+                key_insights = []
+                if standings and standings[0]['rank'] == 1:
+                    key_insights.append("Leading the league!")
+
+                send_league_intelligence(
+                    bot_token=bot_token,
+                    chat_id=chat_id,
+                    gameweek=current_gw,
+                    league_name=league_name,
+                    ron_rank=ron_rank,
+                    total_managers=total,
+                    key_insights=key_insights if key_insights else None
+                )
+                print("   ✓ Notification sent")
+            except Exception as e:
+                logger.warning(f"Failed to send Telegram notification: {e}")
+                print(f"   ⚠️  Failed to send notification: {e}")
 
     return 0
 

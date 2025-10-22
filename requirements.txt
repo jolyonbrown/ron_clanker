@@ -60,3 +60,4 @@ mypy>=1.5.0
 # Development
 ipython>=8.14.0
 jupyter>=1.0.0
+anthropic>=0.40.0

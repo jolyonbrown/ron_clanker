@@ -125,7 +125,55 @@ class Database:
         return results[0] if results else None
 
     # ========================================================================
-    # TEAM STATE
+    # TEAM DATA (FPL Teams - Arsenal, Liverpool, etc.)
+    # ========================================================================
+
+    def upsert_team(self, team_data: Dict[str, Any]) -> int:
+        """Insert or update team data."""
+        query = """
+            INSERT INTO teams (
+                id, code, name, short_name, strength,
+                strength_overall_home, strength_overall_away,
+                strength_attack_home, strength_attack_away,
+                strength_defence_home, strength_defence_away,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                short_name = excluded.short_name,
+                strength = excluded.strength,
+                strength_overall_home = excluded.strength_overall_home,
+                strength_overall_away = excluded.strength_overall_away,
+                strength_attack_home = excluded.strength_attack_home,
+                strength_attack_away = excluded.strength_attack_away,
+                strength_defence_home = excluded.strength_defence_home,
+                strength_defence_away = excluded.strength_defence_away,
+                updated_at = CURRENT_TIMESTAMP
+        """
+        params = (
+            team_data['id'], team_data.get('code'),
+            team_data.get('name'), team_data.get('short_name'),
+            team_data.get('strength'),
+            team_data.get('strength_overall_home'), team_data.get('strength_overall_away'),
+            team_data.get('strength_attack_home'), team_data.get('strength_attack_away'),
+            team_data.get('strength_defence_home'), team_data.get('strength_defence_away')
+        )
+        return self.execute_update(query, params)
+
+    def get_team(self, team_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific team by ID."""
+        results = self.execute_query(
+            "SELECT * FROM teams WHERE id = ?",
+            (team_id,)
+        )
+        return results[0] if results else None
+
+    def get_all_teams(self) -> List[Dict[str, Any]]:
+        """Get all teams."""
+        return self.execute_query("SELECT * FROM teams ORDER BY name")
+
+    # ========================================================================
+    # TEAM STATE (Ron's FPL Team)
     # ========================================================================
 
     def get_current_team(self, gameweek: int) -> List[Dict[str, Any]]:
@@ -153,7 +201,7 @@ class Database:
         """
         params_list = [
             (
-                player['id'], gameweek, player['position'],
+                player.get('player_id', player.get('id')), gameweek, player['position'],
                 player['purchase_price'], player['selling_price'],
                 player.get('is_captain', False), player.get('is_vice_captain', False),
                 player.get('multiplier', 1)
@@ -280,6 +328,46 @@ class Database:
             fixture_data.get('team_h_difficulty'), fixture_data.get('team_a_difficulty'),
             fixture_data.get('kickoff_time'), fixture_data.get('started', False),
             fixture_data.get('finished', False)
+        )
+        return self.execute_update(query, params)
+
+    def upsert_gameweek(self, gameweek_data: Dict[str, Any]) -> int:
+        """Insert or update gameweek data."""
+        query = """
+            INSERT INTO gameweeks (
+                id, name, deadline_time, finished, is_current, is_next,
+                chip_plays, most_selected, most_transferred_in,
+                most_captained, most_vice_captained
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                deadline_time = excluded.deadline_time,
+                finished = excluded.finished,
+                is_current = excluded.is_current,
+                is_next = excluded.is_next,
+                chip_plays = excluded.chip_plays,
+                most_selected = excluded.most_selected,
+                most_transferred_in = excluded.most_transferred_in,
+                most_captained = excluded.most_captained,
+                most_vice_captained = excluded.most_vice_captained
+        """
+        # Convert chip_plays list to JSON string if present
+        chip_plays = gameweek_data.get('chip_plays')
+        if isinstance(chip_plays, list):
+            chip_plays = json.dumps(chip_plays)
+
+        params = (
+            gameweek_data['id'],
+            gameweek_data.get('name'),
+            gameweek_data.get('deadline_time'),
+            gameweek_data.get('finished', False),
+            gameweek_data.get('is_current', False),
+            gameweek_data.get('is_next', False),
+            chip_plays,
+            gameweek_data.get('most_selected'),
+            gameweek_data.get('most_transferred_in'),
+            gameweek_data.get('most_captained'),
+            gameweek_data.get('most_vice_captained')
         )
         return self.execute_update(query, params)
 

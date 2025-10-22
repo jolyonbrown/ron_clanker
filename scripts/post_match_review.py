@@ -24,8 +24,10 @@ from data.database import Database
 from ron_clanker.persona import RonClanker
 from intelligence.league_intel import LeagueIntelligenceService
 from utils.gameweek import get_current_gameweek
-from utils.config import load_config
+from utils.config import load_config, get_telegram_token, get_telegram_chat_id
+from telegram_bot.notifications import send_post_match_review
 import requests
+import os
 
 
 def get_ron_performance(db: Database, gameweek: int, team_id: int) -> Dict[str, Any]:
@@ -251,23 +253,6 @@ def get_premier_league_stories(db: Database, gameweek: int) -> List[str]:
     return stories[:4]
 
 
-def post_to_telegram(message: str, bot_token: str, chat_id: str) -> bool:
-    """Post message to Telegram channel/group."""
-
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-    payload = {
-        'chat_id': chat_id,
-        'text': message,
-        'parse_mode': 'Markdown'
-    }
-
-    try:
-        response = requests.post(url, json=payload, timeout=10)
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Failed to post to Telegram: {e}")
-        return False
 
 
 def main():
@@ -369,20 +354,20 @@ def main():
         print(f"\n💾 Saved to: {output_file}")
 
     # Post to Telegram
-    if args.post_telegram:
-        bot_token = config.get('telegram_bot_token')
-        chat_id = config.get('telegram_chat_id')
+    if args.post_telegram or os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
+        bot_token = get_telegram_token()
+        chat_id = get_telegram_chat_id()
 
         if bot_token and chat_id:
             print("\n📱 Posting to Telegram...")
-            success = post_to_telegram(analysis, bot_token, chat_id)
+            success = send_post_match_review(bot_token, chat_id, gameweek, analysis)
 
             if success:
                 print("   ✅ Posted successfully!")
             else:
                 print("   ❌ Failed to post")
         else:
-            print("\n⚠️  Telegram not configured (add bot_token and chat_id to config)")
+            print("\n⚠️  Telegram not configured (add bot_token and chat_id to .env)")
 
     print("\n✅ Post-match review complete!")
 
