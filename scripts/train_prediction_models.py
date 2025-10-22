@@ -137,8 +137,22 @@ def main():
             args.train_end = last_gw[0]['id']
             print(f"📊 Auto-detected last completed gameweek: GW{args.train_end}")
         else:
-            print("⚠️  No completed gameweeks found, defaulting to GW6")
-            args.train_end = 6
+            print("\n❌ ERROR: No completed gameweeks found in database")
+            print("   Run: venv/bin/python scripts/collect_fpl_data.py")
+            return 1
+
+    # Check if we already have predictions for this gameweek
+    existing_predictions = db.execute_query("""
+        SELECT COUNT(*) as count
+        FROM player_predictions
+        WHERE gameweek = ? + 1
+    """, (args.train_end,))
+
+    if existing_predictions and existing_predictions[0]['count'] > 0:
+        print(f"\n✅ Models already trained on GW{args.train_start}-{args.train_end}")
+        print(f"   Found {existing_predictions[0]['count']} predictions for GW{args.train_end + 1}")
+        print("   No retraining needed (data hasn't changed)")
+        return 0
 
     print("\n" + "=" * 80)
     print("PLAYER PERFORMANCE PREDICTION MODEL TRAINING")
