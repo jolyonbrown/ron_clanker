@@ -194,12 +194,35 @@ def generate_gw_review(gameweek: int) -> str:
                 'gw_points': scorer['gw_points']
             })
 
-    # TODO: Get actual rival fails from rival_team_picks + player_gameweek_history
-    # For now, stub with example data
-    rival_fails = [
-        {'manager_name': 'Kyle', 'player_name': 'Haaland', 'points': 0},
-        {'manager_name': 'Michael', 'player_name': 'Salah', 'points': 2}
-    ]
+    # Get actual rival fails: low-scoring picks from rivals
+    # Find starting XI picks (position <= 11) that got 2 points or less
+    rival_fails_query = db.execute_query("""
+        SELECT
+            lr.player_name,
+            p.web_name as player_name,
+            pgh.total_points as points,
+            rtp.is_captain
+        FROM rival_team_picks rtp
+        JOIN players p ON rtp.player_id = p.id
+        JOIN league_rivals lr ON rtp.entry_id = lr.entry_id
+        LEFT JOIN player_gameweek_history pgh ON p.id = pgh.player_id AND pgh.gameweek = ?
+        WHERE rtp.gameweek = ?
+        AND rtp.position <= 11
+        AND (pgh.total_points IS NULL OR pgh.total_points <= 2)
+        ORDER BY pgh.total_points ASC, rtp.is_captain DESC
+        LIMIT 3
+    """, (gameweek, gameweek))
+
+    rival_fails = []
+    if rival_fails_query:
+        for fail in rival_fails_query:
+            manager_first_name = fail['player_name'].split()[0] if fail['player_name'] else 'Unknown'
+            points = fail['points'] if fail['points'] is not None else 0
+            rival_fails.append({
+                'manager_name': manager_first_name,
+                'player_name': fail['player_name'],
+                'points': points
+            })
 
     # Generate Ron's LLM-powered review
     review = generate_ron_review(
