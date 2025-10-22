@@ -11,14 +11,14 @@ Rank  Manager                   Points  Gap     Form
     4 Steve Hant                    446     -20      ↑
     5 Anthony Stoker                445     -21      ↑
     6 Michael Maude                 441     -25      ↑
-    7 Tony Simons                   438     -28      ↓
-    8 Jolyon Brown                  383     -83      →
-    9 Catherine Beattie             379     -87      →
-   10 ian main                      366    -100      →
+    7 Tony Simons                   436     -30      ↓
+    8 Jolyon Brown                  382     -84      →
+    9 ian main                      366    -100      ↑
+   10 Catherine Beattie             364    -102      ↓
    11 Sir Captain Daniel            340    -126      ↑
    12 Kieran Summersfield           329    -137      ↓
-   13 Peter Korenev                 275    -191      →
-   14 Ron Clanker                    66    -400      ↓
+   13 Peter Korenev                 265    -201      →
+   14 Ron Clanker                    58    -408      ↓
 
 ================================================================================
 CHIP ARSENAL ANALYSIS
@@ -86,7 +86,7 @@ FIXTURE-BASED CHIP OPTIMIZATION
 CHIP STRATEGY REPORT
 ================================================================================
 Gameweek: 8
-Generated: 2025-10-22 12:05:43
+Generated: 2025-10-20 22:26:27
 
 🎯 RON'S CHIP ADVANTAGE:
    Ron has 8 chips remaining
@@ -165,12 +165,12 @@ COMPETITIVE STRATEGY RECOMMENDATIONS
 
 📊 CURRENT POSITION:
    Rank: 14
-   Points: 66
-   Gap to leader: -400 pts
+   Points: 58
+   Gap to leader: -408 pts
    Gameweeks remaining: 30
 
 🎯 CHASING MODE:
-   Need +13.3 pts/GW advantage to catch leader
+   Need +13.6 pts/GW advantage to catch leader
 
    RECOMMENDED STRATEGY:
    • Seek differentials with high upside

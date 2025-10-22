@@ -33,15 +33,16 @@ import os
 def get_ron_performance(db: Database, gameweek: int, team_id: int) -> Dict[str, Any]:
     """Get Ron's points and rank for the gameweek."""
 
-    # Get Ron's gameweek points
+    # Get Ron's gameweek points from my_team (Ron's definitive team state)
     team_picks = db.execute_query("""
-        SELECT p.web_name, p.element_type, rt.position, rt.is_captain, rt.is_vice_captain,
+        SELECT p.web_name, p.element_type, mt.position, mt.is_captain, mt.is_vice_captain,
                pgh.total_points, pgh.minutes
-        FROM rival_team_picks rt
-        JOIN players p ON rt.player_id = p.id
+        FROM my_team mt
+        JOIN players p ON mt.player_id = p.id
         LEFT JOIN player_gameweek_history pgh ON p.id = pgh.player_id AND pgh.gameweek = ?
-        WHERE rt.entry_id = ? AND rt.gameweek = ?
-    """, (gameweek, team_id, gameweek))
+        WHERE mt.gameweek = ?
+        ORDER BY mt.position
+    """, (gameweek, gameweek))
 
     if not team_picks:
         return None
@@ -67,10 +68,10 @@ def get_ron_performance(db: Database, gameweek: int, team_id: int) -> Dict[str, 
     except:
         overall_rank = 0
 
-    # Get average score
+    # Get average score from league standings
     avg_query = db.execute_query("""
-        SELECT AVG(total_points) as avg_score
-        FROM rival_teams
+        SELECT AVG(event_points) as avg_score
+        FROM league_standings_history
         WHERE gameweek = ?
     """, (gameweek,))
 
@@ -146,10 +147,11 @@ def get_league_analysis(db: Database, league_service: LeagueIntelligenceService,
                        gameweek: int, league_id: int, team_id: int) -> Dict[str, Any]:
     """Get mini-league standings and drama."""
 
-    # Get league standings
+    # Get league standings from league_standings_history
+    # Note: This table doesn't have entry_name/player_name, only entry_id
     standings = db.execute_query("""
-        SELECT entry_id, entry_name, player_name, rank, total_points
-        FROM rival_teams
+        SELECT entry_id, rank, total_points, event_points
+        FROM league_standings_history
         WHERE league_id = ? AND gameweek = ?
         ORDER BY rank
     """, (league_id, gameweek))
@@ -172,16 +174,15 @@ def get_league_analysis(db: Database, league_service: LeagueIntelligenceService,
     leader = standings[0]
     gap = leader['total_points'] - ron_points
 
-    # Get league name
-    league_info = db.execute_query("SELECT name FROM leagues WHERE id = ?", (league_id,))
-    league_name = league_info[0]['name'] if league_info else f"League {league_id}"
+    # Get league name (fallback to league_id if leagues table doesn't exist)
+    league_name = f"League {league_id}"  # TODO: Add leagues table or get from config
 
     # Calculate big movers (compare to previous GW)
     big_movers = []
     if gameweek > 1:
         prev_standings = db.execute_query("""
             SELECT entry_id, rank
-            FROM rival_teams
+            FROM league_standings_history
             WHERE league_id = ? AND gameweek = ?
         """, (league_id, gameweek - 1))
 
@@ -193,7 +194,7 @@ def get_league_analysis(db: Database, league_service: LeagueIntelligenceService,
                 change = prev_ranks[entry_id] - current['rank']  # Positive = moved up
                 if abs(change) >= 2:  # Moved 2+ places
                     big_movers.append({
-                        'name': current['entry_name'],
+                        'name': f"Entry {current['entry_id']}",
                         'change': change,
                         'points': current['total_points']
                     })
@@ -205,7 +206,7 @@ def get_league_analysis(db: Database, league_service: LeagueIntelligenceService,
         'ron_rank': ron_rank,
         'total_managers': len(standings),
         'leader': {
-            'name': leader['entry_name'],
+            'name': f"Entry {leader['entry_id']}",
             'points': leader['total_points']
         },
         'gap_to_leader': gap,

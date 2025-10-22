@@ -86,7 +86,7 @@ FIXTURE-BASED CHIP OPTIMIZATION
 CHIP STRATEGY REPORT
 ================================================================================
 Gameweek: 8
-Generated: 2025-10-22 12:05:43
+Generated: 2025-10-21 07:00:05
 
 🎯 RON'S CHIP ADVANTAGE:
    Ron has 8 chips remaining

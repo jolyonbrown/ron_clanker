@@ -299,33 +299,34 @@ class PostGameweekCollector:
     def collect_rival_team_picks(self, gameweek: int) -> int:
         """
         Collect rival team picks for this gameweek.
+        EXCLUDES Ron's team (comes from my_team table instead).
 
         Returns:
             Number of rivals successfully collected
         """
         logger.info(f"PostGWCollection: Collecting rival team picks for GW{gameweek}")
 
-        # Get list of rivals from league_rivals table
+        # Get list of rivals from league_rivals table, EXCLUDING Ron
         rivals = self.db.execute_query("""
             SELECT entry_id, entry_name
             FROM league_rivals
-            WHERE league_id = ?
-        """, (self.league_id,))
+            WHERE league_id = ? AND entry_id != ?
+        """, (self.league_id, self.team_id))
 
         if not rivals:
             logger.warning("PostGWCollection: No rivals found in league_rivals table")
-            # Try to get from recent standings
+            # Try to get from recent standings, EXCLUDING Ron
             rivals = self.db.execute_query("""
                 SELECT DISTINCT entry_id, NULL as entry_name
                 FROM league_standings_history
-                WHERE league_id = ? AND gameweek = ?
-            """, (self.league_id, gameweek - 1))
+                WHERE league_id = ? AND gameweek = ? AND entry_id != ?
+            """, (self.league_id, gameweek, self.team_id))
 
         if not rivals:
             logger.warning("PostGWCollection: No rivals to track")
             return 0
 
-        logger.info(f"PostGWCollection: Fetching picks for {len(rivals)} rivals")
+        logger.info(f"PostGWCollection: Fetching picks for {len(rivals)} rivals (excluding Ron)")
 
         for rival in rivals:
             entry_id = rival['entry_id']
