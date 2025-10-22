@@ -112,7 +112,7 @@ def collect_training_data(db: Database, feature_engineer: FeatureEngineer,
 def main():
     parser = argparse.ArgumentParser(description='Train player performance prediction models')
     parser.add_argument('--train-start', type=int, default=1, help='Start gameweek for training (default: 1)')
-    parser.add_argument('--train-end', type=int, default=6, help='End gameweek for training (default: 6)')
+    parser.add_argument('--train-end', type=int, help='End gameweek for training (default: auto-detect last completed GW)')
     parser.add_argument('--test-gw', type=int, help='Gameweek to test on (optional)')
     parser.add_argument('--full', action='store_true', help='Use all available data for training (no holdout)')
     parser.add_argument('--save', action='store_true', default=True, help='Save trained models (default: True)')
@@ -122,6 +122,24 @@ def main():
 
     start_time = datetime.now()
 
+    # Initialize database first to auto-detect gameweek
+    db = Database()
+
+    # Auto-detect last completed gameweek if not specified
+    if args.train_end is None:
+        last_gw = db.execute_query("""
+            SELECT id FROM gameweeks
+            WHERE finished = 1
+            ORDER BY id DESC
+            LIMIT 1
+        """)
+        if last_gw:
+            args.train_end = last_gw[0]['id']
+            print(f"📊 Auto-detected last completed gameweek: GW{args.train_end}")
+        else:
+            print("⚠️  No completed gameweeks found, defaulting to GW6")
+            args.train_end = 6
+
     print("\n" + "=" * 80)
     print("PLAYER PERFORMANCE PREDICTION MODEL TRAINING")
     print("=" * 80)
@@ -129,9 +147,6 @@ def main():
     print(f"Training range: GW{args.train_start}-{args.train_end}")
 
     logger.info(f"ModelTraining: Starting training for GW{args.train_start}-{args.train_end}")
-
-    # Initialize
-    db = Database()
     feature_engineer = FeatureEngineer(db)
     predictor = PlayerPerformancePredictor(model_dir=project_root / 'models' / 'prediction')
 
