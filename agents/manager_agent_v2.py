@@ -743,30 +743,28 @@ Captain: {captain['web_name']}
         """
         if self.use_ml and self.chip_strategy:
             try:
-                logger.info("Ron: Using ChipStrategyAnalyzer for chip decision...")
-                result = self.chip_strategy.analyze_all_chips(gameweek, chips_used)
+                logger.info("Ron: Analyzing chip options...")
 
-                recommended_chip = result.get('recommended_chip')
-                reasoning = result.get('reasoning', 'No reasoning provided')
+                # Check each chip type individually
+                # ChipStrategyAnalyzer has separate methods for each chip
+                ron_entry_id = self.config.get('team_id')
 
-                if recommended_chip and recommended_chip != 'none':
-                    logger.info(f"Ron: Chip recommended: {recommended_chip}")
-                    logger.info(f"Ron: Reasoning: {reasoning}")
+                # For now, keep it simple - only wildcard is relevant for early gameweeks
+                if 'wildcard1' not in chips_used and gameweek < 19:
+                    wc_result = self.chip_strategy.recommend_wildcard_timing(gameweek, ron_entry_id)
+                    if wc_result.get('use_now', False):
+                        confidence = wc_result.get('confidence', 0.5)
+                        if confidence >= 0.7:
+                            logger.info(f"Ron: Wildcard recommended (confidence: {confidence:.0%})")
+                            return 'wildcard'
+                        else:
+                            logger.info(f"Ron: Wildcard confidence {confidence:.0%} < 70%, saving chip")
 
-                    # Ron is conservative - only use chip if confidence is high
-                    confidence = result.get('confidence', 0.5)
-                    if confidence >= 0.7:
-                        logger.info(f"Ron: Using {recommended_chip} (confidence: {confidence:.0%})")
-                        return recommended_chip
-                    else:
-                        logger.info(f"Ron: Confidence {confidence:.0%} < 70%, saving chip")
-                        return None
-                else:
-                    logger.info("Ron: No chip recommended this gameweek")
-                    return None
+                logger.info("Ron: No chip recommended this gameweek")
+                return None
 
             except Exception as e:
-                logger.error(f"Ron: ChipStrategyAnalyzer failed: {e}. No chip will be used.", exc_info=True)
+                logger.warning(f"Ron: ChipStrategyAnalyzer failed: {e}. No chip will be used.")
                 return None
         else:
             logger.info("Ron: Chip analysis not available (ML disabled), no chip will be used")
@@ -819,47 +817,41 @@ Captain: {captain['web_name']}
             try:
                 recommendations = self.synthesis_engine.synthesize_recommendations(gameweek)
 
-                # Create lookup dict: player_id -> xP
-                xp_lookup = {}
+                # Create lookup dict: player_id -> {xP, value_score}
+                predictions_lookup = {}
                 for player_pred in recommendations.get('top_players', []):
-                    xp_lookup[player_pred['player_id']] = player_pred.get('xp', 0)
+                    predictions_lookup[player_pred['player_id']] = {
+                        'xP': player_pred.get('xp', 0),  # Expected points from ML
+                        'value_score': player_pred.get('value_score', 0)  # xP / price
+                    }
 
-                # Enrich each player with xP
+                # Enrich each player with xP and value_score
                 for player in current_team:
                     player_id = player.get('id')
-                    player['xP'] = xp_lookup.get(player_id, 2.0)  # Default 2.0 if not found
+                    pred = predictions_lookup.get(player_id)
 
-                logger.info(f"Ron: Enriched {len(current_team)} players with xP values")
+                    if pred:
+                        player['xP'] = pred['xP']
+                        player['value_score'] = pred['value_score']
+                    else:
+                        # Fallback for players not in recommendations
+                        pos_type = player.get('element_type', 1)
+                        default_xp = {1: 2.0, 2: 3.0, 3: 4.0, 4: 5.0}.get(pos_type, 3.0)
+                        player['xP'] = default_xp
+                        price = player.get('now_cost', 10) / 10.0
+                        player['value_score'] = default_xp / price if price > 0 else 0.0
+
+                logger.info(f"Ron: Enriched {len(current_team)} players with xP and value_score")
 
             except Exception as e:
                 logger.warning(f"Ron: Could not enrich with ML predictions: {e}")
-                # Set default xP based on position
+                # Fallback: use position-based defaults
                 for player in current_team:
                     pos_type = player.get('element_type', 1)
                     default_xp = {1: 2.0, 2: 3.0, 3: 4.0, 4: 5.0}.get(pos_type, 3.0)
+                    price = player.get('now_cost', 10) / 10.0
                     player['xP'] = default_xp
-
-        # Get value scores from value_rankings table
-        try:
-            value_rankings = self.db.execute_query("""
-                SELECT player_id, value_score
-                FROM value_rankings
-                WHERE gameweek = ?
-                ORDER BY value_score DESC
-            """, (gameweek,))
-
-            value_lookup = {r['player_id']: r['value_score'] for r in value_rankings}
-
-            for player in current_team:
-                player_id = player.get('id')
-                player['value_score'] = value_lookup.get(player_id, 0.0)
-
-            logger.info(f"Ron: Enriched with value scores from value_rankings table")
-
-        except Exception as e:
-            logger.warning(f"Ron: Could not load value scores: {e}")
-            for player in current_team:
-                player['value_score'] = 0.0
+                    player['value_score'] = default_xp / price if price > 0 else 0.0
 
         # 2. Decide transfers
         logger.info("Ron: Analyzing transfer opportunities...")
@@ -1088,10 +1080,21 @@ Captain: {captain['web_name']}
         if self.use_ml and self.transfer_optimizer:
             try:
                 logger.info("Ron: Using TransferOptimizer for transfer decisions...")
+
+                # Build ml_predictions dict from current team's xP values
+                ml_predictions = {}
+                for player in current_team:
+                    ml_predictions[player['id']] = player.get('xP', 2.0)
+
                 result = self.transfer_optimizer.optimize_transfers(
                     current_team=current_team,
-                    gameweek=gameweek,
-                    free_transfers_available=free_transfers
+                    ml_predictions=ml_predictions,
+                    current_gw=gameweek,
+                    free_transfers=free_transfers,
+                    bank=0.0,  # TODO: get actual bank from team state
+                    horizon=4,
+                    ron_entry_id=self.config.get('team_id'),
+                    league_id=self.config.get('league_id')
                 )
 
                 transfers = result.get('transfers', [])
@@ -1103,7 +1106,7 @@ Captain: {captain['web_name']}
                 return transfers
 
             except Exception as e:
-                logger.error(f"Ron: TransferOptimizer failed: {e}. Falling back to basic logic.", exc_info=True)
+                logger.warning(f"Ron: TransferOptimizer failed: {e}. Falling back to basic logic.")
                 return self._decide_transfers_fallback(current_team, gameweek)
         else:
             logger.info("Ron: Using basic transfer logic (ML not available)")

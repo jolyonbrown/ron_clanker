@@ -310,14 +310,16 @@ class DecisionSynthesisEngine:
 
     def _gather_fixture_intel(self, gameweek: int) -> Dict:
         """Gather fixture difficulty and swing analysis."""
-        # Get next 6 gameweeks of fixtures
-        fixture_report = self.fixture_optimizer.analyze_fixture_difficulty_range(
-            start_gw=gameweek,
-            num_gameweeks=6
-        )
+        # Note: analyze_fixture_difficulty works per team, not range
+        # For now, just return fixture swing analysis
+        try:
+            fixture_swings = self.fixture_optimizer.find_fixture_swings()
+        except Exception as e:
+            logger.warning(f"DecisionSynthesis: Fixture swings failed: {e}")
+            fixture_swings = []
 
         return {
-            'next_6_gws': fixture_report,
+            'fixture_swings': fixture_swings,
             'focus_gw': gameweek
         }
 
