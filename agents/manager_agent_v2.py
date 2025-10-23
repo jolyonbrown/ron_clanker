@@ -711,6 +711,60 @@ Squad value: £{sum(p['now_cost'] for p in squad)/10:.1f}m
         return announcement
 
     # ========================================================================
+    # CHIP DECISIONS
+    # ========================================================================
+
+    async def decide_chip_usage(
+        self,
+        gameweek: int,
+        squad: List[Dict[str, Any]],
+        chips_used: List[str]
+    ) -> Optional[str]:
+        """
+        Decide whether to use a chip this gameweek.
+
+        Uses ChipStrategyAnalyzer if ML is enabled, otherwise no chips.
+
+        Args:
+            gameweek: Target gameweek
+            squad: Current squad
+            chips_used: List of chips already used this season
+
+        Returns:
+            Chip name to use (e.g., 'wildcard', 'bench_boost') or None
+        """
+        if self.use_ml and self.chip_strategy:
+            try:
+                logger.info("Ron: Using ChipStrategyAnalyzer for chip decision...")
+                result = self.chip_strategy.analyze_all_chips(gameweek, chips_used)
+
+                recommended_chip = result.get('recommended_chip')
+                reasoning = result.get('reasoning', 'No reasoning provided')
+
+                if recommended_chip and recommended_chip != 'none':
+                    logger.info(f"Ron: Chip recommended: {recommended_chip}")
+                    logger.info(f"Ron: Reasoning: {reasoning}")
+
+                    # Ron is conservative - only use chip if confidence is high
+                    confidence = result.get('confidence', 0.5)
+                    if confidence >= 0.7:
+                        logger.info(f"Ron: Using {recommended_chip} (confidence: {confidence:.0%})")
+                        return recommended_chip
+                    else:
+                        logger.info(f"Ron: Confidence {confidence:.0%} < 70%, saving chip")
+                        return None
+                else:
+                    logger.info("Ron: No chip recommended this gameweek")
+                    return None
+
+            except Exception as e:
+                logger.error(f"Ron: ChipStrategyAnalyzer failed: {e}. No chip will be used.", exc_info=True)
+                return None
+        else:
+            logger.info("Ron: Chip analysis not available (ML disabled), no chip will be used")
+            return None
+
+    # ========================================================================
     # TRANSFER DECISIONS
     # ========================================================================
 
