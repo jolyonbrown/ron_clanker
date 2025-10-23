@@ -222,6 +222,189 @@ Making changes. Can't afford another week like that. The algorithms say we need 
 - RC"""
 
 
+    def generate_team_announcement(
+        self,
+        gameweek: int,
+        squad: List[Dict[str, Any]],
+        transfers: List[Dict[str, Any]],
+        chip_used: str = None,
+        free_transfers: int = 1,
+        bank: float = 0.0,
+        reasoning: Dict[str, Any] = None
+    ) -> str:
+        """
+        Generate Ron's pre-deadline team announcement.
+
+        Args:
+            gameweek: GW number
+            squad: Full 15-player squad with positions, captain, etc.
+            transfers: List of {player_out, player_in, reasoning} dicts
+            chip_used: Name of chip used (or None)
+            free_transfers: Number of free transfers available
+            bank: Money in the bank
+            reasoning: Optional dict with strategy notes
+
+        Returns:
+            Natural, authentic Ron team announcement
+        """
+
+        if not self.enabled:
+            logger.error("Cannot generate announcement - API key not configured")
+            return self._fallback_announcement(gameweek, squad, transfers)
+
+        # Organize squad by position
+        by_position = {'GKP': [], 'DEF': [], 'MID': [], 'FWD': []}
+        starting_xi = []
+        bench = []
+
+        for player in squad:
+            pos_name = ['', 'GKP', 'DEF', 'MID', 'FWD'][player.get('element_type', player.get('position_type', 1))]
+            by_position[pos_name].append(player)
+
+            if player.get('position', 16) <= 11:
+                starting_xi.append(player)
+            else:
+                bench.append(player)
+
+        # Find captain
+        captain = next((p for p in squad if p.get('is_captain')), starting_xi[0] if starting_xi else squad[0])
+        vice = next((p for p in squad if p.get('is_vice_captain')), None)
+
+        # Format squad details
+        starting_xi_sorted = sorted(starting_xi, key=lambda x: x.get('position', 99))
+        starting_text = "\n".join([
+            f"- {p['web_name']}" + (" (C)" if p.get('is_captain') else " (VC)" if p.get('is_vice_captain') else "")
+            for p in starting_xi_sorted
+        ])
+
+        bench_sorted = sorted(bench, key=lambda x: x.get('position', 99))
+        bench_text = "\n".join([f"- {p['web_name']}" for p in bench_sorted])
+
+        # Format transfers
+        transfers_text = ""
+        if transfers:
+            transfers_text = "TRANSFERS:\n"
+            for t in transfers:
+                out_name = t['player_out']['web_name']
+                in_name = t['player_in']['web_name']
+                reason = t.get('reasoning', 'Squad refresh')
+                transfers_text += f"OUT: {out_name} → IN: {in_name}\nReason: {reason}\n\n"
+        else:
+            transfers_text = "NO TRANSFERS - sticking with the squad"
+
+        # Strategy context
+        strategy_text = ""
+        if reasoning:
+            if reasoning.get('approach'):
+                strategy_text += f"Approach: {reasoning['approach']}\n"
+            if reasoning.get('key_differentials'):
+                strategy_text += f"Key differentials: {', '.join(reasoning['key_differentials'])}\n"
+
+        prompt = f"""You are Ron Clanker, a gruff 1970s/80s football manager who now runs an autonomous FPL team using AI and data science. You're announcing your team selection for Gameweek {gameweek}.
+
+CHARACTER TRAITS:
+- Old school tactical brain with modern data science tools
+- References "the data", "the models", "the algorithms", "expected points"
+- Proud of clever picks and differentials
+- Honest about taking calculated risks
+- Explains decisions with logic and numbers
+- Uses football manager language ("between the sticks", "engine room", "up front")
+- Not overly formal - direct and authentic
+- May swear occasionally if emphasizing a point
+
+GAMEWEEK {gameweek} SELECTION:
+
+STARTING XI:
+{starting_text}
+
+BENCH:
+{bench_text}
+
+{transfers_text}
+
+CAPTAIN: {captain['web_name']}
+VICE-CAPTAIN: {vice['web_name'] if vice else 'TBD'}
+
+CHIP USED: {chip_used or 'None'}
+FREE TRANSFERS: {free_transfers}
+IN THE BANK: £{bank:.1f}m
+
+{strategy_text}
+
+TASK:
+Write Ron's team announcement explaining his Gameweek {gameweek} selection. Structure it naturally:
+
+1. Opening line - "Right lads, here's how we're lining up for Gameweek {gameweek}..."
+
+2. Key players - Explain 3-5 key selections with reasoning:
+   - WHY these players (fixtures, form, DC points, differentials)
+   - Reference the data where relevant ("averaging 12 defensive actions per game")
+   - Tactical logic
+
+3. Captain choice - Brief explanation of why this player gets the armband
+
+4. Transfers (if any) - Why these moves make sense
+
+5. Overall strategy - What's the plan? (e.g., "building around DC specialists", "loading up on City attack", "differentials to gain ground")
+
+6. Sign off - "- Ron" or "- RC"
+
+TONE:
+- Confident and tactical
+- Data-informed but not robotic
+- 200-350 words
+- Natural paragraphs, not bullet points
+- Like Ron explaining his team to fellow managers
+
+Do NOT:
+- Use emojis
+- List every player
+- Be overly formal
+- Use corporate speak
+
+Write as Ron would explain his team selection to the lads."""
+
+        try:
+            # Use Claude Haiku 4.5
+            message = self.client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=600,
+                temperature=0.9,  # Creative but focused
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+
+            announcement = message.content[0].text.strip()
+            logger.info(f"Generated {len(announcement)} character team announcement for GW{gameweek}")
+            return announcement
+
+        except Exception as e:
+            logger.error(f"Failed to generate LLM announcement: {e}")
+            return self._fallback_announcement(gameweek, squad, transfers)
+
+    def _fallback_announcement(self, gameweek: int, squad: List[Dict], transfers: List[Dict]) -> str:
+        """Fallback announcement if API fails."""
+        captain = next((p for p in squad if p.get('is_captain')), squad[0])
+
+        announcement = f"""GAMEWEEK {gameweek} - RON'S TEAM SELECTION
+
+Right lads, here's how we're lining up for Gameweek {gameweek}.
+
+Captain: {captain['web_name']}
+"""
+
+        if transfers:
+            announcement += f"\nTransfers made: {len(transfers)}\n"
+            for t in transfers:
+                announcement += f"OUT: {t['player_out']['web_name']} → IN: {t['player_in']['web_name']}\n"
+
+        announcement += "\nThe fundamentals are sound. We go again.\n\n- Ron"
+
+        return announcement
+
+
 def generate_ron_review(
     gameweek: int,
     ron_points: int,
@@ -262,4 +445,31 @@ def generate_ron_review(
         league_members=league_members,
         rival_fails=rival_fails,
         low_scorers=low_scorers
+    )
+
+
+def generate_team_announcement(
+    gameweek: int,
+    squad: List[Dict[str, Any]],
+    transfers: List[Dict[str, Any]],
+    chip_used: str = None,
+    free_transfers: int = 1,
+    bank: float = 0.0,
+    reasoning: Dict[str, Any] = None
+) -> str:
+    """
+    Convenience function to generate Ron's team announcement.
+
+    Returns:
+        Natural team announcement from Ron
+    """
+    generator = RonBanterGenerator()
+    return generator.generate_team_announcement(
+        gameweek=gameweek,
+        squad=squad,
+        transfers=transfers,
+        chip_used=chip_used,
+        free_transfers=free_transfers,
+        bank=bank,
+        reasoning=reasoning
     )

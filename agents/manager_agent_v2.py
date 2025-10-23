@@ -20,6 +20,7 @@ from agents.base_agent import BaseAgent
 from agents.data_collector import DataCollector
 from rules.rules_engine import RulesEngine
 from ron_clanker.persona import RonClanker
+from ron_clanker.llm_banter import generate_team_announcement
 from data.database import Database
 from infrastructure.events import Event, EventType, EventPriority
 
@@ -648,67 +649,69 @@ class RonManager(BaseAgent):
     def _generate_team_announcement(
         self,
         squad: List[Dict],
-        gameweek: int
+        gameweek: int,
+        transfers: List[Dict] = None,
+        chip_used: str = None
     ) -> str:
         """
-        Generate Ron's team announcement.
+        Generate Ron's team announcement using LLM (Claude Haiku).
 
         Args:
-            squad: Final squad
+            squad: Final squad with positions assigned
             gameweek: Gameweek number
+            transfers: List of transfers made (optional)
+            chip_used: Name of chip used (optional)
 
         Returns:
-            Announcement text in Ron's voice
+            Natural language announcement in Ron's voice
         """
-        # Group players by position
-        by_position = {'GKP': [], 'DEF': [], 'MID': [], 'FWD': []}
+        # Get free transfers and bank (if available)
+        free_transfers = 1  # Default
+        bank = 0.0
 
-        for player in squad:
-            pos = ['GKP', 'DEF', 'MID', 'FWD'][player['element_type'] - 1]
-            by_position[pos].append(player)
+        try:
+            # Try to get actual bank balance
+            team_id = self.db.config.get('team_id')
+            if team_id:
+                # Could fetch from FPL API if needed
+                pass
+        except:
+            pass
 
-        # Get starting XI
-        starting_xi = sorted(
-            [p for p in squad if p.get('position', 16) <= 11],
-            key=lambda x: x['position']
-        )
+        # Use LLM-powered announcement generator
+        try:
+            announcement = generate_team_announcement(
+                gameweek=gameweek,
+                squad=squad,
+                transfers=transfers or [],
+                chip_used=chip_used,
+                free_transfers=free_transfers,
+                bank=bank,
+                reasoning=None  # Could pass ML synthesis reasoning here
+            )
+            logger.info(f"Ron: Generated LLM-powered announcement ({len(announcement)} chars)")
+            return announcement
 
-        # Find captain
-        captain = next((p for p in squad if p.get('is_captain')), None)
+        except Exception as e:
+            logger.warning(f"Ron: LLM announcement failed ({e}), using fallback")
+            # Fallback to basic announcement
+            captain = next((p for p in squad if p.get('is_captain')), squad[0])
 
-        # Generate Ron's announcement
-        announcement = f"""GAMEWEEK {gameweek} - RON'S TEAM SELECTION
+            announcement = f"""GAMEWEEK {gameweek} - RON'S TEAM SELECTION
 
-Right lads, here's how we're lining up for Gameweek {gameweek}...
+Right lads, here's how we're lining up for Gameweek {gameweek}.
 
-BETWEEN THE STICKS: {by_position['GKP'][0]['web_name']}
-Solid keeper. £{by_position['GKP'][0]['now_cost']/10:.1f}m well spent.
-
-THE BACK LINE: {', '.join(p['web_name'] for p in starting_xi if p['element_type'] == 2)}
-This is where we're different. These lads do the dirty work - tackles,
-blocks, clearances. Defensive contribution points every week. That's a
-high floor. Foundation first.
-
-MIDFIELD ENGINE ROOM: {', '.join(p['web_name'] for p in starting_xi if p['element_type'] == 3)}
-Mix of defensive graft and attacking threat. Some of these will earn DC
-points, others are there for goals and assists. Balanced.
-
-UP FRONT: {', '.join(p['web_name'] for p in starting_xi if p['element_type'] == 4)}
-{captain['web_name'] if captain else 'The main striker'} gets the armband.
-
-THE GAFFER'S LOGIC:
-Jimmy's given me the rankings. Digger's found the DC specialists. Priya's
-checked the fixtures. Sophia's identified the threats. I've weighed it all
-up and made the call.
-
-We're building for the long haul. High floors, smart picks, within budget.
-
-Squad value: £{sum(p['now_cost'] for p in squad)/10:.1f}m
-
-- Ron
+Captain: {captain['web_name']}
 """
 
-        return announcement
+            if transfers:
+                announcement += f"\nTransfers made: {len(transfers)}\n"
+                for t in transfers:
+                    announcement += f"OUT: {t['player_out']['web_name']} → IN: {t['player_in']['web_name']}\n"
+
+            announcement += "\nThe fundamentals are sound. We go again.\n\n- Ron"
+
+            return announcement
 
     # ========================================================================
     # CHIP DECISIONS
