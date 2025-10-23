@@ -12,13 +12,13 @@ from .xg_analyst import XGAnalyst
 from .value_analyst import ValueAnalyst
 from .data_collector import DataCollector
 from .player_valuation import PlayerValuationAgent
-from .manager import ManagerAgent
+from .manager_agent_v2 import RonManager  # Event-driven manager
 from .transfer_strategy import TransferStrategyAgent
 from .chip_strategist import ChipStrategistAgent
 from .learning_agent import LearningAgent
 from .scout import ScoutAgent
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"  # Bumped for event-driven architecture
 
 __all__ = [
     'BaseAgent',
@@ -28,7 +28,7 @@ __all__ = [
     'ValueAnalyst',
     'DataCollector',
     'PlayerValuationAgent',
-    'ManagerAgent',
+    'RonManager',  # Preferred manager (event-driven)
     'TransferStrategyAgent',
     'ChipStrategistAgent',
     'LearningAgent',

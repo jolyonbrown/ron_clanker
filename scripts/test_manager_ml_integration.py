@@ -19,7 +19,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from data.database import Database
-from agents.manager import ManagerAgent
+from agents.manager_agent_v2 import RonManager
 from utils.gameweek import get_current_gameweek
 
 
@@ -50,13 +50,15 @@ def main():
     print("=" * 80)
 
     # Test 1: Initialize Manager with ML enabled
-    print("\n📦 TEST 1: Initialize Manager Agent with ML...")
+    print("\n📦 TEST 1: Initialize RonManager (Event-Driven) with ML...")
     try:
-        manager = ManagerAgent(database=db, use_ml=True)
+        manager = RonManager(database=db, use_ml=True)
 
         if manager.use_ml and manager.synthesis_engine:
-            print("✅ Manager Agent initialized with ML ENABLED")
+            print("✅ RonManager initialized with ML ENABLED")
             print(f"   Synthesis Engine: {type(manager.synthesis_engine).__name__}")
+            print(f"   Transfer Optimizer: {type(manager.transfer_optimizer).__name__}")
+            print(f"   Chip Strategy: {type(manager.chip_strategy).__name__}")
         else:
             print("⚠️  Manager initialized but ML is disabled")
 

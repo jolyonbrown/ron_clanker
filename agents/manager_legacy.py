@@ -1,8 +1,26 @@
 """
-Manager Agent - Ron Clanker
+Manager Agent - Ron Clanker (LEGACY - DEPRECATED)
 
-The central decision-maker. Coordinates all specialist agents and makes
-final autonomous decisions on team selection, transfers, and chip usage.
+⚠️  DEPRECATION NOTICE:
+This is the legacy synchronous manager. It has been replaced by manager_agent_v2.RonManager
+which uses event-driven architecture and includes better ML integration.
+
+MIGRATION:
+  OLD: from agents.manager import ManagerAgent
+  NEW: from agents.manager_agent_v2 import RonManager
+
+WHY DEPRECATED:
+  - Synchronous (blocking) architecture
+  - No event publishing for downstream agents
+  - Doesn't use TransferOptimizer (just has it imported)
+  - Doesn't use ChipStrategyAnalyzer properly
+  - No current/draft team separation
+
+USE RonManager INSTEAD!
+
+This file is kept for reference only and will be removed in a future release.
+Date deprecated: 2025-10-23
+Replacement: agents/manager_agent_v2.py::RonManager
 """
 
 from typing import Dict, List, Any, Optional, Tuple
