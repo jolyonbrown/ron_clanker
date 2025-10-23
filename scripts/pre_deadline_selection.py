@@ -16,9 +16,9 @@ from typing import Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from agents.manager import ManagerAgent
+from agents.manager_agent_v2 import RonManager
 from data.database import Database
-from infrastructure.event_bus import EventBus
+from infrastructure.event_bus import EventBus, get_event_bus
 import logging
 
 logger = logging.getLogger('ron_clanker.pre_deadline')
@@ -56,7 +56,10 @@ async def main():
     print(f"Timestamp: {start_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
     db = Database()
-    event_bus = EventBus()
+
+    # Initialize event bus for event-driven architecture
+    event_bus = get_event_bus()
+    await event_bus.start()
 
     # Check deadline info
     deadline_info = get_next_deadline(db)
@@ -87,12 +90,13 @@ async def main():
         print("\n⚠️  WARNING: More than 8 hours until deadline")
         print("  This script should run 6 hours before deadline")
 
-    # Initialize manager
+    # Initialize manager (EVENT-DRIVEN)
     print("\n" + "-" * 80)
-    print("INITIALIZING RON CLANKER")
+    print("INITIALIZING RON CLANKER (Event-Driven Manager)")
     print("-" * 80)
 
-    ron = ManagerAgent(database=db)
+    ron = RonManager(database=db)
+    await ron.start()  # Start BaseAgent event subscriptions
 
     # Make team selection
     print("\n" + "-" * 80)
@@ -101,9 +105,16 @@ async def main():
 
     try:
         # Make weekly decision (transfers, captain, chip usage)
-        transfers, chip_used, announcement = await ron.make_weekly_decision(gameweek)
+        # Returns dict with keys: squad, transfers, chip_used, announcement
+        result = await ron.make_weekly_decision(gameweek)
+
+        transfers = result['transfers']
+        chip_used = result['chip_used']
+        announcement = result['announcement']
+        squad = result['squad']
 
         print(f"\n✓ Team selection complete!")
+        print(f"   Players: {len(squad)}")
         print(f"   Transfers: {len(transfers)}")
         print(f"   Chip used: {chip_used or 'None'}")
 
@@ -134,16 +145,14 @@ async def main():
             ORDER BY executed_at DESC
         """, (gameweek,))
 
-        team_stored = db.execute_query("""
-            SELECT COUNT(*) as count FROM my_team
-            WHERE gameweek = ?
-        """, (gameweek,))
+        # Check draft_team (new architecture)
+        draft_team = db.get_draft_team(gameweek)
 
         if transfers_logged:
             print(f"✓ Transfers logged: {len(transfers_logged)} transfer(s)")
-        if team_stored and team_stored[0]['count'] > 0:
-            print(f"✓ Team stored: {team_stored[0]['count']} players")
-        if not transfers_logged and not (team_stored and team_stored[0]['count'] > 0):
+        if draft_team and len(draft_team) > 0:
+            print(f"✓ Draft team stored: {len(draft_team)} players")
+        if not transfers_logged and not draft_team:
             print("⚠️  No decision records found in database")
 
     except Exception as e:
@@ -184,6 +193,13 @@ async def main():
         print("⚠️  No webhook configured - set WEBHOOK_URL environment variable")
         print("   to receive notifications (Discord/Slack/etc)")
 
+    # Cleanup event-driven components
+    try:
+        await ron.stop()
+        await event_bus.stop()
+    except Exception as e:
+        logger.warning(f"PreDeadline: Error during cleanup: {e}")
+
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
     print("\n" + "=" * 80)
@@ -193,6 +209,8 @@ async def main():
     print(f"Status: SUCCESS")
     print(f"\nView team announcement:")
     print(f"  venv/bin/python scripts/show_latest_team.py")
+    print(f"\nView draft team:")
+    print(f"  SELECT * FROM draft_team WHERE for_gameweek = {gameweek};")
 
     return 0
 
