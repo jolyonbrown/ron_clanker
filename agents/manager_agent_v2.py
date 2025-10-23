@@ -73,6 +73,9 @@ class RonManager(BaseAgent):
         self.rules_engine = RulesEngine()
         self.ron = RonClanker()
 
+        # Configuration
+        self.config = self._load_config()
+
         # ML-powered Decision Making
         self.use_ml = use_ml
         if use_ml:
@@ -125,6 +128,19 @@ class RonManager(BaseAgent):
         }
 
         logger.info("Ron Clanker (Event-Driven Manager) initialized")
+
+    def _load_config(self) -> Dict:
+        """Load configuration from file."""
+        import json
+        from pathlib import Path
+
+        config_file = Path('config/ron_config.json')
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                return json.load(f)
+
+        logger.warning("Ron: No config file found, using defaults")
+        return {'team_id': None, 'league_id': None}
 
     async def setup_subscriptions(self) -> None:
         """Subscribe to specialist analyses."""
@@ -827,8 +843,9 @@ Captain: {captain['web_name']}
 
                 # Enrich each player with xP and value_score
                 for player in current_team:
-                    player_id = player.get('id')
-                    pred = predictions_lookup.get(player_id)
+                    # Use player_id (FPL ID) not id (row ID from current_team table)
+                    fpl_player_id = player.get('player_id')
+                    pred = predictions_lookup.get(fpl_player_id)
 
                     if pred:
                         player['xP'] = pred['xP']
@@ -1084,7 +1101,7 @@ Captain: {captain['web_name']}
                 # Build ml_predictions dict from current team's xP values
                 ml_predictions = {}
                 for player in current_team:
-                    ml_predictions[player['id']] = player.get('xP', 2.0)
+                    ml_predictions[player['player_id']] = player.get('xP', 2.0)
 
                 result = self.transfer_optimizer.optimize_transfers(
                     current_team=current_team,
