@@ -606,6 +606,115 @@ Squad value: £{sum(p['now_cost'] for p in squad)/10:.1f}m
 
         return announcement
 
+    # ========================================================================
+    # TRANSFER DECISIONS
+    # ========================================================================
+
+    async def decide_transfers(
+        self,
+        current_team: List[Dict[str, Any]],
+        gameweek: int,
+        free_transfers: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        Decide on transfers for the gameweek.
+
+        Uses TransferOptimizer if ML is enabled, otherwise basic logic.
+
+        Args:
+            current_team: Current 15-player squad
+            gameweek: Target gameweek
+            free_transfers: Number of free transfers available
+
+        Returns:
+            List of transfer recommendations (may be empty if no beneficial transfers)
+        """
+        if self.use_ml and self.transfer_optimizer:
+            try:
+                logger.info("Ron: Using TransferOptimizer for transfer decisions...")
+                result = self.transfer_optimizer.optimize_transfers(
+                    current_team=current_team,
+                    gameweek=gameweek,
+                    free_transfers_available=free_transfers
+                )
+
+                transfers = result.get('transfers', [])
+                logger.info(f"Ron: TransferOptimizer recommends {len(transfers)} transfer(s)")
+
+                if result.get('chip_recommendation'):
+                    logger.info(f"Ron: Chip vs Transfer comparison: {result['chip_recommendation'].get('recommendation', 'N/A')}")
+
+                return transfers
+
+            except Exception as e:
+                logger.error(f"Ron: TransferOptimizer failed: {e}. Falling back to basic logic.", exc_info=True)
+                return self._decide_transfers_fallback(current_team, gameweek)
+        else:
+            logger.info("Ron: Using basic transfer logic (ML not available)")
+            return self._decide_transfers_fallback(current_team, gameweek)
+
+    def _decide_transfers_fallback(
+        self,
+        current_team: List[Dict[str, Any]],
+        gameweek: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Basic fallback transfer logic if ML unavailable.
+
+        Simple strategy:
+        - Find weakest player by form
+        - Consider upgrade if +2pts expected gain
+        """
+        transfers = []
+
+        # Sort by form to find weakest
+        team_by_form = sorted(current_team, key=lambda x: float(x.get('form', 0)))
+        weakest = team_by_form[0] if team_by_form else None
+
+        if weakest and float(weakest.get('form', 0)) < 2.0:
+            logger.info(f"Ron: Weakest player {weakest.get('web_name')} has form {weakest.get('form')} < 2.0")
+
+            # Look for better alternative in same position
+            position = weakest.get('element_type')
+            max_price = weakest.get('now_cost', 0) / 10 + 1.0
+
+            # Query database for alternatives
+            alternatives = self.db.execute_query(
+                """
+                SELECT * FROM players
+                WHERE element_type = ?
+                AND now_cost <= ?
+                AND status = 'a'
+                ORDER BY form DESC
+                LIMIT 5
+                """,
+                (position, int(max_price * 10))
+            )
+
+            current_ids = {p.get('player_id', p.get('id')) for p in current_team}
+            alternatives = [a for a in alternatives if a['id'] not in current_ids]
+
+            if alternatives:
+                best = alternatives[0]
+                expected_gain = float(best.get('form', 0)) - float(weakest.get('form', 0))
+
+                if expected_gain >= 2.0:
+                    transfers.append({
+                        'player_out': weakest,
+                        'player_in': best,
+                        'expected_gain': expected_gain,
+                        'is_free': True,
+                        'cost': 0,
+                        'reasoning': f"Form upgrade: {best['web_name']} ({best.get('form')} form) replacing {weakest['web_name']} ({weakest.get('form')} form)"
+                    })
+                    logger.info(f"Ron: Recommending {weakest['web_name']} → {best['web_name']} (expected gain: +{expected_gain:.1f})")
+
+        return transfers
+
+    # ========================================================================
+    # GETTERS
+    # ========================================================================
+
     def get_current_team(self) -> Optional[List[Dict]]:
         """Get the current team."""
         return self._current_team
