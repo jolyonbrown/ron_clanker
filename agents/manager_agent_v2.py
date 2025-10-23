@@ -404,10 +404,10 @@ class RonManager(BaseAgent):
             pos_name = ['GKP', 'DEF', 'MID', 'FWD'][player['element_type'] - 1]
             by_position[pos_name].append(player)
 
-        # Sort each position by value score (proxy for expected points)
+        # Sort each position by xP (expected points) - highest first
         for pos in by_position:
             by_position[pos].sort(
-                key=lambda x: x.get('value_score', 0),
+                key=lambda x: x.get('xP', 0),
                 reverse=True
             )
 
@@ -434,12 +434,12 @@ class RonManager(BaseAgent):
                 len(by_position['FWD']) < fwd_count):
                 continue
 
-            # Calculate total score for this formation
+            # Calculate total xP for this formation
             total_score = (
-                sum(p.get('value_score', 0) for p in by_position['GKP'][:gk_count]) +
-                sum(p.get('value_score', 0) for p in by_position['DEF'][:def_count]) +
-                sum(p.get('value_score', 0) for p in by_position['MID'][:mid_count]) +
-                sum(p.get('value_score', 0) for p in by_position['FWD'][:fwd_count])
+                sum(p.get('xP', 0) for p in by_position['GKP'][:gk_count]) +
+                sum(p.get('xP', 0) for p in by_position['DEF'][:def_count]) +
+                sum(p.get('xP', 0) for p in by_position['MID'][:mid_count]) +
+                sum(p.get('xP', 0) for p in by_position['FWD'][:fwd_count])
             )
 
             if total_score > best_total_score:
@@ -499,14 +499,13 @@ class RonManager(BaseAgent):
         gameweek: Optional[int] = None
     ) -> List[Dict]:
         """
-        Select captain and vice-captain using ML predictions.
+        Select captain and vice-captain.
 
-        Uses DecisionSynthesisEngine if available, otherwise falls back to
-        basic value_score sorting.
+        Simple and effective: Pick the 2 players in starting XI with highest xP.
 
         Args:
             squad: Squad with positions assigned
-            gameweek: Gameweek number (for ML predictions)
+            gameweek: Gameweek number (for logging)
 
         Returns:
             Squad with captaincy assigned
@@ -515,26 +514,32 @@ class RonManager(BaseAgent):
         starting_xi = [p for p in squad if p.get('position', 16) <= 11]
 
         if not starting_xi:
-            logger.warning("Ron: No starting XI found for captain selection")
+            logger.error("Ron: No starting XI found for captain selection!")
             return squad
 
-        # Try ML-powered captain selection
-        if self.use_ml and self.synthesis_engine and gameweek:
-            try:
-                logger.info("Ron: Using ML predictions for captain selection...")
-                recommendations = self.synthesis_engine.synthesize_recommendations(gameweek)
-                captain_rec = recommendations.get('captain_recommendation', {})
+        # Reset all captaincy flags
+        for player in squad:
+            player['is_captain'] = False
+            player['is_vice_captain'] = False
+            player['multiplier'] = 1
 
-                if captain_rec:
-                    return self._assign_captain_ml(squad, captain_rec, recommendations)
-                else:
-                    logger.warning("Ron: No captain recommendation from ML, using fallback")
-            except Exception as e:
-                logger.error(f"Ron: ML captain selection failed: {e}. Using fallback.", exc_info=True)
+        # Sort starting XI by xP (highest first)
+        starting_xi.sort(key=lambda x: x.get('xP', 0), reverse=True)
 
-        # Fallback: Use value_score
-        logger.info("Ron: Using basic value_score for captain selection")
-        return self._assign_captain_fallback(squad)
+        # Captain = highest xP
+        if len(starting_xi) >= 1:
+            captain = starting_xi[0]
+            captain['is_captain'] = True
+            captain['multiplier'] = 2
+            logger.info(f"Ron: Captain: {captain['web_name']} ({captain.get('xP', 0):.2f} xP)")
+
+        # Vice = second highest xP
+        if len(starting_xi) >= 2:
+            vice = starting_xi[1]
+            vice['is_vice_captain'] = True
+            logger.info(f"Ron: Vice Captain: {vice['web_name']} ({vice.get('xP', 0):.2f} xP)")
+
+        return squad
 
     def _assign_captain_ml(
         self,
@@ -807,6 +812,54 @@ Captain: {captain['web_name']}
             raise ValueError("Current team not found - cannot make weekly decision")
 
         logger.info(f"Ron: Current team loaded ({len(current_team)} players)")
+
+        # 1b. Enrich team with ML predictions and value scores
+        logger.info("Ron: Enriching team with ML predictions...")
+        if self.use_ml and self.synthesis_engine:
+            try:
+                recommendations = self.synthesis_engine.synthesize_recommendations(gameweek)
+
+                # Create lookup dict: player_id -> xP
+                xp_lookup = {}
+                for player_pred in recommendations.get('top_players', []):
+                    xp_lookup[player_pred['player_id']] = player_pred.get('xp', 0)
+
+                # Enrich each player with xP
+                for player in current_team:
+                    player_id = player.get('id')
+                    player['xP'] = xp_lookup.get(player_id, 2.0)  # Default 2.0 if not found
+
+                logger.info(f"Ron: Enriched {len(current_team)} players with xP values")
+
+            except Exception as e:
+                logger.warning(f"Ron: Could not enrich with ML predictions: {e}")
+                # Set default xP based on position
+                for player in current_team:
+                    pos_type = player.get('element_type', 1)
+                    default_xp = {1: 2.0, 2: 3.0, 3: 4.0, 4: 5.0}.get(pos_type, 3.0)
+                    player['xP'] = default_xp
+
+        # Get value scores from value_rankings table
+        try:
+            value_rankings = self.db.execute_query("""
+                SELECT player_id, value_score
+                FROM value_rankings
+                WHERE gameweek = ?
+                ORDER BY value_score DESC
+            """, (gameweek,))
+
+            value_lookup = {r['player_id']: r['value_score'] for r in value_rankings}
+
+            for player in current_team:
+                player_id = player.get('id')
+                player['value_score'] = value_lookup.get(player_id, 0.0)
+
+            logger.info(f"Ron: Enriched with value scores from value_rankings table")
+
+        except Exception as e:
+            logger.warning(f"Ron: Could not load value scores: {e}")
+            for player in current_team:
+                player['value_score'] = 0.0
 
         # 2. Decide transfers
         logger.info("Ron: Analyzing transfer opportunities...")
