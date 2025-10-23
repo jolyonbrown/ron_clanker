@@ -765,6 +765,248 @@ Squad value: £{sum(p['now_cost'] for p in squad)/10:.1f}m
             return None
 
     # ========================================================================
+    # WEEKLY DECISION ORCHESTRATION
+    # ========================================================================
+
+    async def make_weekly_decision(
+        self,
+        gameweek: int,
+        free_transfers: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Master orchestration method for weekly team decisions.
+
+        Coordinates all decision-making:
+        1. Load current team
+        2. Decide transfers (using TransferOptimizer)
+        3. Execute transfers
+        4. Assign positions (formation optimizer)
+        5. Select captain (ML-powered)
+        6. Decide chip usage (ChipStrategyAnalyzer)
+        7. Generate team announcement
+        8. Save to draft_team
+        9. Log all decisions
+        10. Publish TEAM_SELECTED event
+
+        Args:
+            gameweek: Target gameweek
+            free_transfers: Number of free transfers available
+
+        Returns:
+            Dict with keys: squad, transfers, chip_used, announcement
+        """
+        logger.info(f"Ron: Planning for GW{gameweek}...")
+
+        # 1. Load current team
+        current_team = self.db.get_actual_current_team()
+        if not current_team:
+            logger.error("Ron: No current team found in database!")
+            raise ValueError("Current team not found - cannot make weekly decision")
+
+        logger.info(f"Ron: Current team loaded ({len(current_team)} players)")
+
+        # 2. Decide transfers
+        logger.info("Ron: Analyzing transfer opportunities...")
+        transfers = await self.decide_transfers(
+            current_team=current_team,
+            gameweek=gameweek,
+            free_transfers=free_transfers
+        )
+
+        if transfers:
+            logger.info(f"Ron: Recommending {len(transfers)} transfer(s)")
+            for t in transfers:
+                logger.info(f"  OUT: {t['player_out']['web_name']} → IN: {t['player_in']['web_name']}")
+        else:
+            logger.info("Ron: No transfers recommended - team is solid")
+
+        # 3. Execute transfers
+        new_team = self._execute_transfers(current_team, transfers)
+
+        # 4. Assign positions (formation optimizer)
+        logger.info("Ron: Optimizing formation...")
+        new_team = self._assign_squad_positions(new_team)
+
+        # 5. Select captain
+        logger.info("Ron: Selecting captain...")
+        new_team = self._select_captain(new_team, gameweek=gameweek)
+
+        # 6. Decide chip usage
+        logger.info("Ron: Evaluating chip usage...")
+        chip_used = await self.decide_chip_usage(
+            gameweek=gameweek,
+            squad=new_team,
+            chips_used=self.chips_used
+        )
+
+        if chip_used:
+            logger.info(f"Ron: Using chip: {chip_used}")
+            self.chips_used.append(chip_used)
+        else:
+            logger.info("Ron: No chip used this week")
+
+        # 7. Log decisions to database
+        self._log_decisions(gameweek, new_team, transfers, chip_used)
+
+        # 8. Save to draft_team
+        logger.info(f"Ron: Saving draft team for GW{gameweek}...")
+        self.db.save_draft_team(gameweek, new_team)
+
+        # 9. Generate team announcement
+        logger.info("Ron: Generating team announcement...")
+        announcement = self._generate_team_announcement(
+            squad=new_team,
+            gameweek=gameweek,
+            transfers=transfers,
+            chip_used=chip_used
+        )
+
+        # 10. Publish TEAM_SELECTED event
+        await self.publish_event(
+            EventType.TEAM_SELECTED,
+            {
+                'gameweek': gameweek,
+                'squad': new_team,
+                'transfers': transfers,
+                'chip_used': chip_used,
+                'announcement': announcement
+            },
+            priority=EventPriority.HIGH
+        )
+
+        logger.info(f"Ron: GW{gameweek} planning complete!")
+
+        return {
+            'squad': new_team,
+            'transfers': transfers,
+            'chip_used': chip_used,
+            'announcement': announcement
+        }
+
+    def _execute_transfers(
+        self,
+        current_team: List[Dict[str, Any]],
+        transfers: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute transfers and return new team.
+
+        Args:
+            current_team: Current 15-player squad
+            transfers: List of transfers to execute
+
+        Returns:
+            New team with transfers applied
+        """
+        new_team = current_team.copy()
+
+        for transfer in transfers:
+            player_out = transfer['player_out']
+            player_in = transfer['player_in']
+
+            # Remove player out (compare player_id)
+            player_out_id = player_out.get('player_id', player_out.get('id'))
+            new_team = [
+                p for p in new_team
+                if p.get('player_id', p.get('id')) != player_out_id
+            ]
+
+            # Add player in with same position
+            player_in_copy = player_in.copy()
+            player_in_copy['position'] = player_out.get('position', 1)
+            player_in_copy['purchase_price'] = player_in['now_cost']
+            player_in_copy['selling_price'] = player_in['now_cost']
+
+            # Ensure player_id is set
+            if 'player_id' not in player_in_copy:
+                player_in_copy['player_id'] = player_in_copy['id']
+
+            new_team.append(player_in_copy)
+
+        return new_team
+
+    def _log_decisions(
+        self,
+        gameweek: int,
+        team: List[Dict[str, Any]],
+        transfers: List[Dict[str, Any]],
+        chip_used: Optional[str]
+    ) -> None:
+        """
+        Log all decisions to database for learning/review.
+
+        Args:
+            gameweek: Target gameweek
+            team: Final squad
+            transfers: Transfers made
+            chip_used: Chip used (if any)
+        """
+        # Log captain decision
+        captain = next((p for p in team if p.get('is_captain')), None)
+        if captain:
+            self.db.log_decision(
+                gameweek=gameweek,
+                decision_type='captain',
+                decision_data={
+                    'player_id': captain.get('player_id', captain.get('id')),
+                    'player_name': captain.get('web_name', 'Unknown')
+                },
+                reasoning=f"Captain selected: {captain.get('web_name')}",
+                expected_value=0,  # Would need ML xP here
+                agent_source='RonManager',
+                confidence=0.8
+            )
+
+        # Log transfer decisions
+        if transfers:
+            total_expected_gain = sum(t.get('expected_gain', 0) for t in transfers)
+            transfer_reasoning = f"Made {len(transfers)} transfer(s). " + '; '.join([
+                t.get('reasoning', 'N/A') for t in transfers
+            ])
+
+            self.db.log_decision(
+                gameweek=gameweek,
+                decision_type='transfer_strategy',
+                decision_data={
+                    'num_transfers': len(transfers),
+                    'transfers': [
+                        {
+                            'out': t['player_out'].get('web_name'),
+                            'in': t['player_in'].get('web_name')
+                        }
+                        for t in transfers
+                    ]
+                },
+                reasoning=transfer_reasoning,
+                expected_value=total_expected_gain,
+                agent_source='RonManager',
+                confidence=0.7
+            )
+
+            # Log individual transfers
+            for transfer in transfers:
+                self.db.log_transfer(
+                    gameweek=gameweek,
+                    player_out_id=transfer['player_out'].get('player_id', transfer['player_out'].get('id')),
+                    player_in_id=transfer['player_in'].get('player_id', transfer['player_in'].get('id')),
+                    cost=transfer.get('cost', 0),
+                    is_free=transfer.get('is_free', True),
+                    reasoning=transfer.get('reasoning', '')
+                )
+
+        # Log chip decision
+        chip_reasoning = f"Using {chip_used}" if chip_used else "No chip used"
+        self.db.log_decision(
+            gameweek=gameweek,
+            decision_type='chip_usage',
+            decision_data={'chip': chip_used or 'none'},
+            reasoning=chip_reasoning,
+            expected_value=0,
+            agent_source='RonManager',
+            confidence=0.6
+        )
+
+    # ========================================================================
     # TRANSFER DECISIONS
     # ========================================================================
 
