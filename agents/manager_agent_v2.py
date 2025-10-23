@@ -853,7 +853,7 @@ Captain: {captain['web_name']}
 
         # 8. Save to draft_team
         logger.info(f"Ron: Saving draft team for GW{gameweek}...")
-        self.db.save_draft_team(gameweek, new_team)
+        self.db.set_draft_team(gameweek, new_team)
 
         # 9. Generate team announcement
         logger.info("Ron: Generating team announcement...")
