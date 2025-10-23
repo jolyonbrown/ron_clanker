@@ -492,52 +492,156 @@ class RonManager(BaseAgent):
 
         return squad
 
-    def _select_captain(self, squad: List[Dict]) -> List[Dict]:
+    def _select_captain(
+        self,
+        squad: List[Dict],
+        gameweek: Optional[int] = None
+    ) -> List[Dict]:
         """
-        Select captain and vice-captain.
+        Select captain and vice-captain using ML predictions.
 
-        Ron's logic:
-        - Captain: Highest xGI player in starting XI
-        - Vice: Second highest
+        Uses DecisionSynthesisEngine if available, otherwise falls back to
+        basic value_score sorting.
 
         Args:
             squad: Squad with positions assigned
+            gameweek: Gameweek number (for ML predictions)
+
+        Returns:
+            Squad with captaincy assigned
+        """
+        # Get starting XI only
+        starting_xi = [p for p in squad if p.get('position', 16) <= 11]
+
+        if not starting_xi:
+            logger.warning("Ron: No starting XI found for captain selection")
+            return squad
+
+        # Try ML-powered captain selection
+        if self.use_ml and self.synthesis_engine and gameweek:
+            try:
+                logger.info("Ron: Using ML predictions for captain selection...")
+                recommendations = self.synthesis_engine.synthesize_recommendations(gameweek)
+                captain_rec = recommendations.get('captain_recommendation', {})
+
+                if captain_rec:
+                    return self._assign_captain_ml(squad, captain_rec, recommendations)
+                else:
+                    logger.warning("Ron: No captain recommendation from ML, using fallback")
+            except Exception as e:
+                logger.error(f"Ron: ML captain selection failed: {e}. Using fallback.", exc_info=True)
+
+        # Fallback: Use value_score
+        logger.info("Ron: Using basic value_score for captain selection")
+        return self._assign_captain_fallback(squad)
+
+    def _assign_captain_ml(
+        self,
+        squad: List[Dict],
+        captain_rec: Dict[str, Any],
+        recommendations: Dict[str, Any]
+    ) -> List[Dict]:
+        """
+        Assign captain using ML recommendation.
+
+        Args:
+            squad: Full squad
+            captain_rec: Captain recommendation from synthesis engine
+            recommendations: Full recommendations for fallback vice captain logic
+
+        Returns:
+            Squad with captaincy assigned
+        """
+        primary = captain_rec.get('primary', {})
+        differential = captain_rec.get('differential_option', {})
+
+        captain_id = primary.get('player_id') if primary else None
+        vice_captain_id = differential.get('player_id') if differential else None
+
+        # Reset all captaincy flags
+        for player in squad:
+            player['is_captain'] = False
+            player['is_vice_captain'] = False
+            player['multiplier'] = 1
+
+        # Assign captain and vice
+        for player in squad:
+            player_fpl_id = player.get('player_id', player.get('id'))
+
+            if player_fpl_id == captain_id:
+                player['is_captain'] = True
+                player['multiplier'] = 2
+                logger.info(f"Ron: Captain (ML): {player['web_name']} ({primary.get('xp', 0):.2f} xP)")
+            elif player_fpl_id == vice_captain_id:
+                player['is_vice_captain'] = True
+                logger.info(f"Ron: Vice Captain (ML): {player['web_name']} ({differential.get('xp', 0):.2f} xP)")
+
+        # If captain not in team, fallback
+        if not any(p.get('is_captain') for p in squad):
+            logger.warning(f"Ron: ML captain {primary.get('name', 'N/A')} not in team, using fallback")
+            return self._assign_captain_fallback(squad)
+
+        # If vice captain not in team, assign to second-best by ML xP
+        if not any(p.get('is_vice_captain') for p in squad):
+            logger.info(f"Ron: ML vice captain {differential.get('name', 'N/A')} not in team, finding second-best")
+            starting_xi = [p for p in squad if p.get('position', 16) <= 11 and not p.get('is_captain')]
+
+            # Get ML xP for each player
+            all_players_xp = {}
+            if recommendations and recommendations.get('top_players'):
+                for player_pred in recommendations['top_players']:
+                    all_players_xp[player_pred['player_id']] = player_pred.get('xp', 0)
+
+            # Build list with xP values
+            candidates = []
+            for player in starting_xi:
+                player_fpl_id = player.get('player_id', player.get('id'))
+                xp = all_players_xp.get(player_fpl_id, 0)
+                candidates.append((player, xp))
+
+            # Sort by xP and assign vice to top
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            if candidates:
+                candidates[0][0]['is_vice_captain'] = True
+                logger.info(f"Ron: Vice Captain (fallback): {candidates[0][0]['web_name']} ({candidates[0][1]:.2f} xP)")
+
+        return squad
+
+    def _assign_captain_fallback(self, squad: List[Dict]) -> List[Dict]:
+        """
+        Basic fallback captain selection by value_score.
+
+        Args:
+            squad: Full squad
 
         Returns:
             Squad with captaincy assigned
         """
         starting_xi = [p for p in squad if p.get('position', 16) <= 11]
 
-        # Sort by value score (proxy for expected points)
+        # Sort by value score
         candidates = sorted(
             starting_xi,
             key=lambda x: x.get('value_score', 0),
             reverse=True
         )
 
+        # Reset all flags
+        for player in squad:
+            player['is_captain'] = False
+            player['is_vice_captain'] = False
+            player['multiplier'] = 1
+
         # Assign captain
         if candidates:
             candidates[0]['is_captain'] = True
-            candidates[0]['is_vice_captain'] = False
             candidates[0]['multiplier'] = 2
+            logger.info(f"Ron: Captain (basic): {candidates[0]['web_name']} (value: {candidates[0].get('value_score', 0):.2f})")
 
         # Assign vice
         if len(candidates) > 1:
-            candidates[1]['is_captain'] = False
             candidates[1]['is_vice_captain'] = True
-            candidates[1]['multiplier'] = 1
-
-        # Set defaults for others
-        for player in squad:
-            if 'is_captain' not in player:
-                player['is_captain'] = False
-            if 'is_vice_captain' not in player:
-                player['is_vice_captain'] = False
-            if 'multiplier' not in player:
-                player['multiplier'] = 1
-
-        captain = candidates[0]['web_name'] if candidates else "Unknown"
-        logger.info(f"Ron: Captain selected: {captain}")
+            logger.info(f"Ron: Vice Captain (basic): {candidates[1]['web_name']} (value: {candidates[1].get('value_score', 0):.2f})")
 
         return squad
 
