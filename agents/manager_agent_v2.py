@@ -23,6 +23,11 @@ from ron_clanker.persona import RonClanker
 from data.database import Database
 from infrastructure.events import Event, EventType, EventPriority
 
+# ML/Intelligence imports for decision making
+from agents.synthesis.engine import DecisionSynthesisEngine
+from agents.transfer_optimizer import TransferOptimizer
+from intelligence.chip_strategy import ChipStrategyAnalyzer
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +54,8 @@ class RonManager(BaseAgent):
     def __init__(
         self,
         database: Optional[Database] = None,
-        data_collector: Optional[DataCollector] = None
+        data_collector: Optional[DataCollector] = None,
+        use_ml: bool = True
     ):
         """
         Initialize Ron.
@@ -57,6 +63,7 @@ class RonManager(BaseAgent):
         Args:
             database: Optional database instance
             data_collector: Optional data collector
+            use_ml: Whether to use ML-powered decision making (default: True)
         """
         super().__init__(agent_name="ron")
 
@@ -64,6 +71,31 @@ class RonManager(BaseAgent):
         self.data_collector = data_collector or DataCollector()
         self.rules_engine = RulesEngine()
         self.ron = RonClanker()
+
+        # ML-powered Decision Making
+        self.use_ml = use_ml
+        if use_ml:
+            try:
+                self.synthesis_engine = DecisionSynthesisEngine(database=self.db)
+                self.chip_strategy = ChipStrategyAnalyzer(
+                    database=self.db,
+                    league_intel_service=None  # Will be added when available
+                )
+                self.transfer_optimizer = TransferOptimizer(
+                    database=self.db,
+                    chip_strategy=self.chip_strategy
+                )
+                logger.info("Ron: ML decision systems loaded (synthesis, transfers, chips)")
+            except Exception as e:
+                logger.warning(f"Ron: Could not load ML systems: {e}. Falling back to basic valuation.")
+                self.synthesis_engine = None
+                self.chip_strategy = None
+                self.transfer_optimizer = None
+                self.use_ml = False
+        else:
+            self.synthesis_engine = None
+            self.chip_strategy = None
+            self.transfer_optimizer = None
 
         # Cache latest analyses
         self._value_rankings: Optional[Dict] = None
