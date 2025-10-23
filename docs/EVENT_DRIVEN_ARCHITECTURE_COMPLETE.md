@@ -192,6 +192,25 @@ After testing period (GW10-12):
 
 ---
 
+## Post-Phase 7 Enhancement
+
+### LLM-Powered Team Announcements ✅
+
+After completing Phase 7, we identified that team announcements were still using static templates instead of dynamic LLM generation like post-match reviews.
+
+**Problem**: `_generate_team_announcement()` used f-string templates
+**Solution**: Integrated Claude Haiku (via `llm_banter.py`)
+
+**Changes**:
+- Added `generate_team_announcement()` method to `llm_banter.py`
+- Updated `RonManager._generate_team_announcement()` to use LLM
+- Passes squad, transfers, chip usage to LLM for context
+- Graceful fallback if API fails
+
+**Result**: Natural, context-aware team announcements matching Ron's persona, just like post-match reviews.
+
+---
+
 ## Testing Checklist
 
 Before merging to main:
@@ -200,10 +219,12 @@ Before merging to main:
 - [x] No import errors
 - [x] pre_deadline_selection.py updated
 - [x] All scripts use RonManager
+- [x] LLM-powered announcements integrated
 - [ ] Dry run test for GW9
 - [ ] End-to-end test with event bus
 - [ ] Verify draft_team saves correctly
 - [ ] Verify TEAM_SELECTED event publishes
+- [ ] Test LLM announcement generation
 
 ---
 
@@ -216,9 +237,11 @@ Before merging to main:
 - ✅ System remains fully autonomous
 - ✅ ML integration improved
 - ✅ Better than legacy (uses TransferOptimizer + ChipStrategyAnalyzer!)
+- ✅ LLM-powered natural language announcements (no more static templates!)
 
 **Code Quality:**
 - ✅ 7 phases, 7 clean commits
+- ✅ +1 post-phase enhancement (LLM announcements)
 - ✅ Comprehensive documentation
 - ✅ Clear migration path
 - ✅ Backward compatibility maintained (legacy kept)
