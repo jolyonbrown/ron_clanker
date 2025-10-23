@@ -233,35 +233,100 @@ class ManagerAgent:
         """
         Assign positions 1-15 (1-11 starting, 12-15 bench).
 
-        Strategy: Best 11 players start (by expected points).
+        Strategy: Test all valid formations and select the one that maximizes
+        total expected points (using total_value_score as proxy).
         """
         # Separate by position
         by_position = {1: [], 2: [], 3: [], 4: []}
         for player in team:
             by_position[player['element_type']].append(player)
 
-        # Sort each position by value score
+        # Sort each position by value score (best first)
         for pos in by_position:
             by_position[pos].sort(
                 key=lambda x: x.get('total_value_score', 0),
                 reverse=True
             )
 
-        # Assign starting XI (3-4-3 or 3-5-2 formation)
-        # GK: 1, DEF: 3, MID: 5, FWD: 2
-        position_number = 1
-        starting_config = {
-            1: 1,  # 1 GK
-            2: 3,  # 3 DEF
-            3: 5,  # 5 MID
-            4: 2   # 2 FWD
-        }
+        # Valid formations: (GK, DEF, MID, FWD) - all sum to 11
+        valid_formations = [
+            (1, 3, 4, 3),
+            (1, 3, 5, 2),
+            (1, 4, 3, 3),
+            (1, 4, 4, 2),
+            (1, 4, 5, 1),
+            (1, 5, 3, 2),
+            (1, 5, 4, 1)
+        ]
 
-        for pos in [1, 2, 3, 4]:
-            starters = starting_config[pos]
-            for i, player in enumerate(by_position[pos]):
-                player['position'] = position_number
-                position_number += 1
+        # Find formation that maximizes total value score
+        best_formation = None
+        best_total_score = 0
+
+        for gk_count, def_count, mid_count, fwd_count in valid_formations:
+            # Check if we have enough players for this formation
+            if (len(by_position[1]) < gk_count or
+                len(by_position[2]) < def_count or
+                len(by_position[3]) < mid_count or
+                len(by_position[4]) < fwd_count):
+                continue
+
+            # Calculate total score for this formation
+            total_score = (
+                sum(p.get('total_value_score', 0) for p in by_position[1][:gk_count]) +
+                sum(p.get('total_value_score', 0) for p in by_position[2][:def_count]) +
+                sum(p.get('total_value_score', 0) for p in by_position[3][:mid_count]) +
+                sum(p.get('total_value_score', 0) for p in by_position[4][:fwd_count])
+            )
+
+            if total_score > best_total_score:
+                best_total_score = total_score
+                best_formation = (gk_count, def_count, mid_count, fwd_count)
+
+        if not best_formation:
+            logger.warning("No valid formation found! Falling back to 3-5-2")
+            best_formation = (1, 3, 5, 2)
+
+        gk_count, def_count, mid_count, fwd_count = best_formation
+        formation_str = f"{def_count}-{mid_count}-{fwd_count}"
+        logger.info(f"Optimal formation: {formation_str} (total score: {best_total_score:.2f})")
+
+        # Assign positions based on best formation
+        position_number = 1
+
+        # Starting XI (positions 1-11)
+        for i in range(gk_count):
+            by_position[1][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(def_count):
+            by_position[2][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(mid_count):
+            by_position[3][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(fwd_count):
+            by_position[4][i]['position'] = position_number
+            position_number += 1
+
+        # Bench (positions 12-15)
+        for i in range(gk_count, len(by_position[1])):
+            by_position[1][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(def_count, len(by_position[2])):
+            by_position[2][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(mid_count, len(by_position[3])):
+            by_position[3][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(fwd_count, len(by_position[4])):
+            by_position[4][i]['position'] = position_number
+            position_number += 1
 
         return team
 

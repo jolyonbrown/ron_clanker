@@ -211,6 +211,227 @@ class Database:
         return self.execute_many(query, params_list)
 
     # ========================================================================
+    # CURRENT/DRAFT TEAM (New Architecture)
+    # ========================================================================
+
+    def get_actual_current_team(self) -> List[Dict[str, Any]]:
+        """
+        Get Ron's actual current team (source of truth).
+
+        Returns the 15 players in current_team table with full player details.
+        """
+        query = """
+            SELECT
+                ct.id,
+                ct.player_id,
+                ct.position,
+                ct.purchase_price,
+                ct.selling_price,
+                ct.is_captain,
+                ct.is_vice_captain,
+                ct.multiplier,
+                p.web_name,
+                p.element_type,
+                p.team_id,
+                p.now_cost,
+                p.form,
+                p.points_per_game,
+                p.status
+            FROM current_team ct
+            JOIN players p ON ct.player_id = p.id
+            ORDER BY ct.position
+        """
+        return self.execute_query(query)
+
+    def set_actual_current_team(self, team_data: List[Dict[str, Any]]) -> int:
+        """
+        Set Ron's actual current team (replaces entire team).
+
+        This should only be called when confirming a team selection.
+        """
+        # Clear existing
+        self.execute_update("DELETE FROM current_team")
+
+        # Insert new team
+        query = """
+            INSERT INTO current_team
+            (player_id, position, purchase_price, selling_price,
+             is_captain, is_vice_captain, multiplier)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        params_list = [
+            (
+                player.get('player_id', player.get('id')),
+                player['position'],
+                player['purchase_price'],
+                player['selling_price'],
+                player.get('is_captain', False),
+                player.get('is_vice_captain', False),
+                player.get('multiplier', 1)
+            )
+            for player in team_data
+        ]
+        return self.execute_many(query, params_list)
+
+    def get_draft_team(self, gameweek: int) -> List[Dict[str, Any]]:
+        """
+        Get draft team for a specific gameweek.
+
+        Returns empty list if no draft exists for that gameweek.
+        """
+        query = """
+            SELECT
+                dt.id,
+                dt.player_id,
+                dt.position,
+                dt.purchase_price,
+                dt.selling_price,
+                dt.is_captain,
+                dt.is_vice_captain,
+                dt.multiplier,
+                dt.for_gameweek,
+                p.web_name,
+                p.element_type,
+                p.team_id,
+                p.now_cost,
+                p.form,
+                p.points_per_game,
+                p.status
+            FROM draft_team dt
+            JOIN players p ON dt.player_id = p.id
+            WHERE dt.for_gameweek = ?
+            ORDER BY dt.position
+        """
+        return self.execute_query(query, (gameweek,))
+
+    def create_draft_from_current(self, gameweek: int) -> int:
+        """
+        Create a draft team for gameweek by copying current team.
+
+        Clears any existing draft for this gameweek first.
+        """
+        # Clear existing draft for this gameweek
+        self.execute_update("DELETE FROM draft_team WHERE for_gameweek = ?", (gameweek,))
+
+        # Copy current_team to draft_team
+        query = """
+            INSERT INTO draft_team
+            (player_id, position, purchase_price, selling_price,
+             is_captain, is_vice_captain, multiplier, for_gameweek)
+            SELECT
+                player_id, position, purchase_price, selling_price,
+                is_captain, is_vice_captain, multiplier, ?
+            FROM current_team
+        """
+        return self.execute_update(query, (gameweek,))
+
+    def set_draft_team(self, gameweek: int, team_data: List[Dict[str, Any]]) -> int:
+        """
+        Set the draft team for a gameweek (replaces existing draft).
+        """
+        # Clear existing draft
+        self.execute_update("DELETE FROM draft_team WHERE for_gameweek = ?", (gameweek,))
+
+        # Insert new draft
+        query = """
+            INSERT INTO draft_team
+            (player_id, position, purchase_price, selling_price,
+             is_captain, is_vice_captain, multiplier, for_gameweek)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        params_list = [
+            (
+                player.get('player_id', player.get('id')),
+                player['position'],
+                player['purchase_price'],
+                player['selling_price'],
+                player.get('is_captain', False),
+                player.get('is_vice_captain', False),
+                player.get('multiplier', 1),
+                gameweek
+            )
+            for player in team_data
+        ]
+        return self.execute_many(query, params_list)
+
+    def confirm_draft_to_current(self, gameweek: int) -> int:
+        """
+        Confirm draft team as the new current team.
+
+        Copies draft_team to current_team and archives old current_team to my_team history.
+        """
+        # First, archive current team to my_team history
+        # (We'll do this when implementing full workflow)
+
+        # Clear current_team
+        self.execute_update("DELETE FROM current_team")
+
+        # Copy draft to current
+        query = """
+            INSERT INTO current_team
+            (player_id, position, purchase_price, selling_price,
+             is_captain, is_vice_captain, multiplier)
+            SELECT
+                player_id, position, purchase_price, selling_price,
+                is_captain, is_vice_captain, multiplier
+            FROM draft_team
+            WHERE for_gameweek = ?
+        """
+        return self.execute_update(query, (gameweek,))
+
+    def get_draft_transfers(self, gameweek: int) -> List[Dict[str, Any]]:
+        """Get proposed transfers for a gameweek draft."""
+        query = """
+            SELECT
+                dt.id,
+                dt.for_gameweek,
+                dt.player_out_id,
+                dt.player_in_id,
+                dt.transfer_cost,
+                dt.is_free_transfer,
+                dt.reasoning,
+                dt.expected_gain,
+                p_out.web_name as player_out_name,
+                p_in.web_name as player_in_name
+            FROM draft_transfers dt
+            JOIN players p_out ON dt.player_out_id = p_out.id
+            JOIN players p_in ON dt.player_in_id = p_in.id
+            WHERE dt.for_gameweek = ?
+            ORDER BY dt.created_at
+        """
+        return self.execute_query(query, (gameweek,))
+
+    def add_draft_transfer(
+        self,
+        gameweek: int,
+        player_out_id: int,
+        player_in_id: int,
+        transfer_cost: int = 0,
+        is_free_transfer: bool = True,
+        reasoning: str = "",
+        expected_gain: Optional[float] = None
+    ) -> int:
+        """Add a proposed transfer to the draft."""
+        query = """
+            INSERT INTO draft_transfers
+            (for_gameweek, player_out_id, player_in_id, transfer_cost,
+             is_free_transfer, reasoning, expected_gain)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        return self.execute_update(
+            query,
+            (gameweek, player_out_id, player_in_id, transfer_cost,
+             is_free_transfer, reasoning, expected_gain)
+        )
+
+    def clear_draft_transfers(self, gameweek: int) -> int:
+        """Clear all draft transfers for a gameweek."""
+        return self.execute_update(
+            "DELETE FROM draft_transfers WHERE for_gameweek = ?",
+            (gameweek,)
+        )
+
+    # ========================================================================
     # DECISIONS & LEARNING
     # ========================================================================
 

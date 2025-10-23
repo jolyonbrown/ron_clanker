@@ -350,7 +350,8 @@ class RonManager(BaseAgent):
         """
         Assign positions 1-15 (1-11 starting, 12-15 bench).
 
-        Ron's formation: 3-5-2 (defensive stability)
+        Uses formation optimizer to test all valid formations and select
+        the one that maximizes total expected points.
 
         Args:
             squad: 15 players
@@ -370,56 +371,90 @@ class RonManager(BaseAgent):
             pos_name = ['GKP', 'DEF', 'MID', 'FWD'][player['element_type'] - 1]
             by_position[pos_name].append(player)
 
-        # Sort each position by value score (best first)
+        # Sort each position by value score (proxy for expected points)
         for pos in by_position:
             by_position[pos].sort(
                 key=lambda x: x.get('value_score', 0),
                 reverse=True
             )
 
-        # Assign starting XI: 1 GKP, 3 DEF, 5 MID, 2 FWD
-        # Then bench: positions 12-15
+        # Valid formations: (GK, DEF, MID, FWD) - all sum to 11
+        valid_formations = [
+            (1, 3, 4, 3),
+            (1, 3, 5, 2),
+            (1, 4, 3, 3),
+            (1, 4, 4, 2),
+            (1, 4, 5, 1),
+            (1, 5, 3, 2),
+            (1, 5, 4, 1)
+        ]
+
+        # Find formation that maximizes total value score
+        best_formation = None
+        best_total_score = 0
+
+        for gk_count, def_count, mid_count, fwd_count in valid_formations:
+            # Check if we have enough players for this formation
+            if (len(by_position['GKP']) < gk_count or
+                len(by_position['DEF']) < def_count or
+                len(by_position['MID']) < mid_count or
+                len(by_position['FWD']) < fwd_count):
+                continue
+
+            # Calculate total score for this formation
+            total_score = (
+                sum(p.get('value_score', 0) for p in by_position['GKP'][:gk_count]) +
+                sum(p.get('value_score', 0) for p in by_position['DEF'][:def_count]) +
+                sum(p.get('value_score', 0) for p in by_position['MID'][:mid_count]) +
+                sum(p.get('value_score', 0) for p in by_position['FWD'][:fwd_count])
+            )
+
+            if total_score > best_total_score:
+                best_total_score = total_score
+                best_formation = (gk_count, def_count, mid_count, fwd_count)
+
+        if not best_formation:
+            logger.error("Ron: No valid formation found! Falling back to 3-5-2")
+            best_formation = (1, 3, 5, 2)
+
+        gk_count, def_count, mid_count, fwd_count = best_formation
+        formation_str = f"{def_count}-{mid_count}-{fwd_count}"
+        logger.info(f"Ron: Optimal formation: {formation_str} (total score: {best_total_score:.2f})")
+
+        # Assign positions based on best formation
         position_number = 1
 
-        # First pass: assign starters (positions 1-11)
-        # GKP: 1 starter
-        if len(by_position['GKP']) >= 1:
-            by_position['GKP'][0]['position'] = position_number
-            position_number += 1
-
-        # DEF: 3 starters
-        for i in range(min(3, len(by_position['DEF']))):
-            by_position['DEF'][i]['position'] = position_number
-            position_number += 1
-
-        # MID: 5 starters
-        for i in range(min(5, len(by_position['MID']))):
-            by_position['MID'][i]['position'] = position_number
-            position_number += 1
-
-        # FWD: 2 starters
-        for i in range(min(2, len(by_position['FWD']))):
-            by_position['FWD'][i]['position'] = position_number
-            position_number += 1
-
-        # Second pass: assign bench (positions 12-15)
-        # Remaining GKP
-        for i in range(1, len(by_position['GKP'])):
+        # Starting XI (positions 1-11)
+        for i in range(gk_count):
             by_position['GKP'][i]['position'] = position_number
             position_number += 1
 
-        # Remaining DEF
-        for i in range(3, len(by_position['DEF'])):
+        for i in range(def_count):
             by_position['DEF'][i]['position'] = position_number
             position_number += 1
 
-        # Remaining MID
-        for i in range(5, len(by_position['MID'])):
+        for i in range(mid_count):
             by_position['MID'][i]['position'] = position_number
             position_number += 1
 
-        # Remaining FWD
-        for i in range(2, len(by_position['FWD'])):
+        for i in range(fwd_count):
+            by_position['FWD'][i]['position'] = position_number
+            position_number += 1
+
+        # Bench (positions 12-15)
+        for i in range(gk_count, len(by_position['GKP'])):
+            by_position['GKP'][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(def_count, len(by_position['DEF'])):
+            by_position['DEF'][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(mid_count, len(by_position['MID'])):
+            by_position['MID'][i]['position'] = position_number
+            position_number += 1
+
+        for i in range(fwd_count, len(by_position['FWD'])):
             by_position['FWD'][i]['position'] = position_number
             position_number += 1
 
