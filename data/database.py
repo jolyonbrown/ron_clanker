@@ -79,8 +79,10 @@ class Database:
                 id, code, first_name, second_name, web_name, team_id,
                 element_type, now_cost, selected_by_percent, form,
                 points_per_game, total_points, status, news,
-                chance_of_playing_next_round, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                chance_of_playing_next_round,
+                influence, creativity, threat, ict_index,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 now_cost = excluded.now_cost,
                 selected_by_percent = excluded.selected_by_percent,
@@ -90,6 +92,10 @@ class Database:
                 status = excluded.status,
                 news = excluded.news,
                 chance_of_playing_next_round = excluded.chance_of_playing_next_round,
+                influence = excluded.influence,
+                creativity = excluded.creativity,
+                threat = excluded.threat,
+                ict_index = excluded.ict_index,
                 updated_at = CURRENT_TIMESTAMP
         """
         params = (
@@ -100,7 +106,9 @@ class Database:
             player_data.get('selected_by_percent'), player_data.get('form'),
             player_data.get('points_per_game'), player_data.get('total_points'),
             player_data.get('status'), player_data.get('news'),
-            player_data.get('chance_of_playing_next_round')
+            player_data.get('chance_of_playing_next_round'),
+            player_data.get('influence'), player_data.get('creativity'),
+            player_data.get('threat'), player_data.get('ict_index')
         )
         return self.execute_update(query, params)
 

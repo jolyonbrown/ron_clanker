@@ -1,0 +1,2139 @@
+Delivered-To: jolyon.brown@gmail.com
+Received: by 2002:a05:7508:10c6:b0:d0:c185:1dc with SMTP id p6csp652835gbb;
+        Thu, 23 Oct 2025 10:32:46 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IE3BgA8VMGIDuQuNG+YDA100gbq5Oos+m0/s8byfEbZF45Uw2N2AcNjtRYQiUaebAdDRJEN
+X-Received: by 2002:ac8:5916:0:b0:4d7:e0ed:421f with SMTP id d75a77b69052e-4ea1167dbc0mr106281221cf.3.1761240766269;
+        Thu, 23 Oct 2025 10:32:46 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1761240766; cv=none;
+        d=google.com; s=arc-20240605;
+        b=Y+jGOMRdEhfauJBOgXvVy7qlezZ8s63uBvhFvG453XPA4ANs2RiA8WaB+t3w+V0kJ9
+         4WaRK45+1RTvlFm6Vy7ffnBrt/Msky1lTPkfEgTXw0FmeLFpYkbceiR1THMQ8Jq7i6wy
+         OTE09aLYNOIuVk3EcU8vDMO7PXlWfG5Mp7dwIrWF8O2/ESf4R1L4rMAn/fVi7UtpwWRV
+         uHRj6QyPg7jKNOYXUykZS5b/RKtyFPmJlSsu4wHwS5k49J5YqZtKW6Psku7xLa2XiiCn
+         UP36Y4dTKrGfHiBsA+7qux8Sv9SNfAv8kcLYsxreRJX5ntfNQQXPV/ZN77FMJPPxdDAK
+         OucA==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=to:sid:list-unsubscribe-post:list-unsubscribe:feedback-id:reply-to
+         :subject:message-id:mime-version:from:date:dkim-signature
+         :dkim-signature;
+        bh=iX5N4Zk4Pa+X4HR5ygrkI4J5MVkr6lG+ITtEw/kRZT0=;
+        fh=wT0esuUmtXdXMYzOjjJrTFAXP33CfPfRT2UwOuk59DY=;
+        b=iP4Oao652tginyyJZrhlJ6Ka9o+KcEDfjuZJ9vthx9H7UasVWKyH6x2t8zDgRxjEdR
+         kh12Qj+P9iqwlpeZUsLsCHZazUKF0C6DYfx79B56BmoDq0oggAIIDP33PXQ3n1zMn4Zc
+         +BcRBcq83rwvdtGCpVrHKXquN9kppY+miKUUV5fR/En4oja+Vh3qMA4CY4dVE16z0Nwa
+         1RKYipbaY7F1UAS4HeXKKfgt8g1UVp4RSouayrC+nbhxD5VQA5NaIjLuIDiDuJF2agSh
+         e0630tH1AQRyf+oY3bSj32C6u6sh1nltcAD9kQJKpvrLwPNEWXEVOowTMhmqnid7XFm1
+         vF5A==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@mail.beehiiv.com header.s=s1 header.b=IswZPlvR;
+       dkim=pass header.i=@sendgrid.info header.s=smtpapi header.b=pQqF7aXo;
+       spf=pass (google.com: domain of bounces+29938952-55fd-jolyon.brown=gmail.com@em2003.mail.beehiiv.com designates 159.183.140.27 as permitted sender) smtp.mailfrom="bounces+29938952-55fd-jolyon.brown=gmail.com@em2003.mail.beehiiv.com";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=beehiiv.com
+Return-Path: <bounces+29938952-55fd-jolyon.brown=gmail.com@em2003.mail.beehiiv.com>
+Received: from o167.ptr4513.mail.beehiiv.com (o167.ptr4513.mail.beehiiv.com. [159.183.140.27])
+        by mx.google.com with ESMTPS id d75a77b69052e-4eb808aae4esi8998031cf.796.2025.10.23.10.32.45
+        for <jolyon.brown@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Thu, 23 Oct 2025 10:32:46 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounces+29938952-55fd-jolyon.brown=gmail.com@em2003.mail.beehiiv.com designates 159.183.140.27 as permitted sender) client-ip=159.183.140.27;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@mail.beehiiv.com header.s=s1 header.b=IswZPlvR;
+       dkim=pass header.i=@sendgrid.info header.s=smtpapi header.b=pQqF7aXo;
+       spf=pass (google.com: domain of bounces+29938952-55fd-jolyon.brown=gmail.com@em2003.mail.beehiiv.com designates 159.183.140.27 as permitted sender) smtp.mailfrom="bounces+29938952-55fd-jolyon.brown=gmail.com@em2003.mail.beehiiv.com";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=beehiiv.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=mail.beehiiv.com;
+	h=content-type:date:from:mime-version:subject:reply-to:feedback-id:
+	list-unsubscribe:list-unsubscribe-post:to:cc:content-type:date:feedback-id:from:
+	subject:to;
+	s=s1; bh=iX5N4Zk4Pa+X4HR5ygrkI4J5MVkr6lG+ITtEw/kRZT0=;
+	b=IswZPlvRanLcCfgAL7VEox4gHYUqQlUITqlfPH1fwHnyhT1UV6qjYCxRvn3pTLAorCu2
+	PlkdPWaOiTPpKvv/b/nFfSLlogk3+5MhSK30m8sXZrZF49IGcMjOgZTfxSAzBmC/dGYJ9/
+	GJhgNFkx5I6BTypJo58LMa7ctE/w3iRmofUURWSbhjKLSFX9ZgZ4B/Z0HJ3tAjUMRwH7nX
+	PqmbLkf4eIfDB3JV3SZt4/j3TzKxU7yppmZQYH0cgGtgmdrqk5S4GIZEnJAaJ1LI4NtgDg
+	u8pxBGPXQ0UVd6Etmqg2xH7OoBnYnckaBHTpySeLgv6ubUwcd4DeQL/wKKLn7oMg==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=sendgrid.info;
+	h=content-type:date:from:mime-version:subject:reply-to:feedback-id:
+	list-unsubscribe:list-unsubscribe-post:to:cc:content-type:date:feedback-id:from:
+	subject:to;
+	s=smtpapi; bh=iX5N4Zk4Pa+X4HR5ygrkI4J5MVkr6lG+ITtEw/kRZT0=;
+	b=pQqF7aXo7OVV7qD+A30qweBMxloNLHhp8WCnkhcnaiRLJd0+NNOzm2YPK07pkgwiy0Fm
+	CWdFDUqO2GaNekpQ/z8AgvvkGWSQY3feGlahHYFq8ov/6pX19x9f/CY+rZnLm3IBRGo+qo
+	DUprzAAe/Sg7wPFP01xcaN8wRNcVn/3wg=
+Received: by recvd-568d8c787b-95r7n with SMTP id recvd-568d8c787b-95r7n-1-68FA66A7-61
+	2025-10-23 17:32:23.5409999 +0000 UTC m=+12185271.984585010
+Received: from Mjk5Mzg5NTI (unknown)
+	by geopod-ismtpd-39 (SG) with HTTP
+	id O67d9ky9SJGJtMcpA17mpQ
+	Thu, 23 Oct 2025 17:32:23.498 +0000 (UTC)
+Content-Type: multipart/alternative; boundary=86d0efaf9eb01eb20ceb90d922b12de10659173593633223cfc25db7c578
+Date: Thu, 23 Oct 2025 17:32:44 +0000 (UTC)
+From: LazyFPL =?UTF-8?b?8J+bjw==?= <lazyfpl@mail.beehiiv.com>
+Mime-Version: 1.0
+Message-ID: <O67d9ky9SJGJtMcpA17mpQ@geopod-ismtpd-39>
+Subject: =?UTF-8?B?8J+aqA==?= GW9: the FPL cheat sheet
+Reply-To: LazyFPL =?UTF-8?b?8J+bjw==?= <newsletter@lazyfpl.com>
+Feedback-ID: 
+ =?us-ascii?Q?852541e8-a9b5-4b55-aa82-7d68c3351058=3Anewsletter=3Ab1482734-9ad9-?=
+ =?us-ascii?Q?4641-ad9b-badd069c2c0c=3A8683befabd58d84?=
+List-Unsubscribe: 
+ =?us-ascii?Q?=3Cmailto=3Ab1482734-9ad9-4641-ad9b-badd069c2c0c+3541fdfd-402d-4d2?=
+ =?us-ascii?Q?f-be47-a653d8890090+852541e8-a9b5-4b55-?=
+ =?us-ascii?Q?aa82-7d68c3351058=40unsub=2Ebeehiiv=2Ecom=3E=2C?=
+ =?us-ascii?Q?_=3Chttps=3A=2F=2Fwww=2Elazyfpl=2Ecom=2Funsubscribe=2FeyJ0eXAiOiJKV1QiLCJhbGciO?=
+ =?us-ascii?Q?iJIUzI1NiJ9=2EeyJzdWJzY3JpYmVyX2lkIjoiMzU?=
+ =?us-ascii?Q?0MWZkZmQtNDAyZC00ZDJmLWJlNDctYTY1M2Q4OD?=
+ =?us-ascii?Q?kwMDkwIiwicG9zdF9pZCI6Ijg1MjU0MWU4LWE5Y?=
+ =?us-ascii?Q?jUtNGI1NS1hYTgyLTdkNjhjMzM1MTA1OCIsImxh?=
+ =?us-ascii?Q?c3RfcmVzb3VyY2VfZ3VpZCI6IlBvc3Q6ODUyNTQ?=
+ =?us-ascii?Q?xZTgtYTliNS00YjU1LWFhODItN2Q2OGMzMzUxMD?=
+ =?us-ascii?Q?U4In0=2EoehF4GB0rr7UUpyC9BoTYIpmDWkHkjnUT?=
+ =?us-ascii?Q?rItFEYx48w=3E?=
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+sId: b1482734-9ad9-4641-ad9b-badd069c2c0c
+x-beehiiv-ids: 
+ =?us-ascii?Q?{=22account=5Fname=22=3A=22https=3A=2F=2Fwww=2Elazyfpl=2Ecom=2F=22=2C=22campaign=5Fid=22=3A=228525?=
+ =?us-ascii?Q?41e8-a9b5-4b55-aa82-7d68c3351058=22=2C=22cate?=
+ =?us-ascii?Q?gory=22=3A=22newsletter=22=2C=22email=5Fgenerated=5Fat=22?=
+ =?us-ascii?Q?=3A1761240743=2C=22user=5Fid=22=3A=22b1482734-9ad9-46?=
+ =?us-ascii?Q?41-ad9b-badd069c2c0c=22}?=
+x-beehiiv-type: newsletter
+x-list-id: b1482734-9ad9-4641-ad9b-badd069c2c0c
+x-list-owner: <mailto:newsletter@lazyfpl.com>
+x-newsletter: https://www.lazyfpl.com/p/fpl-tips-gameweek-9-25-26
+x-newsletter-id: https://www.lazyfpl.com/
+x-newsletter-signup: https://www.lazyfpl.com/subscribe
+X-SG-EID: 
+ =?us-ascii?Q?u001=2E=2FHYwkSJl=2FHgfcDXfWGb8DcBFAQ2UrS+=2Fi6c2IyNlvCk6K1eWBfbn82Eas?=
+ =?us-ascii?Q?ic3QoE53uaIrR2rMuXgDqIm76CmzdOfxcrHTZ3s?=
+ =?us-ascii?Q?toDlWonuMfMpPFbbgdt8IuD2GIdI28ska55GgbJ?=
+ =?us-ascii?Q?8pOIqo6muF+BQY4Ab4XhmdprJwuYL=2FgP0ztmyYX?=
+ =?us-ascii?Q?8oyR0C4P2PBIn9aSc9G8KPQmanxznGQJKZOuCF2?=
+ =?us-ascii?Q?eaby7LQzHkzxjFRMiRMRU4qrHNpAgUq=2FeYsQKdL?= =?us-ascii?Q?bJuQ?=
+X-SG-ID: 
+ =?us-ascii?Q?u001=2ESdBcvi+Evd=2FbQef8eZF3BpTL9BgbK5wfSJMJGMsmprD1ZcmFObA4po1bG?=
+ =?us-ascii?Q?aUE6gycPsdB95KyWbROQ4MuSUb5EyVPaRN+TYlC?=
+ =?us-ascii?Q?bdHHf5sFjBExJu6eiH4KOJFJuQoNMsWhGmEOkSm?=
+ =?us-ascii?Q?Vf+k8X4FkkCjcjTX84dGhMF2koxceRGxTdGKL37?=
+ =?us-ascii?Q?t=2F+UxSan8or0d2qt=2FiHQEp81vYpxttHaq+wO=2FM8?=
+ =?us-ascii?Q?PncPO2DF83PhtAAEvIPgcTVfgtRdwJjOVp+=2F+si?=
+ =?us-ascii?Q?wImfxIjRHBrSfA=2FCQlX0o5jx0P5CnRVpPz0fz1S?=
+ =?us-ascii?Q?9zNNM8KwUCBle8rPjCpcXBDpBjI+1=2FtF9bMzzTe?=
+ =?us-ascii?Q?6qINCDS7HuObCROWLyEOHaYMBhiMXM1wI=3D?=
+To: "jolyon.brown@gmail.com" <jolyon.brown@gmail.com>
+X-Entity-ID: u001.4wp2ws//8/RXK4W7V70CWw==
+
+--86d0efaf9eb01eb20ceb90d922b12de10659173593633223cfc25db7c578
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain; charset=utf-8
+Mime-Version: 1.0
+
+----------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/4d96356f-b56c-4=
+a88-8c34-874b957b36d5/lazyfpl_header_dark_blue.png?t=3D1713891188)
+Caption:=20
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/591b6335-9aca-4=
+c68-a12d-59a95b0ee9ef/Content_Break_Alert.png?t=3D1713891501)
+Caption:=20
+
+
+--------------------
+## The stuff you should know
+
+
+--------------------
+=E2=8F=B0 Gameweek 9=E2=80=99s deadline is **Friday, 24th October, 18:30 BS=
+T** =E2=8F=B0
+
+=F0=9F=91=8B **Ange Postecoglou** sacked by Nottingham Forest. **Sean Dyche=
+** appointed.
+
+=F0=9F=A4=95 **Alexander Isak** went off with a groin injury in Liverpool=
+=E2=80=99s UCL game. =E2=80=9CLet=E2=80=99s wait and see=E2=80=9D, says Slo=
+t. **Jeremie Frimpong** was also injured.
+
+=F0=9F=A7=90 **Mohamed Salah** only played 15 minutes in an otherwise full-=
+strength UCL side for Liverpool during the week. _BREAKING:_ In the last fe=
+w hours, he=E2=80=99s removed the visible stuff associated with Liverpool f=
+rom his Twitter account (like the cover photo and profile pic). Look, it co=
+uld be nothing, but this is the world we live in now.
+
+=F0=9F=91=80 Keep reading for some new graphics that should make reading La=
+zy on your phone an even lazier experience.
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+Alright?
+
+These days, LazyFPL is a multinational community that spans more than 50 co=
+untries.
+
+So it won=E2=80=99t be obvious to everyone reading that this Sunday, the cl=
+ocks go back an hour here in the UK. We move from British Summer Time (iron=
+ically named, given how crap the weather is) to Greenwich Mean Time (GMT). =
+We don=E2=80=99t know why, but we=E2=80=99re pretty sure it has something t=
+o do with making sure everyone in Britain remains as miserable as possible.
+
+This Friday=E2=80=99s Gameweek 9 deadline is the **last BST deadline** unti=
+l we move back to it at the end of March next year. From Gameweek 10, we=E2=
+=80=99re in GMT.
+
+Every season, some poor sod writes to us to tell us that they=E2=80=99ve mi=
+ssed the Gameweek 10 deadline because of this change. So if you=E2=80=99re =
+that poor-sod-to-be, please consider this your advance notice.
+
+Anyway, Gameweek 9 is outside, and it=E2=80=99d be rude to keep it waiting =
+any longer. Here=E2=80=99s everything you need to know.
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+## Read 1440, be a little more in the know.
+
+
+--------------------
+1440 is a free newsletter that sends you a 5-minute, unbiased summary of wh=
+at=E2=80=99s going on in the world every day.=20
+
+We read it, and we like it. It makes us more clued up. So now we=E2=80=99re=
+ recommending it to you.
+
+Don=E2=80=99t take our word for it, though: click the button below to do so=
+me due diligence:
+
+CHECK OUT 1440 (https://www.meintercept.com/3FM24M/WGR393/?uid=3D15961&sub1=
+=3Dlazy_fpl&sub2=3Dnewsletter&sub3=3D10_17_2025)
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+## Gameweek 9=E2=80=99s fixtures.
+
+
+----------View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-=
+down,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/85a8a=
+fe8-e576-4983-a7c9-2c1b6cea693a/Fixtures_GW_9.jpg?t=3D1761162200)
+Caption:=20
+
+----------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+## What happened in midweek?
+
+
+--------------------
+=3D=3D**Lazy summary: Quite a bit.**=3D=3D
+
+Enough happened in Europe during the week to justify looking at each game i=
+n turn. And by =E2=80=9Clooking at=E2=80=9D we mean =E2=80=9Cpicking out th=
+e FPL-relevant stuff and ignoring literally everything else about the game=
+=E2=80=9D.
+
+=3D=3D**Tuesday**=3D=3D
+
+Three Premier League teams were in action**,** and all of them kept a clean=
+ sheet.
+
+**Arsenal 4-0 Atl=C3=A9tico Madrid**
+
+**Gabriel** scored and assisted. **Viktor Gy=C3=B6keres** scored a brace.
+
+**Newcastle 3-0 Benfica**
+
+**Harvey Barnes **didn=E2=80=99t start but scored two from the bench**. Ant=
+hony Gordon **got a goal and an assist**. Nick Woltemade **had one shot.
+
+**Villarreal 0-2 Man City**
+
+**Erling Haaland **scored, as per. **Bernardo Silva** nabbed the other. **T=
+ijjani Reijnders** and **Phil Foden** were both rested, with Reijnders comi=
+ng on in the 73rd minute. **Nico Gonz=C3=A1lez** picked up an injury and wa=
+s replaced by **Mateo Kova=C4=8Di=C4=87**. The big concern for FPL managers=
+ is that Reijnders could, at some point, be deployed deeper due to injuries=
+.
+
+=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=
+=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=
+=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=
+=E2=80=94=E2=80=94
+
+=3D=3D**Wednesday**=3D=3D
+
+Another three Premier League teams played in the UCL.
+
+**Chelsea 5-1 Ajax**
+
+**Marc Guiu, Enzo Fern=C3=A1ndez, Mois=C3=A9s Caicedo, Tyrique George** and=
+** Est=C3=AAv=C3=A3o **scored. Jo=C3=A3o** Pedro** was suspended for this g=
+ame, and Fern=C3=A1ndez only played a half after returning from injury. Inc=
+identally, Guiu (the =C2=A34.3m forward) was bought off at half-time. Was i=
+t a rest ahead of Gameweek 9?
+
+**Frankfurt 1-5 Liverpool**
+
+Another five individual goalscorers here. **Hugo Ekitike, Virgil van Dijk, =
+Ibrahima Konat=C3=A9, Cody Gakpo** and **Dominik Szoboszlai** all scored. *=
+*Florian Wirtz** notched two assists and **Jeremie Frimpong** went off inju=
+red. **Mohamed Salah** was rested=E2=80=A6again. He played for 15 minutes o=
+ff the bench.
+
+Perhaps most notably, **Alexander Isak** went off with a groin injury.
+
+**Monaco 0-0 Spurs**
+
+Despite the scoreline, Spurs got more battered than a sausage in a chippy. =
+There was a Man of the Match performance from **Guglielmo Vicario** here, b=
+ut that=E2=80=99s about it.
+
+=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=
+=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=
+=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=
+=E2=80=94=E2=80=94
+
+=3D=3D**Thursday**=3D=3D
+
+**Nottingham Forest, Aston Villa **and** Crystal Palace** are all in action=
+, but our crystal ball is on the blink again, so we can=E2=80=99t tell you =
+much about those.
+
+We do know that Villa=E2=80=99s most tempting prospect, **Morgan Rogers,** =
+is on the bench for Villa.
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+## How to prepare for AFCON.
+
+
+--------------------
+=3D=3D**Lazy summary: It=E2=80=99s about spending transfers, not saving the=
+m.**=3D=3D
+
+This season, for the first time in FPL history, the FPL Gods will give us f=
+ive free transfers in Gameweek 16 to help us prepare for AFCON.
+
+It feels like overkill. The Premier League [published a list](https://www.p=
+remierleague.com/en/news/4358190/premier-league-stars-who-could-play-at-the=
+-2025-africa-cup-of-nations) of players who could go to AFCON, but only a s=
+mall minority are interesting for FPL managers. They include:
+
+=F0=9F=87=AA=F0=9F=87=AC **Mohamed Salah** and **Omar Marmoush**
+=F0=9F=87=A8=F0=9F=87=A9 **Yoane Wissa**
+=F0=9F=87=A9=F0=9F=87=BF** Rayan A=C3=AFt-Nouri**
+=F0=9F=87=A8=F0=9F=87=B2** Bryan Mbeumo **
+=F0=9F=87=B8=F0=9F=87=B3** Isma=C3=AFla Sarr** and **Iliman Ndiaye **
+
+So, what do we need to do to prepare?
+
+Well, we need to make sure we=E2=80=99ve used up all of our transfers befor=
+e Gameweek 16 so that we feel the full benefit of the five free ones.
+
+There=E2=80=99s simply no point in banking transfers, because in Gameweek 1=
+6, everyone will have five anyway.
+
+And that=E2=80=99s about it. Five free transfers is effectively a mini-Wild=
+card, and it=E2=80=99s a disproportionate response to the mild inconvenienc=
+e that is AFCON. Salah=E2=80=99s poor form only makes it an easier obstacle=
+ to navigate.
+
+Speaking of Salah=E2=80=A6
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+## Salah, Pedro and Reijnders: Time to go?
+
+
+--------------------
+=3D=3D**Lazy summary: Sell, keep, keep (just). Respectively. **=3D=3D
+
+The three horsemen of the 25/26 FPL apocalypse are surely **Mohamed Salah, =
+Jo=C3=A3o Pedro** and **Tijjani Reijnders**.=20
+
+Each has enjoyed significant ownership this season, and each has managed to=
+ find creative and emphatic ways to disappoint their owners.
+
+The question now becomes: Do we keep them, or is it time to get rid?
+
+=3D=3D**Mohamed Salah - 32% owned. Sell. **=3D=3D
+
+Salah=E2=80=99s stats have dropped off a cliff, and given how impressive he=
+ was last season, that cliff is pretty high. It=E2=80=99s like that cliff i=
+n The Princess Bride - if you know, you know.
+
+Sky Sports published the graphic below _before_ Gameweek 8, but Liverpool=
+=E2=80=99s defeat against Man United did little to improve upon his numbers=
+ so far:
+
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/018a10a5-a8b2-4=
+aab-ab86-2a6b4791e53a/Screenshot_2025-10-22_at_23.34.35.jpg?t=3D1761172481)
+Caption:=20
+
+This isn=E2=80=99t the first time over the last few seasons that Salah, the=
+ greatest FPL asset that=E2=80=99s ever lived, has been scrutinised.=20
+
+But it _is_ the first time, as far as we can remember, that his underlying =
+stats have not stood up to that scrutiny. Whether you=E2=80=99re watching h=
+is performances or studying his charts, the inescapable reality is that Sal=
+ah really _has_ dropped off.
+
+This, when combined with a few other factors, makes for a heady cocktail:
+
+**Factor 1 (the vermouth):** On Thursday, he removed references to Liverpoo=
+l from his Twitter profile, including changing his profile and header banne=
+rs. It could be nothing, but it=E2=80=99s ominous.
+
+**Factor 2 (the vodka):** **Erling Haaland **has effectively made the armba=
+nd a redundant clothing accessory by this point.
+
+It means that Salah is not worth his =C2=A314.4m asking price. Of course, h=
+e will score more goals this season, but the only argument left for keeping=
+ him is that =E2=80=9Cit=E2=80=99s Salah=E2=80=9D. And that just isn=E2=80=
+=99t enough at the moment.
+
+=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=
+=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=
+=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=
+=E2=80=94=E2=80=94
+
+=3D=3D**Jo=C3=A3o Pedro - 58% owned. Keep=E2=80=A6for now.**=3D=3D
+
+There=E2=80=99s no hiding from the fact that Pedro=E2=80=99s stats have bee=
+n amongst the worst for forwards over the last four gameweeks (he=E2=80=99s=
+ registered just one shot in his last four Premier League games).
+
+But Waylon Lazy=E2=80=99s teachings are unequivocal: fixtures beat form. We=
+=E2=80=99re not saying that Pedro is a buy - far from it - but if you have =
+him in your team, using a valuable free transfer to get rid of him ahead of=
+ Sunderland at home feels wasteful.
+
+With other strikers in his price bracket - like **Nick Woltemade** and **Je=
+an-Philippe Mateta** - looking so good, Pedro ought to be on ice thin enoug=
+h to make Peter Crouch look chunky. But for now, he=E2=80=99s a keep for us=
+.
+
+=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=
+=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=
+=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=
+=E2=80=94=E2=80=94
+
+=3D=3D**Tijjani Reijnders - 30% owned. Keep if you can=E2=80=99t afford an =
+upgrade.**=3D=3D
+
+One of the most transferred-out players this week, **Tijjani Reijnders** wa=
+s the Gameweek 1 darling that hasn=E2=80=99t registered a single return sin=
+ce. Which is almost impressively shite, given he=E2=80=99s started every ga=
+me for Man City this season.
+
+For many of his owners, a =E2=80=9858 substitution in Gameweek 8 was the fi=
+nal straw.
+
+But hang on a second. Reijnders is =C2=A35.7m and playing for (arguably) th=
+e best attacking team in the league. He=E2=80=99s starting games, he=E2=80=
+=99s getting forward, and he=E2=80=99s unfortunate not to have had more ret=
+urns.=20
+
+Assuming he continues to do that (and who knows with Pep?), he=E2=80=99s pr=
+obably still the best midfielder in his price bracket.
+
+But if you=E2=80=99ve got the money, there are better midfielders north of =
+the =C2=A36.0m mark. **Isma=C3=AFla Sarr** is our favourite between now and=
+ AFCON.
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/c91fb6cd-f0fa-4=
+26a-b6f2-c66a765e93d7/Content_Break_Captain.png?t=3D1713892415)
+Caption:=20
+
+
+--------------------
+## The best captain for Gameweek 9.
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/3b471908-5e38-4=
+f37-adca-c03ee1ff63bc/Screenshot_2025-10-23_at_00.12.55.jpg?t=3D1761174781)
+Caption:=20
+
+It=E2=80=99s **Erling Haaland** away at Aston Villa. His form and popularit=
+y are just too potent to look elsewhere.
+
+A quick note on your **Triple Captain**, for those who still have it. It=E2=
+=80=99s hard to look past the Norse God, but he=E2=80=99ll have better oppo=
+rtunities than Aston Villa away. Leeds (H) in Gameweek 13, Sunderland (H) i=
+n Gameweek 15 and West Ham (H) in Gameweek 17 stand out.
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/183b2419-53e2-4=
+2b6-9dd7-2daddc34bece/professors_team.png?t=3D1713892631)
+Caption:=20
+
+
+--------------------
+The Professor has described the number of options he has this week as =E2=
+=80=9Ca slew=E2=80=9D, so you know it=E2=80=99s serious.=20
+
+He has three free transfers (not easy to say after a few pints) and a few i=
+ssues in his team to deal with.
+
+**Phil Foden** and **Tijjani Reijnders** are on the potential chopping bloc=
+k, and he=E2=80=99s eyeing up **Enzo Fern=C3=A1ndez, Yankuba Minteh**, and =
+**Isma=C3=AFla Sarr** as possible replacements. But nothing is set in stone=
+ yet.
+
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/d0e94807-1be7-4=
+4d7-87b8-98fea15f9305/image.png?t=3D1761218203)
+Caption:=20
+
+Will it be surgery or yet another roll of the transfer for the Prof? Find o=
+ut on the next episode of-oh wait, wrong plug. Find out by joining [LazyFPL=
+ Premium](https://www.lazyfpl.com/upgrade) for the cost of a meal deal a mo=
+nth.
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/a5542082-a125-4=
+8bb-a1bd-afc1da5039cb/Content_Break_Stats.png?t=3D1713892771)
+Caption:=20
+
+
+--------------------
+## Player form (Last 6)
+
+
+----------View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-=
+down,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/8f782=
+70d-3b7b-4826-8d4c-4caadd33372f/Player_Form_GW_9.jpg?t=3D1761162224)
+Caption:=20
+
+----------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/a5542082-a125-4=
+8bb-a1bd-afc1da5039cb/Content_Break_Stats.png?t=3D1713892771)
+Caption:=20
+
+
+--------------------
+## Team form (Last 6)
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/62e0f627-c027-4=
+325-8572-3566f4b46dbc/Team_Stats_GW_9.jpg?t=3D1761162236)
+Caption:=20
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+## Other stuff we found interesting
+
+
+--------------------
+1) **Omar Alderete **is ruled out of Gameweek 9 due to concussion protocols=
+.
+
+2) Fulham=E2=80=99s **Joachim Andersen** has a =E2=80=9Cnot that serious=E2=
+=80=9D muscle injury - Silva.
+
+3) A defender has been the top-scoring player in five of the eight gameweek=
+s so far this season.
+
+4) The team of the season so far:
+
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/822a20a8-017e-4=
+daa-8fce-718f8e3dd28b/image.png?t=3D1761174932)
+Caption:=20
+
+5) Every single centre back that has played against Crystal Palace in their=
+ last 5 league matches has hit DEFCON. All 10 of them. They play Arsenal ne=
+xt. [[@FPL_TomHadley](https://x.com/FPL_TomHadley)]
+
+
+--------------------
+View image: (https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765)
+Caption:=20
+
+
+--------------------
+There=E2=80=99s no early kick-off next week, so we=E2=80=99ll be back in yo=
+ur inbox on Friday afternoon, at 13:30 GMT. Try to enjoy Gameweek 9 and rem=
+ember,
+
+**Stay lazy.**
+
+The LazyFPL Team.
+
+=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=
+=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=
+=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=E2=80=94=
+=E2=80=94=E2=80=94
+
+
+----------
+=E2=80=94=E2=80=94=E2=80=94
+
+You are reading a plain text version of this post. For the best experience,=
+ copy and paste this link in your browser to view the post online:
+https://www.lazyfpl.com/p/fpl-tips-gameweek-9-25-26
+
+--86d0efaf9eb01eb20ceb90d922b12de10659173593633223cfc25db7c578
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=utf-8
+Mime-Version: 1.0
+
+<!DOCTYPE html><html lang=3D"en" xmlns=3D"http://www.w3.org/1999/xhtml" xml=
+ns:v=3D"urn:schemas-microsoft-com:vml" xmlns:o=3D"urn:schemas-microsoft-com=
+:office:office" style=3D"font-size:16px;"><head></head><head><meta charset=
+=3D"utf-8"/><!--[if !mso]><!--><meta http-equiv=3D"X-UA-Compatible" content=
+=3D"IE=3Dedge"/><!--<![endif]--><meta name=3D"viewport" content=3D"width=3D=
+device-width,initial-scale=3D1"/><meta name=3D"x-apple-disable-message-refo=
+rmatting"/><meta name=3D"format-detection" content=3D"telephone=3Dno,addres=
+s=3Dno,email=3Dno,date=3Dno,url=3Dno"/><meta name=3D"color-scheme" content=
+=3D"light"/><meta name=3D"supported-color-schemes" content=3D"light"/><titl=
+e>=F0=9F=9A=A8 GW9: the FPL cheat sheet </title><!--[if mso]><xml><o:Office=
+DocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:Offi=
+ceDocumentSettings></xml><![endif]--><style>
+  :root { color-scheme: light; supported-color-schemes: light; }
+  body { margin: 0; padding: 0; min-width: 100%!important; -ms-text-size-ad=
+just: 100% !important; -webkit-transform: scale(1) !important; -webkit-text=
+-size-adjust: 100% !important; -webkit-font-smoothing: antialiased !importa=
+nt; }
+  .body { word-wrap: normal; word-spacing:normal; }
+  table.mso { width: 100%; border-collapse: collapse; padding: 0; table-lay=
+out: fixed; }
+  img { border: 0; outline: none; }
+  table {  mso-table-lspace: 0px; mso-table-rspace: 0px; }
+  td, a, span {  mso-line-height-rule: exactly; }
+  #root [x-apple-data-detectors=3Dtrue],
+  a[x-apple-data-detectors=3Dtrue],
+  #MessageViewBody a { color: inherit !important; text-decoration: inherit =
+!important; font-size: inherit !important; font-family: inherit !important;=
+ font-weight: inherit !important; line-height: inherit !important; }
+  span.MsoHyperlink { color: inherit !important; mso-style-priority: 99 !im=
+portant; }
+  span.MsoHyperlinkFollowed { color: inherit !important; mso-style-priority=
+: 99 !important; }
+  .a { background-color:#ffffff; }
+  .b { background-color:#0e132b; }
+  .c  { background-color:#ffffff; }
+  .d { background-color:#FFFCDD; }
+  .d2 { background-color:#ffffff; }
+  .d3 { background-color:#FFFFFF; }
+  h1 a { text-decoration:underline;color:#3039e5;font-weight:bold;font-styl=
+e:italic; }
+  h2 a { text-decoration:underline;color:#3039e5;font-weight:bold;font-styl=
+e:italic; }
+  h3 a { text-decoration:underline;color:#3039e5;font-weight:bold;font-styl=
+e:italic; }
+  h4 a { text-decoration:underline;color:#3039e5;font-weight:bold;font-styl=
+e:italic; }
+  h5 a { text-decoration:underline;color:#3039e5;font-weight:bold;font-styl=
+e:italic; }
+  h6 a { text-decoration:underline;color:#3039e5;font-weight:bold;font-styl=
+e:italic; }
+  h1, h1 a, h2, h2 a, h3, h3 a, h4, h4 a, h5, h5 a, h6, h6 a, ul, li, ol, p=
+, p a { margin: 0;padding: 0; }
+  h1 { font-family:'Trebuchet MS','Lucida Grande',Tahoma,sans-serif;font-we=
+ight:700;font-size:28px;color:#0c0c0c;line-height:1.75;padding-bottom:4px;p=
+adding-top:16px;mso-margin-top-alt:16px;mso-margin-bottom-alt:4px }
+  h2 { font-family:'Trebuchet MS','Lucida Grande',Tahoma,sans-serif;font-we=
+ight:700;font-size:24px;color:#0c0c0c;line-height:1.5;padding-bottom:4px;pa=
+dding-top:16px;mso-margin-top-alt:16px;mso-margin-bottom-alt:4px }
+  h3 { font-family:'Trebuchet MS','Lucida Grande',Tahoma,sans-serif;font-we=
+ight:700;font-size:20px;color:#0c0c0c;line-height:1.25;padding-bottom:4px;p=
+adding-top:16px;mso-margin-top-alt:16px;mso-margin-bottom-alt:4px }
+  h4 { font-family:'Trebuchet MS','Lucida Grande',Tahoma,sans-serif;font-we=
+ight:700;font-size:18px;color:#0c0c0c;line-height:1.125;padding-bottom:4px;=
+padding-top:16px;mso-margin-top-alt:16px;mso-margin-bottom-alt:4px }
+  h5 { font-family:'Trebuchet MS','Lucida Grande',Tahoma,sans-serif;font-we=
+ight:700;font-size:16px;color:#0c0c0c;line-height:1;padding-bottom:4px;padd=
+ing-top:16px;mso-margin-top-alt:16px;mso-margin-bottom-alt:4px }
+  h6 { font-family:'Trebuchet MS','Lucida Grande',Tahoma,sans-serif;font-we=
+ight:400;font-size:14px;color:#0c0c0c;line-height:0.875;padding-bottom:4px;=
+padding-top:16px;mso-margin-top-alt:16px;mso-margin-bottom-alt:4px }
+  p { font-family:'Helvetica',Arial,sans-serif;font-weight:400;color:#0c0c0=
+c;font-size:16px;line-height:1.5;padding-bottom:12px;padding-top:12px;mso-m=
+argin-top-alt:12px;mso-margin-bottom-alt:12px; }
+  p a, .e a, ul a, li a, .h a, .h2 a, .h3 a { word-break:break-word;color:#=
+3039e5 !important;text-decoration:underline;text-decoration-color:#3039e5;f=
+ont-weight:bold;font-style:italic; }
+  p a span, .e a span, ul a span, li a span { color: inherit }
+  p .bold { font-weight:bold;color:#0c0c0c; }
+  p span[style*=3D"font-size"] { line-height: 1.6; }
+  .f p { font-size:12px;line-height:15px;color:#0c0c0c;padding:0; }
+  .f p a { color:#0c0c0c !important; }
+  .g p { font-family:'Helvetica',Arial,sans-serif;font-size:14px;line-heigh=
+t:20px;font-weight:normal;margin:0; }
+  .g p a  { text-decoration: underline; }
+  .i p { font-family:'Helvetica',Arial,sans-serif;line-height:1.5;font-size=
+:15px;color:#2D2D2D; }
+  .i p a { color:#2D2D2D !important; }
+  .i2 p { font-family:'Helvetica',Arial,sans-serif;line-height:1.5;font-siz=
+e:15px;color:#2D2D2D; }
+  .i2 p a { color:#2D2D2D !important; }
+  .i3 p { font-family:'Helvetica',Arial,sans-serif;line-height:1.8;font-siz=
+e:24px;color:#2D2D2D; }
+  .i3 p a { color:#2D2D2D !important; }
+  .h p a { color:#ffffff !important; }
+  .h2 p a { color:#0e132b !important; }
+  .h3 p a { color:#595959 !important; }
+  .f p a, .i p a, .i2 p a, .i3 p a, .h p a, .h2 p a, .h3 p a { text-decorat=
+ion:underline; }
+  .j { border-top:2px Solid #011b2c; }
+  .k p { padding-left:15px;padding-bottom:0px;padding-top:6px;mso-margin-to=
+p-alt:6px;mso-margin-bottom-alt:0px;mso-margin-left-alt:15px; }
+  .o { background-color:#FFFFFF;border:1px solid #F1F1F1;border-radius:5px;=
+ }
+  .o p { font-family:'Helvetica',Arial,sans-serif;padding:0px;margin:0px; }
+  .l p,
+  .l p a, .l a { font-size:14px;line-height:20px;font-weight: bold;color:#2=
+D2D2D;padding-bottom:6px;mso-margin-bottom-alt:6px;text-decoration:none; }
+  .m p,
+  .m p a { font-size:13px;line-height:18px;font-weight:400;color:#ffffff;pa=
+dding-bottom:6px;mso-margin-bottom-alt:6px;text-decoration:none; }
+  .n p,
+  .n p a { font-size:12px;line-height:17px;font-weight:400;color:#ffffff;pa=
+dding-bottom:6px;mso-margin-bottom-alt:6px;text-decoration:none; }
+  .p { background-color:#FFFFFF;max-width:520px;border:1px solid #E1E8ED;bo=
+rder:1px solid rgba(80, 80, 80, 0.3);border-radius:5px; }
+  .q { font-size:16px;font-family:Helvetica,Roboto,Calibri,sans-serif !impo=
+rtant;border:1px solid #e1e8ed;border:1px solid rgba(80, 80, 80, 0.3);borde=
+r-radius:10px;background-color:#FFFFFF; }
+  .q p { font-size:16px;font-family:system-ui,Helvetica,Roboto,Calibri,sans=
+-serif !important;color:#222222;padding:4px 0; }
+  .r { border:1px solid #E1E8ED !important;border-radius:5px; }
+  .s p { font-size: 14px; line-height: 17px; font-weight: 400; color: #6978=
+82; text-decoration: none; }
+  .t p { font-family:'Helvetica',Arial,sans-serif;font-size:12px;line-heigh=
+t:1.5;font-weight:400;color:#000000;font-style:italic;padding:0px; }
+  .v { border-radius:15px;border:solid 1px #ffffff;background-color:#ff872e=
+;font-family:'Trebuchet MS','Lucida Grande',Tahoma,sans-serif;color:#FFFFFF=
+; }
+  .v a { text-decoration:none;display:block;color:#FFFFFF; }
+  .w p { font-size:12px;line-height:15px;font-weight:400;color:#FFFFFF; }
+  .w p a { text-decoration: underline !important;color:#FFFFFF !important; =
+}
+  ul { font-family:'Helvetica',Arial,sans-serif;margin:0px 0px 0px 25px !im=
+portant;padding:0px !important;color:#0c0c0c;line-height:24px;list-style:di=
+sc;font-size:16px; }
+  ul > li { font-family:'Helvetica',Arial,sans-serif;margin:10px 0px 0px 0p=
+x !important;padding: 0px 0px 0px 0px !important; color: #0c0c0c; list-styl=
+e:disc; }
+  ol { font-family:'Helvetica',Arial,sans-serif;margin: 0px 0px 0px 25px !i=
+mportant;padding:0px !important;color:#0c0c0c;line-height:24px;list-style:d=
+ecimal;font-size:16px; }
+  ol > li { font-family:'Helvetica',Arial,sans-serif;margin:10px 0px 0px 0p=
+x !important;padding: 0px 0px 0px 0px !important; color: #0c0c0c; }
+  .e h3,
+  .e p,
+  .e span { padding-bottom:0px;padding-top:0px;mso-margin-top-alt:0px;mso-m=
+argin-bottom-alt:0px; }
+  .e span,
+  .e li { font-family:'Helvetica',Arial,sans-serif;font-size:16px;color:#0c=
+0c0c;line-height:24px; }
+  .rec { font-family:  ui-sans-serif, system-ui, -apple-system, BlinkMacSys=
+temFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-ser=
+if, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color E=
+moji" !important; }
+  .rec__button:hover { background-color: #f9fafb !important; }
+  .copyright a {color: inherit !important; text-decoration: none !important=
+; font-size: inherit !important; font-family: inherit !important; font-weig=
+ht: inherit !important; line-height: inherit !important;}
+  .txt_social p { padding: 0; word-break: break-all; }
+  .table, .table-c, .table-h { border: 1px solid #C0C0C0; }
+  .table-c { padding:5px; background-color:#FFFFFF; }
+  .table-c p { color: #2D2D2D; font-family:'Helvetica',Arial,sans-serif !im=
+portant;overflow-wrap: break-word; }
+  .table-h { padding:5px; background-color:#F1F1F1; }
+  .table-h p { color: #0c0c0c; font-family:'Trebuchet MS','Lucida Grande',T=
+ahoma,sans-serif !important;overflow-wrap: break-word; }
+  @media only screen and (max-width:667px) {
+    .aa, .w100pc { width: 100% !important; }
+    .bb img { width: 100% !important; height: auto !important; max-width: n=
+one !important; }
+    .cc { padding: 0px 8px !important; }
+    .ee { padding-top:10px !important;padding-bottom:10px !important; }
+    .ff ul, .ff ol { margin: 0px 0px 0px 10px !important;padding: 0px !impo=
+rtant; }
+    .ff li { margin:10px 0px 0px 10px !important; }
+    .r {height:140px !important;}
+    .s p { font-size:13px !important;line-height:15px !important; }
+    .mob-hide {display:none !important;}
+    .mob-show {display: block !important; width: auto !important; overflow:=
+ visible !important; float: none !important; max-height: inherit !important=
+; line-height: inherit !important;}
+    .mob-stack {width:100% !important;display:block !important;}
+    .mob-w-full {width:100% !important;}
+    .mob-block {display:block !important;}
+    .embed-img {padding:0px 0px 12px 0px !important;}
+    .socialShare {padding-top:15px !important;}
+    .rec { padding-left:15px!important;padding-right:15px!important; }
+    .bodyWrapper { padding:0px 4px 0px 4px !important; }
+    .social-mobile {float:left !important;margin-top:10px !important;}
+  }
+  @media screen and (max-width: 480px) {
+    u + .a .gg { width: 100% !important; width: 100vw !important; }
+    .tok-heart { padding-top:75% !important; }
+    .tok-play { padding-top: 250px !important; }
+  }
+  @media screen and (max-width: 320px) {
+    .tok-heart { padding-top:65% !important; }
+  }
+  .u { border: 1px solid #CACACA !important; border-radius: 2px !important;=
+ background-color: #ffffff !important; padding: 0px 13px 0px 13px !importan=
+t; font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Se=
+goe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif !important;fon=
+t-size: 12px !important; color: #767676 !important; }
+  .u a { text-decoration: none; display: block !important; color: #767676 !=
+important; margin: 0px !important; }
+  .u span, .u img { color: #767676 !important;margin:0px !important; max-he=
+ight:32px !important;background-color:#ffffff !important; }
+</style><!--[if mso]><style type=3D"text/css">
+    h1, h2, h3, h4, h5, h6 {font-family: Arial, sans-serif !important;}
+    body, table, td, p, a, span {font-family: Arial, sans-serif !important;=
+}
+    sup { font-size: 100% !important;vertical-align: .5em !important;mso-te=
+xt-raise: -1.5% !important;line-height: 0 !important; }
+    ul { margin-left:0px !important; margin-right:10px !important; margin-t=
+op:20px !important; margin-bottom:20px !important; }
+    ul li { margin-left: 0px !important; mso-special-format: decimal; }
+    ol { margin-left:0px !important; margin-right:10px !important; margin-t=
+op:20px !important; margin-bottom:20px !important; }
+    ol li { margin-left: 0px !important; mso-special-format: decimal; }
+    li.listItem { margin-left:15px !important; margin-top:0px !important; }
+    .paddingDesktop { padding: 10px 0 !important; }
+    .edm_outlooklist { margin-left: -20px !important; }
+    .embedImage { display:none !important; }
+</style><![endif]--><!-- __merge_tags_in_links__ --><style>
+        @font-face {
+          font-family: 'Open Sans';
+          font-style: normal;
+          font-weight: 400;
+          font-display: swap;
+          src: url('https://fonts.gstatic.com/s/opensans/v40/memSYaGs126MiZ=
+pBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVIUwaEQbjA.woff2') format('woff2=
+');
+        }
+
+        @font-face {
+          font-family: 'Open Sans';
+          font-style: italic;
+          font-weight: 400;
+          font-display: swap;
+          src: url('https://fonts.gstatic.com/s/opensans/v40/memQYaGs126MiZ=
+pBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk8ZkWVAewIMUdjFXmQ.woff2') format('wo=
+ff2');
+        }
+        @font-face {
+          font-family: 'Open Sans';
+          font-style: normal;
+          font-weight: 700;
+          font-display: swap;
+          src: url('https://fonts.gstatic.com/s/opensans/v40/memSYaGs126MiZ=
+pBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsg-1x4gaVIUwaEQbjA.woff2') format('woff2=
+');
+        }
+
+        @font-face {
+          font-family: 'Open Sans';
+          font-style: italic;
+          font-weight: 700;
+          font-display: swap;
+          src: url('https://fonts.googleapis.com/css2?family=3DOpen+Sans:it=
+al,wght@1,700&display=3Dswap') format('woff2');
+        }
+</style></head><body class=3D"a" style=3D"margin:0px auto;padding:0px;word-=
+wrap:normal;word-spacing:normal;background-color:#ffffff;"><div role=3D"art=
+icle" aria-roledescription=3D"email" aria-label=3D"email_name" lang=3D"en" =
+style=3D"font-size:1rem"><div style=3D"display:none;max-height:0px;overflow=
+:hidden;"> Everything you need to know ahead of Gameweek 9. &#160;&#8204;&#=
+160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204=
+;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8=
+204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;=
+&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#1=
+60;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;=
+&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#82=
+04;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&=
+#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#16=
+0;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&=
+#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#820=
+4;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#=
+8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160=
+;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#=
+160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204=
+;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8=
+204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;=
+&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#1=
+60;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;=
+&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#82=
+04;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&=
+#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#16=
+0;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&=
+#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#820=
+4;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#=
+8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160=
+;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#=
+160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204=
+;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8=
+204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;=
+&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#1=
+60;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;=
+&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#82=
+04;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&=
+#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#160;&#8204;&#16=
+0;&#8204;&#160;&#8204;&#160;&#8204; </div><table role=3D"none" width=3D"100=
+%" border=3D"0" cellspacing=3D"0" align=3D"center" cellpadding=3D"0" class=
+=3D"gg"><tr><td align=3D"center" valign=3D"top"><table role=3D"none" width=
+=3D"670" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" class=3D"aa" styl=
+e=3D"width:670px;table-layout:fixed;"><tr><td class=3D"bodyWrapper" align=
+=3D"center" valign=3D"top" style=3D"padding:0px 0px 0px 0px;"><table role=
+=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" a=
+lign=3D"center"><tr><td align=3D"center" valign=3D"top" style=3D"border-wid=
+th:0px 0px 0px 0px;border-style: solid; border-color: #0e132b;border-radius=
+:10px 10px 0px 0px;background-color:#ffffff;" class=3D"c"><table role=3D"no=
+ne" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" align=
+=3D"center"><tr id=3D"header"><td style=3D"padding:0px 0px 0px 0px;"><div s=
+tyle=3D"padding-top:0px;padding-right:0px;padding-bottom:20px;padding-left:=
+0px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" ce=
+llpadding=3D"0" align=3D"center"><tr><td class=3D"f" align=3D"right" valign=
+=3D"top"><p> October 23, 2025 &nbsp; | &nbsp; <a href=3D"http://link.mail.b=
+eehiiv.com/ss/c/u001.f6xWwooSSKr3K6NAShfW7ohjQZo-TWd1RH0KdoTWETReboijB8vOoU=
+x4pH3dM1XZKZqkWj4U37bWgIyUR6QDULOsmLe8vxzFm-A2Z7DRWC7mjtEravqaKsInDPEwicQdL=
+pESe_jWYmx8-06VzI6DRk9FdCRj4jYf66-9pOokZ1QP9cAXYwBuj-u59qVmJ6RsGnYTk1KSoM1B=
+7cv0Oy-LY6xmazrA72HbB4g_53ygUm0WztxUzTCoxIuKuQ3dsWKTk2GT-Y8qZRMP3Scnzh6lTHA=
+ElNtKyT2hjlcYtFq-rOACUkujug8FtAeJwtW0efJfkcnXuPDDmu4DGCfIQvmtGIpYpuJN6nEBh9=
+ILTm3SRoDbqYj3yqL2MsJwIBco7gg-a8KtuxQRHI3ny44Nzt36OU3iPh8Dz_d4nn0eWTwFQqVno=
+O6XaxNSdfM8Ti7aGB5IWjTXDGdxRZrnYDh6w0I2zXYuMvSHqBWVYYoy-zC2jBbu6vC3Rb1-55Yr=
+ek9D_SYZNhS6U4L9ZvLaRQ2wZQ9vGHiCJMTXMfa7MZV1tftZajDefQ9RZQdLvJeVKERpF6HPWIO=
+MC5cKq8Sv7PljycZRlNxD0cjKi7bLx1OI5LxubFS8D3TylnqYj5G6ZzWLaVfd6Ug0xOnf3NOjLP=
+RPY1f3t0hccjkVS0Ip9of-r2R46vtzZ2N69k1L097mLDZX8ceN6bnNxAhfPwKPVdNnw8YmdTz2S=
+c-Ce0bImKoXXCBBLn72-HPe0cfwElKii8JTsncgWAB201tHCj84HHIeFhzyWPhKQKzrdd9jqkly=
+RkfBKKElSZjdTuxptNpo_kax9QcL/4kz/jYnzCHLZQOKj5CoD8kOuVw/h0/h001.s4Fk0ck2dM2=
+CRrRflIB8WbHEJNEvuk1cLhU79eCA0OU"><span class=3D"translation_missing" title=
+=3D"translation missing: en.templates.posts.email.header.read_online">Read =
+Online</span></a></p></td></tr><tr><td style=3D"line-height:0;"><div data-o=
+pen-tracking=3D"true"> <img src=3D"http://link.mail.beehiiv.com/ss/o/u001.f=
+eaRp0zhVBJ22NnpYYfAPw/4kz/jYnzCHLZQOKj5CoD8kOuVw/ho.gif" alt=3D"" width=3D"=
+1" height=3D"1" border=3D"0" style=3D"height:1px !important;width:1px !impo=
+rtant;border-width:0 !important;margin-top:0 !important;margin-bottom:0 !im=
+portant;margin-right:0 !important;margin-left:0 !important;padding-top:0 !i=
+mportant;padding-bottom:0 !important;padding-right:0 !important;padding-lef=
+t:0 !important;"/> </div></td></tr></table></div></td></tr><tr id=3D"conten=
+t-blocks"><td class=3D"email-card-body" align=3D"center" valign=3D"top" sty=
+le=3D"padding-bottom:0px;"><table role=3D"none" width=3D"100%" border=3D"0"=
+ cellspacing=3D"0" cellpadding=3D"0" align=3D"center"><tr><td><table role=
+=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" s=
+tyle=3D""><tr><td height=3D"25.0px" style=3D"line-height:1px;font-size:1px;=
+height:25.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"#0e132b" style=3D"back=
+ground-color:#0e132b;border-bottom-width:0px;border-color:#0e132b;border-le=
+ft-width:2px;border-right-width:2px;border-style:solid;border-top-width:2px=
+;padding:15.0px 15.0px 15.0px 15.0px;"><table role=3D"none" width=3D"100%" =
+border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td align=3D"center" v=
+align=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding-right:0px=
+;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D"0" cellspaci=
+ng=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td align=3D=
+"center" valign=3D"top" style=3D"width:640px;"><img src=3D"https://media.be=
+ehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredirect,q=
+uality=3D80/uploads/asset/file/4d96356f-b56c-4a88-8c34-874b957b36d5/lazyfpl=
+_header_dark_blue.png?t=3D1713891188" alt=3D"" height=3D"auto" width=3D"640=
+" style=3D"display:block;width:100%;" border=3D"0"/></td></tr></table></td>=
+</tr></table></td></tr></table></td></tr><tr><td><table role=3D"none" width=
+=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><=
+td height=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.0px;"=
+> &nbsp; </td></tr><tr><td bgcolor=3D"transparent" style=3D"background-colo=
+r:transparent;padding:0.0px 0.0px 0.0px 0.0px;"><table role=3D"none" width=
+=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td align=3D=
+"center" valign=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding=
+-right:0px;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D"0"=
+ cellspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><t=
+d align=3D"center" valign=3D"top" style=3D"width:670px;"><img src=3D"https:=
+//media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3D=
+redirect,quality=3D80/uploads/asset/file/591b6335-9aca-4c68-a12d-59a95b0ee9=
+ef/Content_Break_Alert.png?t=3D1713891501" alt=3D"" height=3D"auto" width=
+=3D"670" style=3D"display:block;width:100%;" border=3D"0"/></td></tr></tabl=
+e></td></tr></table></td></tr><tr><td height=3D"15.0px" style=3D"line-heigh=
+t:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr></table></td></tr><tr=
+><td><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cel=
+lpadding=3D"0" style=3D""><tr><td bgcolor=3D"#3ecc6d" style=3D"background-c=
+olor:#3ecc6d;border-bottom-left-radius:0px;border-bottom-right-radius:0px;b=
+order-bottom-width:0px;border-color:#3ecc6d;border-left-width:2px;border-ri=
+ght-width:2px;border-style:solid;border-top-left-radius:0px;border-top-righ=
+t-radius:0px;border-top-width:0px;padding:0.0px 15.0px 0.0px 15.0px;"><tabl=
+e role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=
+=3D"0"><tr><td class=3D"dd" align=3D"left" valign=3D"top" style=3D"color:#0=
+c0c0c;font-weight:Bold;padding:0px 0px;text-align:left;"><h2 style=3D"color=
+:#0c0c0c;font-weight:Bold;mso-line-height-alt:150.0%;"><span style=3D"color=
+:#FFFFFF;">The stuff you should know</span></h2></td></tr></table></td></tr=
+></table></td></tr><tr><td><table role=3D"none" width=3D"100%" border=3D"0"=
+ cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D"transpar=
+ent" style=3D"background-color:transparent;border-color:#3ecc6d;border-styl=
+e:solid;border-width:2px;padding:15.0px 15.0px 15.0px 15.0px;"><table role=
+=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><=
+tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left=
+;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"> =E2=8F=
+=B0<span style=3D""> Gameweek 9=E2=80=99s deadline is </span><span style=3D=
+""><b>Friday, 24th October, 18:30 BST</b></span><span style=3D"">=C2=A0</sp=
+an>=E2=8F=B0 </p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"pad=
+ding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-h=
+eight-alt:150.0%;"> =F0=9F=91=8B<span style=3D"">=C2=A0</span><span style=
+=3D""><b>Ange Postecoglou</b></span><span style=3D""> sacked by Nottingham =
+Forest. </span><span style=3D""><b>Sean Dyche</b></span><span style=3D""> a=
+ppointed.</span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"=
+padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-lin=
+e-height-alt:150.0%;"> =F0=9F=A4=95<span style=3D"">=C2=A0</span><span styl=
+e=3D""><b>Alexander Isak</b></span><span style=3D""> went off with a groin =
+injury in Liverpool=E2=80=99s UCL game. =E2=80=9CLet=E2=80=99s wait and see=
+=E2=80=9D, says Slot. </span><span style=3D""><b>Jeremie Frimpong</b></span=
+><span style=3D""> was also injured.</span></p></td></tr><tr><td class=3D"d=
+d" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break=
+-word;"><p style=3D"mso-line-height-alt:150.0%;"> =F0=9F=A7=90<span style=
+=3D"">=C2=A0</span><span style=3D""><b>Mohamed Salah</b></span><span style=
+=3D""> only played 15 minutes in an otherwise full-strength UCL side for Li=
+verpool during the week. </span><span style=3D""><i>BREAKING:</i></span><sp=
+an style=3D""> In the last few hours, he=E2=80=99s removed the visible stuf=
+f associated with Liverpool from his Twitter account (like the cover photo =
+and profile pic). Look, it could be nothing, but this is the world we live =
+in now.</span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"pa=
+dding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-=
+height-alt:150.0%;"> =F0=9F=91=80<span style=3D""> Keep reading for some ne=
+w graphics that should make reading Lazy on your phone an even lazier exper=
+ience.</span></p></td></tr></table></td></tr></table></td></tr><tr><td><tab=
+le role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=
+=3D"0" style=3D""><tr><td height=3D"15.0px" style=3D"line-height:1px;font-s=
+ize:1px;height:15.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"transparent" s=
+tyle=3D"background-color:transparent;padding:0.0px 0.0px 0.0px 0.0px;"><tab=
+le role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=
+=3D"0"><tr><td align=3D"center" valign=3D"top" style=3D"padding-bottom:px;p=
+adding-left:0px;padding-right:0px;padding-top:px; " class=3D"dd"><table rol=
+e=3D"none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D"margin=
+:0 auto 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D"width:670=
+px;"><img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,f=
+ormat=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a5=
+8d-42a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765" alt=3D"" h=
+eight=3D"auto" width=3D"670" style=3D"display:block;width:100%;" border=3D"=
+0"/></td></tr></table></td></tr></table></td></tr><tr><td height=3D"15.0px"=
+ style=3D"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr><=
+/table></td></tr><tr><td><table role=3D"none" width=3D"100%" border=3D"0" c=
+ellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D"transparen=
+t" style=3D"background-color:transparent;border-color:#0e132b;border-style:=
+solid;border-width:2px;padding:15.0px 15.0px 15.0px 15.0px;"><table role=3D=
+"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr>=
+<td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;wo=
+rd-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=
+=3D"">Alright?</span></p></td></tr><tr><td class=3D"dd" align=3D"left" styl=
+e=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"ms=
+o-line-height-alt:150.0%;"><span style=3D"">These days, LazyFPL is a multin=
+ational community that spans more than 50 countries.</span></p></td></tr><t=
+r><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;=
+word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span styl=
+e=3D"">So it won=E2=80=99t be obvious to everyone reading that this Sunday,=
+ the clocks go back an hour here in the UK. We move from British Summer Tim=
+e (ironically named, given how crap the weather is) to Greenwich Mean Time =
+(GMT). We don=E2=80=99t know why, but we=E2=80=99re pretty sure it has some=
+thing to do with making sure everyone in Britain remains as miserable as po=
+ssible.</span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"pa=
+dding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-=
+height-alt:150.0%;"><span style=3D"">This Friday=E2=80=99s Gameweek 9 deadl=
+ine is the </span><span style=3D""><b>last BST deadline</b></span><span sty=
+le=3D""> until we move back to it at the end of March next year. From Gamew=
+eek 10, we=E2=80=99re in GMT.</span></p></td></tr><tr><td class=3D"dd" alig=
+n=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"=
+><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Every season, so=
+me poor sod writes to us to tell us that they=E2=80=99ve missed the Gamewee=
+k 10 deadline because of this change. So if you=E2=80=99re that poor-sod-to=
+-be, please consider this your advance notice.</span></p></td></tr><tr><td =
+class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-b=
+reak:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D""=
+>Anyway, Gameweek 9 is outside, and it=E2=80=99d be rude to keep it waiting=
+ any longer. Here=E2=80=99s everything you need to know.</span></p></td></t=
+r></table></td></tr></table></td></tr><tr><td><table role=3D"none" width=3D=
+"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td =
+height=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.0px;"> &=
+nbsp; </td></tr><tr><td bgcolor=3D"transparent" style=3D"background-color:t=
+ransparent;padding:0.0px 0.0px 0.0px 0.0px;"><table role=3D"none" width=3D"=
+100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td align=3D"cen=
+ter" valign=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding-rig=
+ht:0px;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D"0" cel=
+lspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td al=
+ign=3D"center" valign=3D"top" style=3D"width:670px;"><img src=3D"https://me=
+dia.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredi=
+rect,quality=3D80/uploads/asset/file/13799588-a58d-42a7-94df-c066a8b66784/C=
+ontent_Break_Lazy.png?t=3D1713891765" alt=3D"" height=3D"auto" width=3D"670=
+" style=3D"display:block;width:100%;" border=3D"0"/></td></tr></table></td>=
+</tr></table></td></tr><tr><td height=3D"15.0px" style=3D"line-height:1px;f=
+ont-size:1px;height:15.0px;"> &nbsp; </td></tr></table></td></tr><tr><td><t=
+able role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpaddin=
+g=3D"0" style=3D""><tr><td bgcolor=3D"#0e132b" style=3D"background-color:#0=
+e132b;border-bottom-left-radius:0px;border-bottom-right-radius:0px;border-b=
+ottom-width:0px;border-color:#0e132b;border-left-width:0px;border-right-wid=
+th:2px;border-style:solid;border-top-left-radius:0px;border-top-right-radiu=
+s:0px;border-top-width:2px;padding:0.0px 15.0px 0.0px 15.0px;"><table role=
+=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><=
+tr><td class=3D"dd" align=3D"left" valign=3D"top" style=3D"color:#0c0c0c;fo=
+nt-weight:Bold;padding:0px 0px;text-align:left;"><h2 style=3D"color:#0c0c0c=
+;font-weight:Bold;mso-line-height-alt:150.0%;"><span style=3D"color:#FFFFFF=
+;">Read 1440, be a little more in the know.</span></h2></td></tr></table></=
+td></tr></table></td></tr><tr><td><table role=3D"none" width=3D"100%" borde=
+r=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D"t=
+ransparent" style=3D"background-color:transparent;border-color:#0e132b;bord=
+er-style:solid;border-width:2px;padding:15.0px 15.0px 15.0px 15.0px;"><tabl=
+e role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=
+=3D"0"><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-al=
+ign:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><=
+span style=3D"">1440 is a free newsletter that sends you a 5-minute, unbias=
+ed summary of what=E2=80=99s going on in the world every day. </span></p></=
+td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-a=
+lign:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;">=
+<span style=3D"">We read it, and we like it. It makes us more clued up. So =
+now we=E2=80=99re recommending it to you.</span></p></td></tr><tr><td class=
+=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:=
+break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Don=
+=E2=80=99t take our word for it, though: click the button below to do some =
+due diligence:</span></p></td></tr><tr class=3D"btn_row"><td valign=3D"top"=
+ style=3D"padding-bottom:14px;padding-left:0px;padding-right:0px;padding-to=
+p:14px;text-align:center;width:100%;word-break:break-word;" class=3D"dd"><t=
+able width=3D"100%" role=3D"none" border=3D"0" cellspacing=3D"0" cellpaddin=
+g=3D"0" style=3D"margin:14px auto 14px auto;"><tr><td align=3D"center" vali=
+gn=3D"middle"><table role=3D"none" border=3D"0" cellspacing=3D"0" cellpaddi=
+ng=3D"0"><tr><td style=3D"background-color:#ff872e;border-radius:10px;mso-p=
+adding-alt:14px 14px;" class=3D"btn"><a href=3D"http://link.mail.beehiiv.co=
+m/ss/c/u001.f6xWwooSSKr3K6NAShfW7jWc6tA-6KYB9pVge0LPg7ZjBls_4mXggt1XbcuH-K_=
+_SjP_YnQfACC7kko9k33Hghnah6B4M8MQr6W_HoLLqOOlXaFlOzmOXQMKVP5hmjVj982t08-D5D=
+Ju3osH-ykCCrKDxjzgMHQTFD9QZYUzVUt6MTECk-n9MHUy1zAi33ngVBKgoMru4LyZzXQdgN6-X=
+joyH2HvTcl4SqBo1EIuaTobJXI4k_WP38gU1Wt2OPEzs1KWDfn3twPFZXKxYZqdtnpWt6ePJu8k=
+YZO_8UTxEYRg8jUNGhFCbqfUAkdgts_C/4kz/jYnzCHLZQOKj5CoD8kOuVw/h1/h001.IWWpAVF=
+tA5BC6dl8dkuYBFapunRAsvpmwCdw1-W_RAk" target=3D"_blank" rel=3D"noopener nor=
+eferrer nofollow" style=3D"background-color:#ff872e;border-radius:10px;colo=
+r:#FFFFFF;display:inline-block;font-family:'Trebuchet MS','Lucida Grande',T=
+ahoma,sans-serif;font-size:16px;font-weight:normal;line-height:18px;padding=
+:14px 14px;text-decoration:none;"> CHECK OUT 1440 </a></td></tr></table></t=
+d></tr></table></td></tr></table></td></tr></table></td></tr><tr><td><table=
+ role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D=
+"0" style=3D""><tr><td height=3D"15.0px" style=3D"line-height:1px;font-size=
+:1px;height:15.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"transparent" styl=
+e=3D"background-color:transparent;padding:0.0px 0.0px 0.0px 0.0px;"><table =
+role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"=
+0"><tr><td align=3D"center" valign=3D"top" style=3D"padding-bottom:px;paddi=
+ng-left:0px;padding-right:0px;padding-top:px; " class=3D"dd"><table role=3D=
+"none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 a=
+uto 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D"width:670px;"=
+><img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,forma=
+t=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-4=
+2a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765" alt=3D"" heigh=
+t=3D"auto" width=3D"670" style=3D"display:block;width:100%;" border=3D"0"/>=
+</td></tr></table></td></tr></table></td></tr><tr><td height=3D"15.0px" sty=
+le=3D"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr></tab=
+le></td></tr><tr><td><table role=3D"none" width=3D"100%" border=3D"0" cells=
+pacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D"#0e132b" style=
+=3D"background-color:#0e132b;border-bottom-left-radius:0px;border-bottom-ri=
+ght-radius:0px;border-bottom-width:0px;border-color:#0e132b;border-left-wid=
+th:2px;border-right-width:2px;border-style:solid;border-top-left-radius:0px=
+;border-top-right-radius:0px;border-top-width:0px;padding:0.0px 15.0px 15.0=
+px 15.0px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D=
+"0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"left" valign=3D"top" st=
+yle=3D"color:#0c0c0c;font-weight:Bold;padding:0px 0px;text-align:left;"><h2=
+ style=3D"color:#0c0c0c;font-weight:Bold;mso-line-height-alt:150.0%;"><span=
+ style=3D"color:#FFFFFF;">Gameweek 9=E2=80=99s fixtures.</span></h2></td></=
+tr></table></td></tr></table></td></tr><tr><td align=3D"center" valign=3D"t=
+op" style=3D"padding-bottom:px;padding-left:0px;padding-right:0px;padding-t=
+op:px; " class=3D"dd"><table role=3D"none" border=3D"0" cellspacing=3D"0" c=
+ellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td align=3D"center" v=
+align=3D"top" style=3D"width:670px;"><img src=3D"https://media.beehiiv.com/=
+cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredirect,quality=3D8=
+0/uploads/asset/file/85a8afe8-e576-4983-a7c9-2c1b6cea693a/Fixtures_GW_9.jpg=
+?t=3D1761162200" alt=3D"" height=3D"auto" width=3D"670" style=3D"display:bl=
+ock;width:100%;" border=3D"0"/></td></tr></table></td></tr><tr><td><table r=
+ole=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0=
+" style=3D""><tr><td height=3D"15.0px" style=3D"line-height:1px;font-size:1=
+px;height:15.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"transparent" style=
+=3D"background-color:transparent;padding:0.0px 0.0px 0.0px 0.0px;"><table r=
+ole=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0=
+"><tr><td align=3D"center" valign=3D"top" style=3D"padding-bottom:px;paddin=
+g-left:0px;padding-right:0px;padding-top:px; " class=3D"dd"><table role=3D"=
+none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 au=
+to 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D"width:670px;">=
+<img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=
+=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-42=
+a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765" alt=3D"" height=
+=3D"auto" width=3D"670" style=3D"display:block;width:100%;" border=3D"0"/><=
+/td></tr></table></td></tr></table></td></tr><tr><td height=3D"15.0px" styl=
+e=3D"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr></tabl=
+e></td></tr><tr><td><table role=3D"none" width=3D"100%" border=3D"0" cellsp=
+acing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D"#0e132b" style=
+=3D"background-color:#0e132b;border-bottom-left-radius:0px;border-bottom-ri=
+ght-radius:0px;border-bottom-width:0px;border-color:#0e132b;border-left-wid=
+th:2px;border-right-width:2px;border-style:solid;border-top-left-radius:0px=
+;border-top-right-radius:0px;border-top-width:0px;padding:0.0px 15.0px 0.0p=
+x 15.0px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"=
+0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"left" valign=3D"top" sty=
+le=3D"color:#0c0c0c;font-weight:Bold;padding:0px 0px;text-align:left;"><h2 =
+style=3D"color:#0c0c0c;font-weight:Bold;mso-line-height-alt:150.0%;"><span =
+style=3D"color:#FFFFFF;">What happened in midweek?</span></h2></td></tr></t=
+able></td></tr></table></td></tr><tr><td><table role=3D"none" width=3D"100%=
+" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcol=
+or=3D"transparent" style=3D"background-color:transparent;border-color:#0e13=
+2b;border-style:solid;border-width:2px;padding:15.0px 15.0px 15.0px 15.0px;=
+"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpa=
+dding=3D"0"><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;te=
+xt-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0=
+%;"><span style=3D"background-color:#3ecc6d;"><span style=3D""><b>Lazy summ=
+ary: Quite a bit.</b></span></span></p></td></tr><tr><td class=3D"dd" align=
+=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-word;">=
+<p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Enough happened i=
+n Europe during the week to justify looking at each game in turn. And by =
+=E2=80=9Clooking at=E2=80=9D we mean =E2=80=9Cpicking out the FPL-relevant =
+stuff and ignoring literally everything else about the game=E2=80=9D.</span=
+><br><br><span style=3D"background-color:#3ecc6d;"><span style=3D""><b>Tues=
+day</b></span></span></p></td></tr><tr><td class=3D"dd" align=3D"left" styl=
+e=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"ms=
+o-line-height-alt:150.0%;"><span style=3D"">Three Premier League teams were=
+ in action</span><span style=3D""><b>,</b></span><span style=3D""> and all =
+of them kept a clean sheet.</span></p></td></tr><tr><td class=3D"dd" align=
+=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-word;">=
+<p style=3D"mso-line-height-alt:150.0%;"><span style=3D""><b>Arsenal 4-0 At=
+l=C3=A9tico Madrid</b></span></p></td></tr><tr><td class=3D"dd" align=3D"le=
+ft" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p sty=
+le=3D"mso-line-height-alt:150.0%;"><span style=3D""><b>Gabriel</b></span><s=
+pan style=3D""> scored and assisted. </span><span style=3D""><b>Viktor Gy=
+=C3=B6keres</b></span><span style=3D""> scored a brace.</span></p></td></tr=
+><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:le=
+ft;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span s=
+tyle=3D""><b>Newcastle 3-0 Benfica</b></span></p></td></tr><tr><td class=3D=
+"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:bre=
+ak-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D""><b>Harv=
+ey Barnes </b></span><span style=3D"">didn=E2=80=99t start but scored two f=
+rom the bench</span><span style=3D""><b>. Anthony Gordon </b></span><span s=
+tyle=3D"">got a goal and an assist</span><span style=3D""><b>. Nick Woltema=
+de </b></span><span style=3D"">had one shot.</span></p></td></tr><tr><td cl=
+ass=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-bre=
+ak:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D""><=
+b>Villarreal 0-2 Man City</b></span></p></td></tr><tr><td class=3D"dd" alig=
+n=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"=
+><p style=3D"mso-line-height-alt:150.0%;"><span style=3D""><b>Erling Haalan=
+d </b></span><span style=3D"">scored, as per. </span><span style=3D""><b>Be=
+rnardo Silva</b></span><span style=3D""> nabbed the other. </span><span sty=
+le=3D""><b>Tijjani Reijnders</b></span><span style=3D""> and </span><span s=
+tyle=3D""><b>Phil Foden</b></span><span style=3D""> were both rested, with =
+Reijnders coming on in the 73rd minute. </span><span style=3D""><b>Nico Gon=
+z=C3=A1lez</b></span><span style=3D""> picked up an injury and was replaced=
+ by </span><span style=3D""><b>Mateo Kova=C4=8Di=C4=87</b></span><span styl=
+e=3D"">. The big concern for FPL managers is that Reijnders could, at some =
+point, be deployed deeper due to injuries.</span></p></td></tr><tr><td alig=
+n=3D"center" valign=3D"top" style=3D"font-size:0px;line-height:0px;padding:=
+30px 0px 30px;" class=3D"dd"><table class=3D"j" role=3D"none" width=3D"95%"=
+ border=3D"0" cellspacing=3D"0" cellpadding=3D"0" align=3D"center"><tr><td>=
+ &nbsp; </td></tr></table></td></tr><tr><td class=3D"dd" align=3D"left" sty=
+le=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"m=
+so-line-height-alt:150.0%;"><span style=3D"background-color:#3ecc6d;"><span=
+ style=3D""><b>Wednesday</b></span></span></p></td></tr><tr><td class=3D"dd=
+" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-=
+word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Another th=
+ree Premier League teams played in the UCL.</span></p></td></tr><tr><td cla=
+ss=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-brea=
+k:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D""><b=
+>Chelsea 5-1 Ajax</b></span></p></td></tr><tr><td class=3D"dd" align=3D"lef=
+t" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p styl=
+e=3D"mso-line-height-alt:150.0%;"><span style=3D""><b>Marc Guiu, Enzo Fern=
+=C3=A1ndez, Mois=C3=A9s Caicedo, Tyrique George</b></span><span style=3D"">=
+ and</span><span style=3D""><b> Est=C3=AAv=C3=A3o </b></span><span style=3D=
+"">scored. Jo=C3=A3o</span><span style=3D""><b> Pedro</b></span><span style=
+=3D""> was suspended for this game, and Fern=C3=A1ndez only played a half a=
+fter returning from injury. Incidentally, Guiu (the =C2=A34.3m forward) was=
+ bought off at half-time. Was it a rest ahead of Gameweek 9?</span></p></td=
+></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-ali=
+gn:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><s=
+pan style=3D""><b>Frankfurt 1-5 Liverpool</b></span></p></td></tr><tr><td c=
+lass=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-br=
+eak:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">=
+Another five individual goalscorers here. </span><span style=3D""><b>Hugo E=
+kitike, Virgil van Dijk, Ibrahima Konat=C3=A9, Cody Gakpo</b></span><span s=
+tyle=3D""> and </span><span style=3D""><b>Dominik Szoboszlai</b></span><spa=
+n style=3D""> all scored. </span><span style=3D""><b>Florian Wirtz</b></spa=
+n><span style=3D""> notched two assists and </span><span style=3D""><b>Jere=
+mie Frimpong</b></span><span style=3D""> went off injured. </span><span sty=
+le=3D""><b>Mohamed Salah</b></span><span style=3D""> was rested=E2=80=A6aga=
+in. He played for 15 minutes off the bench.</span></p></td></tr><tr><td cla=
+ss=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-brea=
+k:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Pe=
+rhaps most notably, </span><span style=3D""><b>Alexander Isak</b></span><sp=
+an style=3D""> went off with a groin injury.</span></p></td></tr><tr><td cl=
+ass=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-bre=
+ak:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D""><=
+b>Monaco 0-0 Spurs</b></span></p></td></tr><tr><td class=3D"dd" align=3D"le=
+ft" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p sty=
+le=3D"mso-line-height-alt:150.0%;"><span style=3D"">Despite the scoreline, =
+Spurs got more battered than a sausage in a chippy. There was a Man of the =
+Match performance from </span><span style=3D""><b>Guglielmo Vicario</b></sp=
+an><span style=3D""> here, but that=E2=80=99s about it.</span></p></td></tr=
+><tr><td align=3D"center" valign=3D"top" style=3D"font-size:0px;line-height=
+:0px;padding:30px 0px 30px;" class=3D"dd"><table class=3D"j" role=3D"none" =
+width=3D"95%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" align=3D"cen=
+ter"><tr><td> &nbsp; </td></tr></table></td></tr><tr><td class=3D"dd" align=
+=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-word;">=
+<p style=3D"mso-line-height-alt:150.0%;"><span style=3D"background-color:#3=
+ecc6d;"><span style=3D""><b>Thursday</b></span></span></p></td></tr><tr><td=
+ class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-=
+break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"=
+"><b>Nottingham Forest, Aston Villa </b></span><span style=3D"">and</span><=
+span style=3D""><b> Crystal Palace</b></span><span style=3D""> are all in a=
+ction, but our crystal ball is on the blink again, so we can=E2=80=99t tell=
+ you much about those.</span></p></td></tr><tr><td class=3D"dd" align=3D"le=
+ft" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p sty=
+le=3D"mso-line-height-alt:150.0%;"><span style=3D"">We do know that Villa=
+=E2=80=99s most tempting prospect, </span><span style=3D""><b>Morgan Rogers=
+,</b></span><span style=3D""> is on the bench for Villa.</span></p></td></t=
+r></table></td></tr></table></td></tr><tr><td><table role=3D"none" width=3D=
+"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td =
+height=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.0px;"> &=
+nbsp; </td></tr><tr><td bgcolor=3D"transparent" style=3D"background-color:t=
+ransparent;padding:0.0px 0.0px 0.0px 0.0px;"><table role=3D"none" width=3D"=
+100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td align=3D"cen=
+ter" valign=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding-rig=
+ht:0px;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D"0" cel=
+lspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td al=
+ign=3D"center" valign=3D"top" style=3D"width:670px;"><img src=3D"https://me=
+dia.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredi=
+rect,quality=3D80/uploads/asset/file/13799588-a58d-42a7-94df-c066a8b66784/C=
+ontent_Break_Lazy.png?t=3D1713891765" alt=3D"" height=3D"auto" width=3D"670=
+" style=3D"display:block;width:100%;" border=3D"0"/></td></tr></table></td>=
+</tr></table></td></tr><tr><td height=3D"15.0px" style=3D"line-height:1px;f=
+ont-size:1px;height:15.0px;"> &nbsp; </td></tr></table></td></tr><tr><td><t=
+able role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpaddin=
+g=3D"0" style=3D""><tr><td bgcolor=3D"#0e132b" style=3D"background-color:#0=
+e132b;border-bottom-left-radius:0px;border-bottom-right-radius:0px;border-b=
+ottom-width:0px;border-color:#0e132b;border-left-width:2px;border-right-wid=
+th:2px;border-style:solid;border-top-left-radius:0px;border-top-right-radiu=
+s:0px;border-top-width:0px;padding:0.0px 15.0px 0.0px 15.0px;"><table role=
+=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><=
+tr><td class=3D"dd" align=3D"left" valign=3D"top" style=3D"color:#0c0c0c;fo=
+nt-weight:Bold;padding:0px 0px;text-align:left;"><h2 style=3D"color:#0c0c0c=
+;font-weight:Bold;mso-line-height-alt:150.0%;"><span style=3D"color:#FFFFFF=
+;">How to prepare for AFCON.</span></h2></td></tr></table></td></tr></table=
+></td></tr><tr><td><table role=3D"none" width=3D"100%" border=3D"0" cellspa=
+cing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D"transparent" sty=
+le=3D"background-color:transparent;border-color:#0e132b;border-style:solid;=
+border-width:2px;padding:15.0px 15.0px 15.0px 15.0px;"><table role=3D"none"=
+ width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td cl=
+ass=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-bre=
+ak:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"bac=
+kground-color:#3ecc6d;"><span style=3D""><b>Lazy summary: It=E2=80=99s abou=
+t spending transfers, not saving them.</b></span></span></p></td></tr><tr><=
+td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;wor=
+d-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=
+=3D"">This season, for the first time in FPL history, the FPL Gods will giv=
+e us five free transfers in Gameweek 16 to help us prepare for AFCON.</span=
+></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px=
+;text-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:15=
+0.0%;"><span style=3D"">It feels like overkill. The Premier League </span><=
+span style=3D""><a class=3D"link" href=3D"http://link.mail.beehiiv.com/ss/c=
+/u001.f6xWwooSSKr3K6NAShfW7uZPtmaAl-3wXeuzNkJzGGT3AWAxsviwtwagwaDLeogTblMHu=
+HU7hn2NOjZhQBMzQ2SK_p1FjQTJvE-3tqnKseIzMkzCK6g3ITOiTp_uKcze5jpugH1jHq3uZZQ5=
+7fIPUf2pFGuYg8wcFt3I9OQjbo7b9esG6JQP1-jxzd2iI_GurLSbYsjFomvALy4HGrcGw2f0IpO=
+ICrQaZVNY_0WDimiYrTstmP1Ag-0pnkXFgWmXbBIniEoVlVQc4uX-PMoznzSn-Sy9UYcoevRfFd=
+SMN-CR1MpG3FGnvRuvBv2_QBDDbAYKggZLeM_vpS-1Vfh4oqvCnJXQOcTibaoIQDG3HkE/4kz/j=
+YnzCHLZQOKj5CoD8kOuVw/h2/h001.rclqxO9ohtTA1Qoe6prY0NZD9BbT9XF2xbiro185-DM" =
+target=3D"_blank" rel=3D"noopener noreferrer nofollow"><span>published a li=
+st</span></a></span><span style=3D""> of players who could go to AFCON, but=
+ only a small minority are interesting for FPL managers. They include:</spa=
+n><br><br>=F0=9F=87=AA=F0=9F=87=AC<span style=3D"">=C2=A0</span><span style=
+=3D""><b>Mohamed Salah</b></span><span style=3D""> and </span><span style=
+=3D""><b>Omar Marmoush</b></span><br>=F0=9F=87=A8=F0=9F=87=A9<span style=3D=
+"">=C2=A0</span><span style=3D""><b>Yoane Wissa</b></span><br>=F0=9F=87=A9=
+=F0=9F=87=BF<span style=3D""><b> Rayan A=C3=AFt-Nouri</b></span><br>=F0=9F=
+=87=A8=F0=9F=87=B2<span style=3D""><b> Bryan Mbeumo </b></span><br>=F0=9F=
+=87=B8=F0=9F=87=B3<span style=3D""><b> Isma=C3=AFla Sarr</b></span><span st=
+yle=3D""> and </span><span style=3D""><b>Iliman Ndiaye </b></span></p></td>=
+</tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-alig=
+n:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><sp=
+an style=3D"">So, what do we need to do to prepare?</span></p></td></tr><tr=
+><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;w=
+ord-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=
+=3D"">Well, we need to make sure we=E2=80=99ve used up all of our transfers=
+ before Gameweek 16 so that we feel the full benefit of the five free ones.=
+</span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0=
+px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-height-=
+alt:150.0%;"><span style=3D"">There=E2=80=99s simply no point in banking tr=
+ansfers, because in Gameweek 16, everyone will have five anyway.</span></p>=
+</td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text=
+-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;=
+"><span style=3D"">And that=E2=80=99s about it. Five free transfers is effe=
+ctively a mini-Wildcard, and it=E2=80=99s a disproportionate response to th=
+e mild inconvenience that is AFCON. Salah=E2=80=99s poor form only makes it=
+ an easier obstacle to navigate.</span></p></td></tr><tr><td class=3D"dd" a=
+lign=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-wor=
+d;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Speaking of S=
+alah=E2=80=A6</span></p></td></tr></table></td></tr></table></td></tr><tr><=
+td><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellp=
+adding=3D"0" style=3D""><tr><td height=3D"15.0px" style=3D"line-height:1px;=
+font-size:1px;height:15.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"transpar=
+ent" style=3D"background-color:transparent;padding:0.0px 0.0px 0.0px 0.0px;=
+"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpa=
+dding=3D"0"><tr><td align=3D"center" valign=3D"top" style=3D"padding-bottom=
+:px;padding-left:0px;padding-right:0px;padding-top:px; " class=3D"dd"><tabl=
+e role=3D"none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D"m=
+argin:0 auto 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D"widt=
+h:670px;"><img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-d=
+own,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/137995=
+88-a58d-42a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765" alt=
+=3D"" height=3D"auto" width=3D"670" style=3D"display:block;width:100%;" bor=
+der=3D"0"/></td></tr></table></td></tr></table></td></tr><tr><td height=3D"=
+15.0px" style=3D"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; </td=
+></tr></table></td></tr><tr><td><table role=3D"none" width=3D"100%" border=
+=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D"#0=
+e132b" style=3D"background-color:#0e132b;border-bottom-left-radius:0px;bord=
+er-bottom-right-radius:0px;border-bottom-width:0px;border-color:#0e132b;bor=
+der-left-width:2px;border-right-width:2px;border-style:solid;border-top-lef=
+t-radius:0px;border-top-right-radius:0px;border-top-width:0px;padding:0.0px=
+ 15.0px 0.0px 15.0px;"><table role=3D"none" width=3D"100%" border=3D"0" cel=
+lspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"left" valign=
+=3D"top" style=3D"color:#0c0c0c;font-weight:Bold;padding:0px 0px;text-align=
+:left;"><h2 style=3D"color:#0c0c0c;font-weight:Bold;mso-line-height-alt:150=
+.0%;"><span style=3D"color:#FFFFFF;">Salah, Pedro and Reijnders: Time to go=
+?</span></h2></td></tr></table></td></tr></table></td></tr><tr><td><table r=
+ole=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0=
+" style=3D""><tr><td bgcolor=3D"transparent" style=3D"background-color:tran=
+sparent;border-color:#0e132b;border-style:solid;border-width:2px;padding:15=
+.0px 15.0px 15.0px 15.0px;"><table role=3D"none" width=3D"100%" border=3D"0=
+" cellspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"left" s=
+tyle=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D=
+"mso-line-height-alt:150.0%;"><span style=3D"background-color:#3ecc6d;"><sp=
+an style=3D""><b>Lazy summary: Sell, keep, keep (just). Respectively. </b><=
+/span></span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"pad=
+ding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-h=
+eight-alt:150.0%;"><span style=3D"">The three horsemen of the 25/26 FPL apo=
+calypse are surely </span><span style=3D""><b>Mohamed Salah, Jo=C3=A3o Pedr=
+o</b></span><span style=3D""> and </span><span style=3D""><b>Tijjani Reijnd=
+ers</b></span><span style=3D"">. </span></p></td></tr><tr><td class=3D"dd" =
+align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-wo=
+rd;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Each has enj=
+oyed significant ownership this season, and each has managed to find creati=
+ve and emphatic ways to disappoint their owners.</span></p></td></tr><tr><t=
+d class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word=
+-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D=
+"">The question now becomes: Do we keep them, or is it time to get rid?</sp=
+an></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0=
+px;text-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:=
+150.0%;"><span style=3D"background-color:#3ecc6d;"><span style=3D""><b>Moha=
+med Salah - 32% owned. Sell. </b></span></span></p></td></tr><tr><td class=
+=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:=
+break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Sala=
+h=E2=80=99s stats have dropped off a cliff, and given how impressive he was=
+ last season, that cliff is pretty high. It=E2=80=99s like that cliff in Th=
+e Princess Bride - if you know, you know.</span></p></td></tr><tr><td class=
+=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:=
+break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">Sky =
+Sports published the graphic below </span><span style=3D""><i>before</i></s=
+pan><span style=3D""> Gameweek 8, but Liverpool=E2=80=99s defeat against Ma=
+n United did little to improve upon his numbers so far:</span></p></td></tr=
+><tr><td align=3D"center" valign=3D"top" style=3D"padding-bottom:px;padding=
+-left:0px;padding-right:0px;padding-top:px; " class=3D"dd"><table role=3D"n=
+one" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 aut=
+o 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D"width:640px;"><=
+img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=
+=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/018a10a5-a8b2-4a=
+ab-ab86-2a6b4791e53a/Screenshot_2025-10-22_at_23.34.35.jpg?t=3D1761172481" =
+alt=3D"" height=3D"auto" width=3D"640" style=3D"display:block;width:100%;" =
+border=3D"0"/></td></tr></table></td></tr><tr><td class=3D"dd" align=3D"lef=
+t" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p styl=
+e=3D"mso-line-height-alt:150.0%;"><span style=3D"">This isn=E2=80=99t the f=
+irst time over the last few seasons that Salah, the greatest FPL asset that=
+=E2=80=99s ever lived, has been scrutinised. </span></p></td></tr><tr><td c=
+lass=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-br=
+eak:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">=
+But it </span><span style=3D""><i>is</i></span><span style=3D""> the first =
+time, as far as we can remember, that his underlying stats have not stood u=
+p to that scrutiny. Whether you=E2=80=99re watching his performances or stu=
+dying his charts, the inescapable reality is that Salah really </span><span=
+ style=3D""><i>has</i></span><span style=3D""> dropped off.</span></p></td>=
+</tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-alig=
+n:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><sp=
+an style=3D"">This, when combined with a few other factors, makes for a hea=
+dy cocktail:</span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=
+=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso=
+-line-height-alt:150.0%;"><span style=3D""><b>Factor 1 (the vermouth):</b><=
+/span><span style=3D""> On Thursday, he removed references to Liverpool fro=
+m his Twitter profile, including changing his profile and header banners. I=
+t could be nothing, but it=E2=80=99s ominous.</span></p></td></tr><tr><td c=
+lass=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-br=
+eak:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">=
+<b>Factor 2 (the vodka):</b></span><span style=3D"">=C2=A0</span><span styl=
+e=3D""><b>Erling Haaland </b></span><span style=3D"">has effectively made t=
+he armband a redundant clothing accessory by this point.</span></p></td></t=
+r><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:l=
+eft;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span =
+style=3D"">It means that Salah is not worth his =C2=A314.4m asking price. O=
+f course, he will score more goals this season, but the only argument left =
+for keeping him is that =E2=80=9Cit=E2=80=99s Salah=E2=80=9D. And that just=
+ isn=E2=80=99t enough at the moment.</span></p></td></tr><tr><td align=3D"c=
+enter" valign=3D"top" style=3D"font-size:0px;line-height:0px;padding:30px 0=
+px 30px;" class=3D"dd"><table class=3D"j" role=3D"none" width=3D"95%" borde=
+r=3D"0" cellspacing=3D"0" cellpadding=3D"0" align=3D"center"><tr><td> &nbsp=
+; </td></tr></table></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"=
+padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-lin=
+e-height-alt:150.0%;"><span style=3D"background-color:#3ecc6d;"><span style=
+=3D""><b>Jo=C3=A3o Pedro - 58% owned. Keep=E2=80=A6for now.</b></span></spa=
+n></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0p=
+x;text-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:1=
+50.0%;"><span style=3D"">There=E2=80=99s no hiding from the fact that Pedro=
+=E2=80=99s stats have been amongst the worst for forwards over the last fou=
+r gameweeks (he=E2=80=99s registered just one shot in his last four Premier=
+ League games).</span></p></td></tr><tr><td class=3D"dd" align=3D"left" sty=
+le=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"m=
+so-line-height-alt:150.0%;"><span style=3D"">But Waylon Lazy=E2=80=99s teac=
+hings are unequivocal: fixtures beat form. We=E2=80=99re not saying that Pe=
+dro is a buy - far from it - but if you have him in your team, using a valu=
+able free transfer to get rid of him ahead of Sunderland at home feels wast=
+eful.</span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padd=
+ing:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-he=
+ight-alt:150.0%;"><span style=3D"">With other strikers in his price bracket=
+ - like </span><span style=3D""><b>Nick Woltemade</b></span><span style=3D"=
+"> and </span><span style=3D""><b>Jean-Philippe Mateta</b></span><span styl=
+e=3D""> - looking so good, Pedro ought to be on ice thin enough to make Pet=
+er Crouch look chunky. But for now, he=E2=80=99s a keep for us.</span></p><=
+/td></tr><tr><td align=3D"center" valign=3D"top" style=3D"font-size:0px;lin=
+e-height:0px;padding:30px 0px 30px;" class=3D"dd"><table class=3D"j" role=
+=3D"none" width=3D"95%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" al=
+ign=3D"center"><tr><td> &nbsp; </td></tr></table></td></tr><tr><td class=3D=
+"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:bre=
+ak-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"backgroun=
+d-color:#3ecc6d;"><span style=3D""><b>Tijjani Reijnders - 30% owned. Keep i=
+f you can=E2=80=99t afford an upgrade.</b></span></span></p></td></tr><tr><=
+td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;wor=
+d-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=
+=3D"">One of the most transferred-out players this week, </span><span style=
+=3D""><b>Tijjani Reijnders</b></span><span style=3D""> was the Gameweek 1 d=
+arling that hasn=E2=80=99t registered a single return since. Which is almos=
+t impressively shite, given he=E2=80=99s started every game for Man City th=
+is season.</span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D=
+"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-li=
+ne-height-alt:150.0%;"><span style=3D"">For many of his owners, a =E2=80=98=
+58 substitution in Gameweek 8 was the final straw.</span></p></td></tr><tr>=
+<td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;wo=
+rd-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=
+=3D"">But hang on a second. Reijnders is =C2=A35.7m and playing for (arguab=
+ly) the best attacking team in the league. He=E2=80=99s starting games, he=
+=E2=80=99s getting forward, and he=E2=80=99s unfortunate not to have had mo=
+re returns. </span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=
+=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso=
+-line-height-alt:150.0%;"><span style=3D"">Assuming he continues to do that=
+ (and who knows with Pep?), he=E2=80=99s probably still the best midfielder=
+ in his price bracket.</span></p></td></tr><tr><td class=3D"dd" align=3D"le=
+ft" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p sty=
+le=3D"mso-line-height-alt:150.0%;"><span style=3D"">But if you=E2=80=99ve g=
+ot the money, there are better midfielders north of the =C2=A36.0m mark. </=
+span><span style=3D""><b>Isma=C3=AFla Sarr</b></span><span style=3D""> is o=
+ur favourite between now and AFCON.</span></p></td></tr></table></td></tr><=
+/table></td></tr><tr><td><table role=3D"none" width=3D"100%" border=3D"0" c=
+ellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td height=3D"15.0px" sty=
+le=3D"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr><tr><=
+td bgcolor=3D"transparent" style=3D"background-color:transparent;padding:0.=
+0px 0.0px 0.0px 0.0px;"><table role=3D"none" width=3D"100%" border=3D"0" ce=
+llspacing=3D"0" cellpadding=3D"0"><tr><td align=3D"center" valign=3D"top" s=
+tyle=3D"padding-bottom:px;padding-left:0px;padding-right:0px;padding-top:px=
+; " class=3D"dd"><table role=3D"none" border=3D"0" cellspacing=3D"0" cellpa=
+dding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td align=3D"center" valign=
+=3D"top" style=3D"width:670px;"><img src=3D"https://media.beehiiv.com/cdn-c=
+gi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredirect,quality=3D80/upl=
+oads/asset/file/c91fb6cd-f0fa-426a-b6f2-c66a765e93d7/Content_Break_Captain.=
+png?t=3D1713892415" alt=3D"" height=3D"auto" width=3D"670" style=3D"display=
+:block;width:100%;" border=3D"0"/></td></tr></table></td></tr></table></td>=
+</tr><tr><td height=3D"15.0px" style=3D"line-height:1px;font-size:1px;heigh=
+t:15.0px;"> &nbsp; </td></tr></table></td></tr><tr><td><table role=3D"none"=
+ width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""=
+><tr><td bgcolor=3D"#0e132b" style=3D"background-color:#0e132b;border-botto=
+m-left-radius:0px;border-bottom-right-radius:0px;border-bottom-width:0px;bo=
+rder-color:#0e132b;border-left-width:2px;border-right-width:2px;border-styl=
+e:solid;border-top-left-radius:0px;border-top-right-radius:0px;border-top-w=
+idth:0px;padding:0.0px 15.0px 0.0px 15.0px;"><table role=3D"none" width=3D"=
+100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd"=
+ align=3D"left" valign=3D"top" style=3D"color:#0c0c0c;font-weight:Bold;padd=
+ing:0px 0px;text-align:left;"><h2 style=3D"color:#0c0c0c;font-weight:Bold;m=
+so-line-height-alt:150.0%;"><span style=3D"color:#FFFFFF;">The best captain=
+ for Gameweek 9.</span></h2></td></tr></table></td></tr></table></td></tr><=
+tr><td><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" c=
+ellpadding=3D"0" style=3D""><tr><td bgcolor=3D"transparent" style=3D"backgr=
+ound-color:transparent;border-color:#0e132b;border-style:solid;border-width=
+:2px;padding:15.0px 15.0px 15.0px 15.0px;"><table role=3D"none" width=3D"10=
+0%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td align=3D"cente=
+r" valign=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding-right=
+:0px;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D"0" cells=
+pacing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td alig=
+n=3D"center" valign=3D"top" style=3D"width:640px;"><img src=3D"https://medi=
+a.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredire=
+ct,quality=3D80/uploads/asset/file/3b471908-5e38-4f37-adca-c03ee1ff63bc/Scr=
+eenshot_2025-10-23_at_00.12.55.jpg?t=3D1761174781" alt=3D"" height=3D"auto"=
+ width=3D"640" style=3D"display:block;width:100%;" border=3D"0"/></td></tr>=
+</table></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px =
+0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt=
+:150.0%;"><span style=3D"">It=E2=80=99s </span><span style=3D""><b>Erling H=
+aaland</b></span><span style=3D""> away at Aston Villa. His form and popula=
+rity are just too potent to look elsewhere.</span></p></td></tr><tr><td cla=
+ss=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-brea=
+k:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">A =
+quick note on your </span><span style=3D""><b>Triple Captain</b></span><spa=
+n style=3D"">, for those who still have it. It=E2=80=99s hard to look past =
+the Norse God, but he=E2=80=99ll have better opportunities than Aston Villa=
+ away. Leeds (H) in Gameweek 13, Sunderland (H) in Gameweek 15 and West Ham=
+ (H) in Gameweek 17 stand out.</span></p></td></tr></table></td></tr></tabl=
+e></td></tr><tr><td><table role=3D"none" width=3D"100%" border=3D"0" cellsp=
+acing=3D"0" cellpadding=3D"0" style=3D""><tr><td height=3D"15.0px" style=3D=
+"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr><tr><td bg=
+color=3D"transparent" style=3D"background-color:transparent;padding:0.0px 0=
+.0px 0.0px 0.0px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspa=
+cing=3D"0" cellpadding=3D"0"><tr><td align=3D"center" valign=3D"top" style=
+=3D"padding-bottom:px;padding-left:0px;padding-right:0px;padding-top:px; " =
+class=3D"dd"><table role=3D"none" border=3D"0" cellspacing=3D"0" cellpaddin=
+g=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td align=3D"center" valign=3D"=
+top" style=3D"width:670px;"><img src=3D"https://media.beehiiv.com/cdn-cgi/i=
+mage/fit=3Dscale-down,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads=
+/asset/file/13799588-a58d-42a7-94df-c066a8b66784/Content_Break_Lazy.png?t=
+=3D1713891765" alt=3D"" height=3D"auto" width=3D"670" style=3D"display:bloc=
+k;width:100%;" border=3D"0"/></td></tr></table></td></tr></table></td></tr>=
+<tr><td height=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.=
+0px;"> &nbsp; </td></tr></table></td></tr><tr><td><table role=3D"none" widt=
+h=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr>=
+<td bgcolor=3D"#0e132b" style=3D"background-color:#0e132b;border-bottom-lef=
+t-radius:0px;border-bottom-right-radius:0px;border-color:#0e132b;border-sty=
+le:solid;border-top-left-radius:0px;border-top-right-radius:0px;border-widt=
+h:2px;padding:5.0px 5.0px 5.0px 5.0px;"><table role=3D"none" width=3D"100%"=
+ border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td align=3D"center" =
+valign=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding-right:0p=
+x;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D"0" cellspac=
+ing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td align=
+=3D"center" valign=3D"top" style=3D"width:660px;"><img src=3D"https://media=
+.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredirec=
+t,quality=3D80/uploads/asset/file/183b2419-53e2-42b6-9dd7-2daddc34bece/prof=
+essors_team.png?t=3D1713892631" alt=3D"" height=3D"auto" width=3D"660" styl=
+e=3D"display:block;width:100%;" border=3D"0"/></td></tr></table></td></tr><=
+/table></td></tr></table></td></tr><tr><td><table role=3D"none" width=3D"10=
+0%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgc=
+olor=3D"transparent" style=3D"background-color:transparent;border-color:#0e=
+132b;border-style:solid;border-width:2px;padding:15.0px 15.0px 15.0px 15.0p=
+x;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cell=
+padding=3D"0"><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;=
+text-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150=
+.0%;"><span style=3D"">The Professor has described the number of options he=
+ has this week as =E2=80=9Ca slew=E2=80=9D, so you know it=E2=80=99s seriou=
+s. </span></p></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"paddin=
+g:0px 0px;text-align:left;word-break:break-word;"><p style=3D"mso-line-heig=
+ht-alt:150.0%;"><span style=3D"">He has three free transfers (not easy to s=
+ay after a few pints) and a few issues in his team to deal with.</span></p>=
+</td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text=
+-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;=
+"><span style=3D""><b>Phil Foden</b></span><span style=3D""> and </span><sp=
+an style=3D""><b>Tijjani Reijnders</b></span><span style=3D""> are on the p=
+otential chopping block, and he=E2=80=99s eyeing up </span><span style=3D""=
+><b>Enzo Fern=C3=A1ndez, Yankuba Minteh</b></span><span style=3D"">, and </=
+span><span style=3D""><b>Isma=C3=AFla Sarr</b></span><span style=3D""> as p=
+ossible replacements. But nothing is set in stone yet.</span></p></td></tr>=
+<tr><td align=3D"center" valign=3D"top" style=3D"padding-bottom:px;padding-=
+left:0px;padding-right:0px;padding-top:px; " class=3D"dd"><table role=3D"no=
+ne" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto=
+ 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D"width:640px;"><i=
+mg src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=
+=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/d0e94807-1be7-44=
+d7-87b8-98fea15f9305/image.png?t=3D1761218203" alt=3D"" height=3D"auto" wid=
+th=3D"640" style=3D"display:block;width:100%;" border=3D"0"/></td></tr></ta=
+ble></td></tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;=
+text-align:left;word-break:break-word;"><p style=3D"mso-line-height-alt:150=
+.0%;"><span style=3D"">Will it be surgery or yet another roll of the transf=
+er for the Prof? Find out on the next episode of-oh wait, wrong plug. Find =
+out by joining </span><span style=3D""><a class=3D"link" href=3D"http://lin=
+k.mail.beehiiv.com/ss/c/u001.f6xWwooSSKr3K6NAShfW7lIR1EdsH0xPn3sRM8gD4lvMCb=
+8etrUJ9aHbjCKxtgSIF6NDllomMRSakKCBsupyOd662FRGWglPzROXm_mhk8cA-Kvksu7sUt4x-=
+_LmNq2HYX8rVTWG1ZnO-nWG9lOod90Ek9sIwZzSt94LMTYK7paB4IHC_i6-U-SzaXyXmx9n_Cgb=
+T72DBO0cTtftrw4BUszA8LUhhS04eo5hL1oMMwQJYGnVJGS5Br52N1YgiIrcHfxh7qNEiSq5zKQ=
+-SzZ0l-B1r-ulH3YNvIl1FKPLjp7BdAj8KB0q2vW5Bat2j4zgQRl_aL1dvva-jg4mqYgYQiMitT=
+cfxCZQHkhOs3H4q4LnPytvubtI30M58JBr7Jvsjp9s5eXzVki-DxebePCZ76-rK5o1ed-2YPnJ8=
+l6UQKef0BWNS-t3HFXS55Dc5qjJ_g8NtzeFcrMXxddxS4P-FkPwLvqWtQ8XD0LQkImlkHffHrrl=
+tswiIf5dhBueSlv865NZvum-0gwUWVXyERh7LOMbUtsDyjP0uM5LX-iZ9LOtTGYncpXu_lYowAg=
+tgQ9DDnsvsp_ZzeX2IFR-7u_9NamestNGvqwhEadU2sCveiDtX0UWF7TB5so-wb-1o8srTnmG4T=
+pwO8ZgPEk-m6TR5iwH3FeIRjCSdPKczDY_kwMJwizQbx9tA18OVi9JJ0jqf_uVu89dVd5_H784b=
+RCb-PRo3CLAE5YaOavuCoFLbI-W7BIGj34t0E9SSRbd0dEc2gUwASx0k8WYPfliG1PrMJOG2kkB=
+7K13s-pdR-lt2-I/4kz/jYnzCHLZQOKj5CoD8kOuVw/h3/h001.i29GEzuiXYu42uVgUZBlvHPZ=
+sdvfkg1U6zoUWCO1pOM" target=3D"_blank" rel=3D"noopener noreferrer nofollow"=
+><span>LazyFPL Premium</span></a></span><span style=3D""> for the cost of a=
+ meal deal a month.</span></p></td></tr></table></td></tr></table></td></tr=
+><tr><td><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0"=
+ cellpadding=3D"0" style=3D""><tr><td height=3D"15.0px" style=3D"line-heigh=
+t:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"tr=
+ansparent" style=3D"background-color:transparent;padding:0.0px 0.0px 0.0px =
+0.0px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" =
+cellpadding=3D"0"><tr><td align=3D"center" valign=3D"top" style=3D"padding-=
+bottom:px;padding-left:0px;padding-right:0px;padding-top:px; " class=3D"dd"=
+><table role=3D"none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" styl=
+e=3D"margin:0 auto 0 auto;"><tr><td align=3D"center" valign=3D"top" style=
+=3D"width:670px;"><img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=
+=3Dscale-down,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/f=
+ile/a5542082-a125-48bb-a1bd-afc1da5039cb/Content_Break_Stats.png?t=3D171389=
+2771" alt=3D"" height=3D"auto" width=3D"670" style=3D"display:block;width:1=
+00%;" border=3D"0"/></td></tr></table></td></tr></table></td></tr><tr><td h=
+eight=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.0px;"> &n=
+bsp; </td></tr></table></td></tr><tr><td><table role=3D"none" width=3D"100%=
+" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcol=
+or=3D"#0e132b" style=3D"background-color:#0e132b;border-bottom-left-radius:=
+0px;border-bottom-right-radius:0px;border-bottom-width:0px;border-color:#0e=
+132b;border-left-width:2px;border-right-width:2px;border-style:solid;border=
+-top-left-radius:0px;border-top-right-radius:0px;border-top-width:0px;paddi=
+ng:0.0px 15.0px 15.0px 15.0px;"><table role=3D"none" width=3D"100%" border=
+=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"le=
+ft" valign=3D"top" style=3D"color:#0c0c0c;font-weight:Bold;padding:0px 0px;=
+text-align:left;"><h2 style=3D"color:#0c0c0c;font-weight:Bold;mso-line-heig=
+ht-alt:150.0%;"><span style=3D"color:#FFFFFF;">Player form (Last 6)</span><=
+/h2></td></tr></table></td></tr></table></td></tr><tr><td align=3D"center" =
+valign=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding-right:0p=
+x;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D"0" cellspac=
+ing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td align=
+=3D"center" valign=3D"top" style=3D"width:670px;"><img src=3D"https://media=
+.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredirec=
+t,quality=3D80/uploads/asset/file/8f78270d-3b7b-4826-8d4c-4caadd33372f/Play=
+er_Form_GW_9.jpg?t=3D1761162224" alt=3D"" height=3D"auto" width=3D"670" sty=
+le=3D"display:block;width:100%;" border=3D"0"/></td></tr></table></td></tr>=
+<tr><td><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" =
+cellpadding=3D"0" style=3D""><tr><td height=3D"15.0px" style=3D"line-height=
+:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"tra=
+nsparent" style=3D"background-color:transparent;padding:0.0px 0.0px 0.0px 0=
+.0px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" c=
+ellpadding=3D"0"><tr><td align=3D"center" valign=3D"top" style=3D"padding-b=
+ottom:px;padding-left:0px;padding-right:0px;padding-top:px; " class=3D"dd">=
+<table role=3D"none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=
+=3D"margin:0 auto 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D=
+"width:670px;"><img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dsc=
+ale-down,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/a=
+5542082-a125-48bb-a1bd-afc1da5039cb/Content_Break_Stats.png?t=3D1713892771"=
+ alt=3D"" height=3D"auto" width=3D"670" style=3D"display:block;width:100%;"=
+ border=3D"0"/></td></tr></table></td></tr></table></td></tr><tr><td height=
+=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; =
+</td></tr></table></td></tr><tr><td><table role=3D"none" width=3D"100%" bor=
+der=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D=
+"#FFFFFF" style=3D"background-color:#FFFFFF;border-bottom-left-radius:0px;b=
+order-bottom-right-radius:0px;border-bottom-width:0px;border-color:#0e132b;=
+border-left-width:2px;border-right-width:2px;border-style:solid;border-top-=
+left-radius:0px;border-top-right-radius:0px;border-top-width:2px;padding:0.=
+0px 15.0px 15.0px 15.0px;"><table role=3D"none" width=3D"100%" border=3D"0"=
+ cellspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"left" va=
+lign=3D"top" style=3D"color:#0c0c0c;font-weight:Bold;padding:0px 0px;text-a=
+lign:left;"><h2 style=3D"color:#0c0c0c;font-weight:Bold;mso-line-height-alt=
+:150.0%;"><span style=3D"color:#0e132b;">Team form (Last 6)</span></h2></td=
+></tr></table></td></tr></table></td></tr><tr><td><table role=3D"none" widt=
+h=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr>=
+<td bgcolor=3D"transparent" style=3D"background-color:transparent;border-bo=
+ttom-width:2px;border-color:#0e132b;border-left-width:2px;border-right-widt=
+h:2px;border-style:solid;border-top-width:0px;padding:0.0px 0.0px 0.0px 0.0=
+px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cel=
+lpadding=3D"0"><tr><td align=3D"center" valign=3D"top" style=3D"padding-bot=
+tom:px;padding-left:0px;padding-right:0px;padding-top:px; " class=3D"dd"><t=
+able role=3D"none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=
+=3D"margin:0 auto 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D=
+"width:670px;"><img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dsc=
+ale-down,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/6=
+2e0f627-c027-4325-8572-3566f4b46dbc/Team_Stats_GW_9.jpg?t=3D1761162236" alt=
+=3D"" height=3D"auto" width=3D"670" style=3D"display:block;width:100%;" bor=
+der=3D"0"/></td></tr></table></td></tr></table></td></tr></table></td></tr>=
+<tr><td><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" =
+cellpadding=3D"0" style=3D""><tr><td height=3D"15.0px" style=3D"line-height=
+:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr><tr><td bgcolor=3D"tra=
+nsparent" style=3D"background-color:transparent;padding:0.0px 0.0px 0.0px 0=
+.0px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" c=
+ellpadding=3D"0"><tr><td align=3D"center" valign=3D"top" style=3D"padding-b=
+ottom:px;padding-left:0px;padding-right:0px;padding-top:px; " class=3D"dd">=
+<table role=3D"none" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=
+=3D"margin:0 auto 0 auto;"><tr><td align=3D"center" valign=3D"top" style=3D=
+"width:670px;"><img src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dsc=
+ale-down,format=3Dauto,onerror=3Dredirect,quality=3D80/uploads/asset/file/1=
+3799588-a58d-42a7-94df-c066a8b66784/Content_Break_Lazy.png?t=3D1713891765" =
+alt=3D"" height=3D"auto" width=3D"670" style=3D"display:block;width:100%;" =
+border=3D"0"/></td></tr></table></td></tr></table></td></tr><tr><td height=
+=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.0px;"> &nbsp; =
+</td></tr></table></td></tr><tr><td><table role=3D"none" width=3D"100%" bor=
+der=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><tr><td bgcolor=3D=
+"#3ecc6d" style=3D"background-color:#3ecc6d;border-bottom-left-radius:0px;b=
+order-bottom-right-radius:0px;border-bottom-width:0px;border-color:#3ecc6d;=
+border-left-width:2px;border-right-width:2px;border-style:solid;border-top-=
+left-radius:0px;border-top-right-radius:0px;border-top-width:0px;padding:0.=
+0px 15.0px 0.0px 15.0px;"><table role=3D"none" width=3D"100%" border=3D"0" =
+cellspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"left" val=
+ign=3D"top" style=3D"color:#0c0c0c;font-weight:Bold;padding:0px 0px;text-al=
+ign:left;"><h2 style=3D"color:#0c0c0c;font-weight:Bold;mso-line-height-alt:=
+150.0%;"><span style=3D"color:#FFFFFF;">Other stuff we found interesting</s=
+pan></h2></td></tr></table></td></tr></table></td></tr><tr><td><table role=
+=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" s=
+tyle=3D""><tr><td bgcolor=3D"transparent" style=3D"background-color:transpa=
+rent;border-color:#3ecc6d;border-style:solid;border-width:2px;padding:15.0p=
+x 15.0px 15.0px 15.0px;"><table role=3D"none" width=3D"100%" border=3D"0" c=
+ellspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd" align=3D"left" styl=
+e=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p style=3D"ms=
+o-line-height-alt:150.0%;"><span style=3D"">1) </span><span style=3D""><b>O=
+mar Alderete </b></span><span style=3D"">is ruled out of Gameweek 9 due to =
+concussion protocols.</span></p></td></tr><tr><td class=3D"dd" align=3D"lef=
+t" style=3D"padding:0px 0px;text-align:left;word-break:break-word;"><p styl=
+e=3D"mso-line-height-alt:150.0%;"><span style=3D"">2) Fulham=E2=80=99s </sp=
+an><span style=3D""><b>Joachim Andersen</b></span><span style=3D""> has a =
+=E2=80=9Cnot that serious=E2=80=9D muscle injury - Silva.</span></p></td></=
+tr><tr><td class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:=
+left;word-break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span=
+ style=3D"">3) A defender has been the top-scoring player in five of the ei=
+ght gameweeks so far this season.</span></p></td></tr><tr><td class=3D"dd" =
+align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-wo=
+rd;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">4) The team =
+of the season so far:</span></p></td></tr><tr><td align=3D"center" valign=
+=3D"top" style=3D"padding-bottom:px;padding-left:0px;padding-right:0px;padd=
+ing-top:px; " class=3D"dd"><table role=3D"none" border=3D"0" cellspacing=3D=
+"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr><td align=3D"cent=
+er" valign=3D"top" style=3D"width:640px;"><img src=3D"https://media.beehiiv=
+.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredirect,qualit=
+y=3D80/uploads/asset/file/822a20a8-017e-4daa-8fce-718f8e3dd28b/image.png?t=
+=3D1761174932" alt=3D"" height=3D"auto" width=3D"640" style=3D"display:bloc=
+k;width:100%;" border=3D"0"/></td></tr></table></td></tr><tr><td class=3D"d=
+d" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break=
+-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"">5) Every =
+single centre back that has played against Crystal Palace in their last 5 l=
+eague matches has hit DEFCON. All 10 of them. They play Arsenal next. [</sp=
+an><span style=3D""><a class=3D"link" href=3D"http://link.mail.beehiiv.com/=
+ss/c/u001.ZXu2PJ-FU9TAyj0edfC1h9yD6zmZx9RAIV6mnE5D6lWDL0nBrQX5wTiNDDsn-zDzj=
+yNPMHL6V584kkxE89H19z_2pdh9ge-qv8GBLjdMY7gdZqYJ8Ll-NREsN19N5OeRWUyzBnkHWLDn=
+tm-s3Ezyt_H8FdOp2fBVGopAjzfPCIRQhaKfKImlqUjL6KfYCddJx2ucRXop-0JDMk2kP1xuk_O=
+gX_KjL_WiHlRnfcXlrVQ/4kz/jYnzCHLZQOKj5CoD8kOuVw/h4/h001.XwNFcmSG_crKfzvK6p-=
+neIJoNkvK3mKjro47cJEvj2Y" target=3D"_blank" rel=3D"noopener noreferrer nofo=
+llow"><span>@FPL_TomHadley</span></a></span><span style=3D"">]</span></p></=
+td></tr></table></td></tr></table></td></tr><tr><td><table role=3D"none" wi=
+dth=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0" style=3D""><t=
+r><td height=3D"15.0px" style=3D"line-height:1px;font-size:1px;height:15.0p=
+x;"> &nbsp; </td></tr><tr><td bgcolor=3D"transparent" style=3D"background-c=
+olor:transparent;padding:0.0px 0.0px 0.0px 0.0px;"><table role=3D"none" wid=
+th=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td align=
+=3D"center" valign=3D"top" style=3D"padding-bottom:px;padding-left:0px;padd=
+ing-right:0px;padding-top:px; " class=3D"dd"><table role=3D"none" border=3D=
+"0" cellspacing=3D"0" cellpadding=3D"0" style=3D"margin:0 auto 0 auto;"><tr=
+><td align=3D"center" valign=3D"top" style=3D"width:670px;"><img src=3D"htt=
+ps://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=
+=3Dredirect,quality=3D80/uploads/asset/file/13799588-a58d-42a7-94df-c066a8b=
+66784/Content_Break_Lazy.png?t=3D1713891765" alt=3D"" height=3D"auto" width=
+=3D"670" style=3D"display:block;width:100%;" border=3D"0"/></td></tr></tabl=
+e></td></tr></table></td></tr><tr><td height=3D"15.0px" style=3D"line-heigh=
+t:1px;font-size:1px;height:15.0px;"> &nbsp; </td></tr></table></td></tr><tr=
+><td><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cel=
+lpadding=3D"0" style=3D""><tr><td bgcolor=3D"transparent" style=3D"backgrou=
+nd-color:transparent;border-color:#0e132b;border-style:solid;border-width:2=
+px;padding:15.0px 15.0px 15.0px 15.0px;"><table role=3D"none" width=3D"100%=
+" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"><tr><td class=3D"dd" ali=
+gn=3D"left" style=3D"padding:0px 0px;text-align:left;word-break:break-word;=
+"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"color:rgb(45, 45,=
+ 45);font-family:Helvetica, Arial, sans-serif;font-size:16px;">There=E2=80=
+=99s no early kick-off next week, so we=E2=80=99ll be back in your inbox on=
+ Friday afternoon, at 13:30 GMT. Try to enjoy Gameweek 9 and remember,</spa=
+n><br><br><span style=3D"color:rgb(45, 45, 45);font-family:Helvetica, Arial=
+, sans-serif;font-size:16px;"><b>Stay lazy.</b></span></p></td></tr><tr><td=
+ class=3D"dd" align=3D"left" style=3D"padding:0px 0px;text-align:left;word-=
+break:break-word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"=
+color:rgb(45, 45, 45);font-family:Helvetica, Arial, sans-serif;font-size:16=
+px;">The LazyFPL Team.</span></p></td></tr><tr><td align=3D"center" valign=
+=3D"top" style=3D"font-size:0px;line-height:0px;padding:30px 0px 30px;" cla=
+ss=3D"dd"><table class=3D"j" role=3D"none" width=3D"95%" border=3D"0" cells=
+pacing=3D"0" cellpadding=3D"0" align=3D"center"><tr><td> &nbsp; </td></tr><=
+/table></td></tr><tr><td class=3D"e" align=3D"left" valign=3D"top" style=3D=
+"padding:0px 0px 12px;"><h3 style=3D"">What do you make of the new stats se=
+ctions?</h3></td></tr><tr><td class=3D"ee e " style=3D"padding:0px 0px 0px;=
+"><div style=3D"margin-left:0px;" class=3D"edm_outlooklist"><table role=3D"=
+none" border=3D"0" cellspacing=3D"4" cellpadding=3D"0" align=3D"left" style=
+=3D"min-width:300px;"><tr><td style=3D"width:100%;border:1px solid rgba(50,=
+ 50, 50, 0.17);padding:6px 12px; border-radius:4px;"><a style=3D"font-style=
+:normal;text-decoration:none;" href=3D"http://link.mail.beehiiv.com/ss/c/u0=
+01.f6xWwooSSKr3K6NAShfW7ohjQZo-TWd1RH0KdoTWETT2U8VByzh-vblLf9rPLH-zgyfSSTbU=
+pMH_jxT72lv_dZHnHMS5PV84onk9T08evwk-jHaF5YLhinOeJFRbewDbhEUmvqDq6PYBnmFziLQ=
+E02vGdZgGYSBBY7j6H6VraE_Q5mWGwvHg1cCvOrUyZ9q_n9i-G1KobyHhuSnj3GyAVJx2WbrSVW=
+8FwK84Rk2pO_uRx-Lqb2SQaUeS4iaRMEgZKfQBUBCP0kUXwrptz8jEdd24A1e_PUFMmd0KE2dl9=
+hF1tHzT48p7iKxXVpbog7Sqs1RRfI93MXaKzshN0FlxuZntPGcnWoNwvmLK3YEOep-5vNSn3fyV=
+pfeUkH9Fw7mPqtCUZL7sPUjWCIN2nNut0tWavp_1t6fGByg7ziU6Vi-5rFrSyllfuqegcJO2NqJ=
+hUqphFya41DVLaeD5eNcsbv6WqUU2Y8-pYn213EdO1hkDuhPe7NAy3SicRn6C9AGdqQhNBVzfBL=
+2IX-JHnlRfVlrEM53uAyXAVfBA4mHQBfp6ryvTOHK1GdmroFm5oFFwk4kohIod4PK2629tVzH1o=
+tDP51oUml1FQISEVnTrfm1p4ZZZW_2pfEHFZ3MGxgkwh9xK-d0EjgwFj4PXzqesnhS4R7FMMnOc=
+lfCZZoRJ5JHLz1XDhrmazxAwecF9wPIl99ibJXu1HLgoUKBUGrExlremMoYMo787R9OwjgFpRwX=
+L1CbOsm7j6HoXCUkY5Tc-U2mu5Mv2-RYR0lZ1NdMddTK4wEOBA974eZCKOQeSk-e_IsfMhGnT6V=
+N9qonjMcmdzn6zYcyztmPofUtioH6uDD41I2v2q6QgvIxz8cic07X-EbnTpOe0pjjS3JcxkPWja=
+HWlPAd8rEQMkZ58XXeK6-t3h-BpvCJo1OedhQ67ePoCQgyue0h9Cjo-kcWp1dfnOL0iVU93Eu1M=
+mmpSDj6bHJ4MPZSEugI6dCQocG8H12WF8GhByTLeBvvhGPRDVXwUXxG1gDMrliwah_FN_JoS9g/=
+4kz/jYnzCHLZQOKj5CoD8kOuVw/h5/h001.wpzbEyYOL3THon3HJCUvpgnDCaMEr1IzeI44P620=
+9e8"><p style=3D"font-size:14px;color:inherit;"> An improvement =F0=9F=91=
+=8C </p></a></td></tr><tr><td style=3D"width:100%;border:1px solid rgba(50,=
+ 50, 50, 0.17);padding:6px 12px; border-radius:4px;"><a style=3D"font-style=
+:normal;text-decoration:none;" href=3D"http://link.mail.beehiiv.com/ss/c/u0=
+01.f6xWwooSSKr3K6NAShfW7ohjQZo-TWd1RH0KdoTWETT2U8VByzh-vblLf9rPLH-zgyfSSTbU=
+pMH_jxT72lv_dZHnHMS5PV84onk9T08evwkVkaMwwcBnFRYa7Zq3y3MPNW12fAIJvmlI5h1PFJk=
+vwvhY9QynOK3lZvnswVF__sYlKTvegtqrheWogidSvW5n-IudCIptGNROHgYWNxMwWcpPINpaYQ=
+W67TNXSjp4AFKf3rAJKj86u5OyixAGIFbhoTZ--UorDjuNqOq2XYyaTQDes8-U6-QSGeI-cev8g=
+LiNjZgVvuUwTd3V_hZEtyFv8UYY4ABgMGeMdiZEbj6PcZ_XajgMkSCBaxdXqr5U72IAqnDwMf6m=
+X2qeLTyaq1v4_hV-ZlnnL6lgC4LL7GUu5nZuDu03LFrpUDgxgxn4dr6OzdRLPQNyOXbzBPlTrvv=
+S0HFpUPTqL3W78i_5pVYuNaQLv9zTOSuKEyzMcF-wKP31Ktf8ZlX7H_8NceioKPcj2xeKeBitXb=
+kdAHOmKPus2ZoG-ZYzOL5r1IQFrNozSoDydQwuytZbg-v2fUAr_FWBlz-Xoxl0WE9ZfEfE_NkEW=
+Gjek2BUmXJyG6s125P1yqAU-27H5rrsQgcbiVq0whRKj0WiQU07EjKC4Pc0Pk8P_DFocq2e0zpm=
+QKGe7l3n2QDQQoRo_qa2WcNMAUZo2c3LF5usZPbN9eJBIF8w6EQNUSY59hE_PklD6WYkUbu_Rlv=
+mE9KC6Su7QwiGDa44_zvetPNtyiX438JdYhiXU89Y1HsJaV0ewI051iILd1zg3-imzDj2-jbbEU=
+O5wNJSz4p9DeckzeiYU5ypKWT13cWpeLWvJVgqJUSGRdtIg932LdU0K3BA28XKfVDp5JV1Obe3z=
+102uAMnSwEP7z7A1Tbhmnob2ybIfwg6gYuKOUKdo-uuNUPMlgVBhdcKduIaxTF_Wy8T6RkYgXgT=
+raCDzZqoDqf5n82T_VDq1qJV8-LQ3mo-vyTckHBcDyccJPaTZEpExKxLItVLk1ft9kPjVxcE2w/=
+4kz/jYnzCHLZQOKj5CoD8kOuVw/h6/h001.Dfx-05G_vPZitZZoiecUXqD6iFVqxnh81koX-Dbv=
+lrY"><p style=3D"font-size:14px;color:inherit;"> Worse than before =F0=9F=
+=91=8E </p></a></td></tr><tr><td style=3D"width:100%;border:1px solid rgba(=
+50, 50, 50, 0.17);padding:6px 12px; border-radius:4px;"><a style=3D"font-st=
+yle:normal;text-decoration:none;" href=3D"http://link.mail.beehiiv.com/ss/c=
+/u001.f6xWwooSSKr3K6NAShfW7ohjQZo-TWd1RH0KdoTWETT2U8VByzh-vblLf9rPLH-zgyfSS=
+TbUpMH_jxT72lv_dZHnHMS5PV84onk9T08evwnme9RuAxJA53dfijHfif-2p_ty4Edqy7lDAa4d=
+3KTV-IspkvSlINaLiqIgm8yHHnMRmoMDPu8kRNiJQQ4eKvlb5nMfFrmoCRrVXD6z7lj2_i-GgLb=
+zEl8zpsQ8GA80JEQxDO1bbMy8ygmSWXfOYlhFIIt-1t4RmebR8CkFHWe5rh5Q-ajWOTB2GAw0li=
+ekBkCTvE65Q9N4qDsCevOqdrLS9gb6OSELZDhsCV3oiqsNeP7fakDcS0aPBWrfsdGZOXIVFOjNt=
+CeCoiypyK1Gv89dPg1rDg-HzE82gI31ioh291X6SUMqbwAxBG5d6vU6pnTKhE06ouzaxt2TWuVw=
+TA4-PvKlV9Fh52x5at7anhrwVPM4q12Md2iuQ4I6FTya8Rg0jelPQROL_NCyDWrtI1cjgr7JwCk=
+Yjm-R1FkCujpKu0jlFi-P9bfJMHU3M86aKktdWy3Xv45EZEbNKLg1xjkpTtOovAR6UoDkuwcJ03=
+JU4dGVs6DrPgfM7yMGLLVYsYI-6tGnA0b-w6a1UdwPxaLcmbTcK43peDgZXwHG7dxnPCnDv9O1j=
+S7esHUtoP_VJ61-rwmgnbeq7Zgrv8g-RcXtJlrjKSDpo5j7PmX8U2uvCN7m3dNHlACzHtfGeo5o=
+Dgvoauhv2XWHeBD8qoBk6uLqWPi6UDhk4F5a30HoMVagd5SMl8zZfPKOFtG-bu4mTbOYK1TaKDa=
+5Dy0fE3Lf5VTVNpHVsbguzfilFcNupY7rB-v0MueYC074jJ9r34Q6qhTeCZAvKnm599YBoJgWel=
+oI6blpucE5tdoNyvD4ezoOYiUrJ90AUJRodUBQcUSJ8h5PHHBefOGO3uVPBpDF0ynZfNSP1Ol9c=
+8NwU3Uh_Cx_cyFvB-Q9uly2dRHj_a_bx70By4scl8aFua3Y84AfKZ9GQypoas4rTrC-i6Ti80Am=
+jg/4kz/jYnzCHLZQOKj5CoD8kOuVw/h7/h001.aqHiIMH035bufA-fP_sPt_Dd7YQZ28HYxuh5w=
+L7ueqc"><p style=3D"font-size:14px;color:inherit;"> I didn&#39;t notice =F0=
+=9F=A4=B7 </p></a></td></tr></table></div></td></tr></table></td></tr></tab=
+le></td></tr></table></td></tr></table></td></tr><tr><td align=3D"center" v=
+align=3D"top"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=
+=3D"0" cellpadding=3D"0" align=3D"center"><tr><td><tr><td class=3D"b" align=
+=3D"center" valign=3D"top" bgcolor=3D"#0e132b" style=3D"padding:0px 0px 0px=
+ 0px;border-style:solid;border-width: 0px 0px 0px 0px;border-color: #0e132b=
+;border-bottom-left-radius:10px;border-bottom-right-radius:10px;"><table ro=
+le=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0" cellpadding=3D"0"=
+ align=3D"center"><tr><td align=3D"center" valign=3D"top" bgcolor=3D"#0e132=
+b" style=3D"padding:12px"><table role=3D"none" width=3D"100%" border=3D"0" =
+cellspacing=3D"0" cellpadding=3D"0" align=3D"center"><tr><td><span style=3D=
+"padding-left:1px;"></span></td><td align=3D"center" valign=3D"middle" widt=
+h=3D"75" style=3D"width:75px;"><a href=3D"http://link.mail.beehiiv.com/ss/c=
+/u001.f6xWwooSSKr3K6NAShfW7ukaFzdWidtq5cADDlUhAuEpIAxHzfDv0WkDIT3jopQLzyipY=
+4q0TX982dflDcatZQVcezfiGWyNVyrqjmDWrELQ_G9kmgmrkFQKvwZBtrgA1cykARI311i-BI3X=
+gs1HdMQDlsW5CSFq8RfJ8qHUJvVQjhKnjYTPe_unu3___N6sB-U2zCfWWpc_4GJnwRYct5wz3A_=
+P-vJJ-xGJTnNzBK7fz1qZy-M0x4Hr7v2txTP7/4kz/jYnzCHLZQOKj5CoD8kOuVw/h8/h001.md=
+lmJSm1wLRer4uWLzn56OPdbYlkp9cxuDVs8VPThhM" style=3D"text-decoration:none;">=
+<img width=3D"22" height=3D"22" alt=3D"fb" border=3D"0" style=3D"display:bl=
+ock;max-width:22px;color:Light" src=3D"https://media.beehiiv.com/cdn-cgi/im=
+age/fit=3Dscale-down,format=3Dauto,onerror=3Dredirect,quality=3D80/static_a=
+ssets/facebook_light.png"/></a></td><td align=3D"center" valign=3D"middle" =
+width=3D"75" style=3D"width:75px;"><a href=3D"http://link.mail.beehiiv.com/=
+ss/c/u001.7bw8PgzEKlNsQhqUR6EcskMzF78oqhtTqcM-s5y-Zk0G1NwZVcbySN6H7qNh-sApP=
+Xu94jE3QY-JLalMvsrPH0h5ylkAiAsaCv4knRX56e7q84n2P0ZUWdk4E6UHJfXC05KBIVB0b175=
+rgQeDzW97LtI89HHizskTFs5xJMENhw81o0pePxVULsUT_LakkhuKEuMUf0y-iYr7MEFL631M-F=
+B3x-4_ePCqMeDEAQLr8g/4kz/jYnzCHLZQOKj5CoD8kOuVw/h9/h001.9uYWsv5zPfgBeI8Jbcl=
+Zomimw67szg__gOBsRttevZU" style=3D"text-decoration:none;"><img width=3D"22"=
+ height=3D"22" alt=3D"tw" border=3D"0" style=3D"display:block;max-width:22p=
+x;color:Light" src=3D"https://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-d=
+own,format=3Dauto,onerror=3Dredirect,quality=3D80/static_assets/x_light.png=
+"/></a></td><td align=3D"center" valign=3D"middle" width=3D"75" style=3D"wi=
+dth:75px;"><a href=3D"http://link.mail.beehiiv.com/ss/c/u001.f6xWwooSSKr3K6=
+NAShfW7nqE-hqW1Jd5LqpMyP8Ex8GKIwXIRBMqOgzdGCg5fZQGMQRBR8JS4dvVO01qADA1c5NLA=
+6w8xhlA7sx5UWpLD2Gzy8XBkhCW9xirsRg6nV6zrZU4_LhUGo5euL6QTF9vpcMbPSybIBu--zhv=
+aS-z7d30z20FgPlSeos8JeHAHX4teRRhEAYXfnxn_6PsmTSFPR6CugM3IqC0o2lOG-tQc_M/4kz=
+/jYnzCHLZQOKj5CoD8kOuVw/h10/h001.54lIM7qCLi1Ml0KYEQOHeKl8qbwi3S_takEgQy3Wzh=
+E" style=3D"text-decoration:none;"><img width=3D"22" height=3D"22" alt=3D"i=
+g" border=3D"0" style=3D"display:block;max-width:22px;color:Light" src=3D"h=
+ttps://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerr=
+or=3Dredirect,quality=3D80/static_assets/instagram_light.png"/></a></td><td=
+ align=3D"center" valign=3D"middle" width=3D"75" style=3D"width:75px;"><a h=
+ref=3D"http://link.mail.beehiiv.com/ss/c/u001.f6xWwooSSKr3K6NAShfW7sga0dVzu=
+m3rzY1YDoYtxswvoaQAS_l7VXEMCFs5S6ap1JAAu6iWxMozmtmEhlJ8eeda2FnKA-EGh9THjZ5J=
+l_XB73c3oXe2uCuRl_1yUFCHiDi5SYhVK62vAJ0iDVeEsiK05dWy6bi6omu7DAhNQ3eIQS2bzkg=
+qbdxxaEpiQ1yNiRkMby2ZiIt92hunBdhTKHhbngQgGzEvBopbHIYqhLg/4kz/jYnzCHLZQOKj5C=
+oD8kOuVw/h11/h001.KRQqv3-zIQ3a2_dVieoDA-IksHDymkMveQYkvZvTg9s" style=3D"tex=
+t-decoration:none;"><img width=3D"22" height=3D"22" alt=3D"thds" border=3D"=
+0" style=3D"display:block;max-width:22px;color:Light" src=3D"https://media.=
+beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dredirect=
+,quality=3D80/static_assets/threads_light.png"/></a></td><td align=3D"cente=
+r" valign=3D"middle" width=3D"75" style=3D"width:75px;"><a href=3D"http://l=
+ink.mail.beehiiv.com/ss/c/u001.Itb7FiAbTXM7PJHA9S_iE0wnUl-JW7bgki_dmxF5GBTe=
+KEzxHtO-3fCB-iNAaygHIIAow_PytAMcqEgkQePsv4aIL-v9eMrd3ac3J_RsS1AC08BKUdBInql=
+IpbhBAjTYTPxLZGl0p_v1ofQeCDp_ijK-aFSGcN7j2gcNm35J_Y8Yh2sAbkRlahw2gFRkxKJpcs=
+bDA8NdpLYKEBTrLsfxSb0e3tWLEDsEU9oFE1ely909_QTdRY26A2ZLYyCss-bC/4kz/jYnzCHLZ=
+QOKj5CoD8kOuVw/h12/h001.3qG4WNLfTU65pYI5fgAUbIy3gxdSRspM4kj98eSi-c8" style=
+=3D"text-decoration:none;"><img width=3D"22" height=3D"22" alt=3D"in" borde=
+r=3D"0" style=3D"display:block;max-width:22px;color:Light" src=3D"https://m=
+edia.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=3Dred=
+irect,quality=3D80/static_assets/linkedin_light.png"/></a></td><td align=3D=
+"center" valign=3D"middle" width=3D"75" style=3D"width:75px;"><a href=3D"ht=
+tp://link.mail.beehiiv.com/ss/c/u001.uT49H-aTuH54-RIO30356hA_E4wKco5BjaFViA=
+PGd6DQsbsPzywIsOoq8l5yxbbTs9KKH4MaYqxXgrpFfLhhbnhCswPAm4QaWfHkb3cUMs7_cx_EA=
+lXIEEHzpDrrTBios2GK6rDHyQcBuHaCZL5Ol71iLCJuh1c6gGbC0IggRsML7ZcelsrVrzx7G1gK=
+YH9-Q3atfNoPMACCy9yjaf3XGuSV1B7VQaBLnJ1iC30-QMmMFmzn4SVaoeh2YquH8ctA/4kz/jY=
+nzCHLZQOKj5CoD8kOuVw/h13/h001.XUIFBVMmK4xSSsPpL6quFfMEaLNictB7lD4dg5e0fdg" =
+style=3D"text-decoration:none;"><img width=3D"22" height=3D"22" alt=3D"in" =
+border=3D"0" style=3D"display:block;max-width:22px;color:Light" src=3D"http=
+s://media.beehiiv.com/cdn-cgi/image/fit=3Dscale-down,format=3Dauto,onerror=
+=3Dredirect,quality=3D80/bluesky_white.png"/></a></td><td><span style=3D"pa=
+dding-left:1px;"></span></td></tr></table></td></tr><tr><td class=3D"dd" al=
+ign=3D"center" style=3D"padding:0px 0px;text-align:center;word-break:break-=
+word;"><p style=3D"mso-line-height-alt:150.0%;"><span style=3D"color:#F9FAF=
+B;font-size:0.8rem;">Was this email forwarded to you? </span><span style=3D=
+"font-size:0.8rem;"><a class=3D"link" href=3D"http://link.mail.beehiiv.com/=
+ss/c/u001.f6xWwooSSKr3K6NAShfW7t0mxhDdEDUBGiAJLPjasrOui7e8CsGCWlVNxja6Il4fv=
+GZ4Cq3TwS8pRTHS9o8g3GdoP0lfq9GLak6GXSkL1BqqwkFvjVJnLlHc2D_d6SVTFyFUjk9fho4M=
+vrDQQjXxuTecaSq71x3Fpj85HaMEVspxD8uvYDOBtPdVxb3EYuxpdtxAOS9ZQ8S5g3ejFShB76c=
+cXuCb2oLefKTyXVQEb4Lpee3iE3DK6MijsxuExY3TRLBg5f-QHAFk1ZmiS41IBls3Ru-13oPmh1=
+z2rwYWp_9qrzNjUdJ0XEk6RWXzsggVAdcWXTkum61RQHwUZQwmwmf-oPowK8--FmY07ynBKRhfb=
+8AO_mdjPxRM-4KlxouORtwRb3b4hUMmq-jSMQvHVQE8y1m996Om5MBj9dzOM1lXO7DyF7kZi-zs=
+AU8WcaIusWeS7LbcORdc8_v4BxCMuaSkOAB2mOCXPX83BOb1uIIb287tKwxII2mG8tye9SX8Cbt=
+PSzQ3CTtENRJcZb1uYH0AwuUIZDwTO-qBrEvFOkqCDwMSgYmvNjzL4PJ2NHbQQH_VMt5DZqao6u=
+4S-Uoyd0DWYMD8drJBRYtRGGXtZ5ROUab2dacxCljSfrEbB8PBwujW3MzVR64sQjKHD6UZXlizI=
+bAMdtYk6F8xXyvbb9pNVGC5XC2Ti1q4MUqX-EoU1kVa1LVxsAcwPypaQbm9EKUYsSbgWPqEMMvF=
+RVIeZViyKpbm4HWcHxdxjDMbN-ATUHXTJvnMFxBRIigu1P_z9EoNpeSCsIEDs4O7UhegEU4/4kz=
+/jYnzCHLZQOKj5CoD8kOuVw/h14/h001.WT55UovGM6GGstF5mTZO-69fhHGJHxi7ekrTtbDl40=
+Y" target=3D"_blank" rel=3D"noopener noreferrer nofollow" style=3D"text-dec=
+oration-color: #FFFFFF;"><span style=3D"color: #FFFFFF;">Sign up for free</=
+span></a></span><span style=3D"color:#F9FAFB;font-size:0.8rem;">.</span><br=
+><span style=3D"color:#F9FAFB;font-size:0.8rem;">Need support or want to pa=
+rtner? </span><span style=3D"font-size:0.8rem;"><span style=3D"text-decorat=
+ion:underline;"><a class=3D"link" href=3D"http://link.mail.beehiiv.com/ss/c=
+/u001.f6xWwooSSKr3K6NAShfW7lK_pkiVj_DV5F-2FIG1jPX7HxP5aaY6Th1U2I4vY1CjUO7Hr=
+eAKxg00VcCjB7bsNX9_mrJ8_pKifILMeDQws_8ZJ4rHW0FIvNyOwsw8ypNAehkFQ1lnrARmkwqs=
+CFuQJlGSI1AGzThdllbDsT6xr5T1FWeQ8sAeotN63-sDcPZKsBc2yK3DKOz3TylYLtr7-6ynn79=
+OHOjdNm0TtgGQvzQops8KV2_xNPumWwZwSpdXQuD6W3jxxavsZcm-NES2cvYPmuunlHbWj2ZjPh=
+KxYjhfx2qrbQ90KFRykS6tZaGAWVKvOlrOBllbmR552BmbQbyZd1pj9boIwmavCbbXtSW6CemF9=
+Z1L3L0pghgTKNNrR2ms_UgHiMykpEkngUXFiQzzCOlnYpUVG3q958Sv_PcIOWNzZ0iBNueBbC5X=
+-_Zn4LX7ZG9bRUT7IIINgsiATApIxtTqd46KUb1lnYpGkX4HFOc98_YhX6BspYVfwtiyRWkOewk=
+KQfP6AQfMecCebSUAEYFY3izSJ-FrjCpB8fd-Qlk4tvv8QGjpFG5HoqhdlN8hzOfSyA6Dpjl3XR=
+8tBLKzTHjgjnp0sfPYseAI8INX9UC_dSLs4ooWYE8ReAzUKu8HK93Y1gnFT_su8pvpEd5-sZ6T-=
+j_MwuqDNq_YN0GbyhQe7QI5t_9VAn9lCq7YdBNWHcBXa8ks8ejWlGaNkjns9pJgR-5OLEZ49Fre=
+tvY2ddHMsunSj3h1u-DzicopYiY1ln--75UGLHynhgP8WPmRxFHTWj5F3KThCvdl1MQ/4kz/jYn=
+zCHLZQOKj5CoD8kOuVw/h15/h001.rTT3xiSwfV2NOViYmmlZl1UIFnMFZH687hdcuFJGEmM" t=
+arget=3D"_blank" rel=3D"noopener noreferrer nofollow" style=3D"text-decorat=
+ion-color: #F9FAFB;"><span style=3D"color: #F9FAFB;">Get in touch</span></a=
+></span></span><span style=3D"color:#F9FAFB;font-size:0.8rem;">.</span><br>=
+<span style=3D"color:#F9FAFB;font-size:0.8rem;">Premium member? No, but </s=
+pan><span style=3D"font-size:0.8rem;"><a class=3D"link" href=3D"http://link=
+.mail.beehiiv.com/ss/c/u001.f6xWwooSSKr3K6NAShfW7lIR1EdsH0xPn3sRM8gD4lvMCb8=
+etrUJ9aHbjCKxtgSIF6NDllomMRSakKCBsupyOd662FRGWglPzROXm_mhk8cA-Kvksu7sUt4x-_=
+LmNq2HYX8rVTWG1ZnO-nWG9lOod90Ek9sIwZzSt94LMTYK7pZd6QqQbqks2JY9RTeFAEY6dqgyK=
+wpc7QVFTSGd3itBV9iVal9PI1uXfKyVvSyOppKiYSs0vnM2zwkR_i5vm-bVztlsM22nQJkce_WC=
+0A8hlRebCVfh9jxL784RqlzJ0kFU3ohn6CU5l25v0LqwQqyOrrX0rJ7s9G-zNQmU8F0a_B-CTNZ=
+LxX4TZjZYHLbLSxSQTF3UgtUM7dStPj8boW_1Dr1adSztByN6EN1r-EnpOnbjrdNgnyaOH-ld6i=
+P9qXF86vupDt8sy6_LgonHTf00MWNKITkGBm-w1fQNZjfZlEis5HgLWfRummJfCrceRcavMNWgm=
+kKtUr2-aCi4MdjkVHLbE4QkZvWOg8Pe6acVonmCOfHdNSkK8db9OjAeP5xuyRixbwTQfiz-RiN3=
+NkSjlBZhNUBTuWTg9hdRo8h4eW0P2z5jEEm8RfksygEnuEA7URbA9wd3YlCK6324CueSF7t2vFJ=
+hgNsleW9_FTZehd5GQea5eipD9D_OGfURcsbRQ_WEcqC2azpI59Pp4x6dSl9W4696XynQAMXP_N=
+dHzkejjhiYMCs1-z_HwQDREeHxc7ZsK29c856CHOJYTk3jMoS-x8v2CXJLQWIpaMxuvtzZCO_aX=
+sqUfjxVyZ1m1cU/4kz/jYnzCHLZQOKj5CoD8kOuVw/h16/h001.XZfqUjgUgp1Cx7QVbVQh9_fI=
+u4MFlsyJilM8PKsaHz4" target=3D"_blank" rel=3D"noopener noreferrer nofollow"=
+ style=3D"text-decoration-color: #FFFFFF;"><span style=3D"color: #FFFFFF;">=
+I=E2=80=99d like to join</span></a></span><span style=3D"color:#F9FAFB;font=
+-size:0.8rem;">. Yes, and </span><span style=3D"font-size:0.8rem;"><a class=
+=3D"link" href=3D"http://link.mail.beehiiv.com/ss/c/u001.f6xWwooSSKr3K6NASh=
+fW7sozS0Iejzy-8BIFDoULPpIrCdYSjfrACROZ7o30dss6mrwW_PURiGHdcgSXSY4GvVEWqSRDV=
+sSzT9EbSbC4v-hpbjf9dARit1euOZSbp-t3EDZVJYs6eSE3GsLDDF71YstxajA5OmctJFTZXG2M=
+ATwD27tMF6bWrd-cWYxm1QmaE6f2ZWxsSElj-VE3qkyzfSjufhZ5rX6n9P5Gk4Ij9Xb0kMKaFLQ=
+NTTKjqx3WmnNBBiwTr8VscLmwZ06ZSd8C48AXXl_2hXbifLc4Nen4lqpVX1VwmU-v56WeQPrtgR=
+-8aQuBPGtX0kQyTs4Bj5roXC_VEwFXJlF26Td8kIzlvn6O-hCj5Bqh4NqI_ivAVhCF4-fgYMsLz=
+gAIjhX7WdDJC3uCWAY7Z2KwNfwimv1HYN44db3qJCAgnAyZuKlEf69-5rDlJWcTW1c5i9WW6Owo=
+rX5ChmLOiuywo84HwdNTZCXvNdMSJSGy8QMP0TZ9XHehUOJvgPxx2KZgQL7sE9gsxDVtC4qlwpm=
+B0J4xKiGOndBmsIbD2RK8Eln_M0ELaVabVr-Ur9bsgvBmVxtHQAfmbGBqyx88xFutjZ-84Zm33b=
+_uPAVDXlVmZE8uRzZ24IAGL5pLcvPaZILrA9Cq8X1toUE8ECZwR5XwBT9flfRskdDBxk5GKEwJb=
+YF2VjNH43GuAcU2b0yghDJnFEt22vn1QGowp0wTuBqVNWQaDI7FTHeTtY4EzGsaMszPFCJBKAL3=
+ke3YYpX0rbbLCPxmipJjTJF0iH7FJAeQd5yPCLCAGNk/4kz/jYnzCHLZQOKj5CoD8kOuVw/h17/=
+h001.cEr-6_5nj8qw5-CA1QWX1zcOeX-MOxDhctgNt_e3af0" target=3D"_blank" rel=3D"=
+noopener noreferrer nofollow" style=3D"text-decoration-color: #FFFFFF;"><sp=
+an style=3D"color: #FFFFFF;">I need to update my account</span></a></span><=
+span style=3D"color:#F9FAFB;font-size:0.8rem;">.</span></p></td></tr><tr><t=
+d class=3D"w" align=3D"center" valign=3D"top" style=3D"padding:15px 15px 15=
+px 15px;"><table role=3D"none" width=3D"100%" border=3D"0" cellspacing=3D"0=
+" cellpadding=3D"0" align=3D"center"><tr><td align=3D"center" valign=3D"top=
+"><p style=3D"font-family:'Verdana',Geneva,sans-serif;color:#FFFFFF!importa=
+nt;"> Update your email preferences or unsubscribe <a class=3D"link" href=
+=3D"http://link.mail.beehiiv.com/ss/c/u001.f6xWwooSSKr3K6NAShfW7u6njG1BW1MP=
+XI9SD_urK5KEorbIWjO0GFUVqGHIYX_NkiZcernuXLMuzrk1Mn2ca0UpYXaw-7yilu8BcLT0CUC=
+9YIsiJQ-pGeJDVzgwn1B21eunWreQTU7Xym5NqpTFheptL3M6ilU0lF820bCVVzZ1RbrAGVHAj7=
+bNKMVfM3f83whsEteAvrA--6GRRGpA5F8Kn0VRD4JDdgFEZTlEcOHtxq75CRq-yWgp_NzkjiWYh=
+oigTejqyLNAaBI3hQErzzr6bU-VULzFggJJSbHLaetTLBkUf4xFnb1AT5aJgiQF2pgmYDkfJU0K=
+g8JPMmHvXLqpn-JWFXG7QEix5Z7j40zKDEikjxL5U9gl8zbknp2s3bvW1glhckvpjKbX-iW8qjL=
+96T9B1_-NjXwYJw8zp1ozQgLNbdoKfehF3jCZE_KpHGdnZvnJUaPo6fLRP0XPhSN6lwCIuU3eIG=
+JD6Wuh1mJLWmjfVJSOzdG3kRUetD7JaRX5aU1-6b-KsVKXVS40LexzWepKLkBlHi382gDOba1_F=
+9pTNjM8ferWacOl1FXl3oCiNnsPGxkiGPviNdKyZ4xaQzooYIf2jZxAr7NhqyKp5Td7Hn_5-ybJ=
+rMYKsLGL2620tEtVvFcwn2wHutfVQZ9Yzv72LnMt04QM99hvMHVH7029wwtns2IAVOamPrh75Dz=
+g3eBzkRgyQkPHwIIa_YVl8S7iUqDZfmF1bjboDlYUf1ITz6fj0Uelf_fdxv39lFLiU4iM574iYK=
+leU8ehEMVuDqWUGZY5eGauzUPrF3mqrl9-7AoEwP_Brbgw96u4UZ1EEGXDXvXVuPr-28PF0eeWu=
+BpPrj-xHgJuKlnOMXTdukdwVjeCcX4lsZDtuCHFhxX-FDrZ13Kokhzx6NZvxblX4dT9nkTvDvFX=
+voFqoADEioSeoSkKGV6ugPfzBdFQKxeNEPP1M8M654rmQhr60yo-cKEt4FxqENRf2Ean9sJO9zS=
+rQweDGJWPxdAL69Fo/4kz/jYnzCHLZQOKj5CoD8kOuVw/h18/h001.Tji5VQamOvkZeJ-SrC6jj=
+uVH5ozh-U-kwdZd_Jd4sq4" style=3D"text-decoration:underline;text-decoration-=
+color:#FFFFFF!important;color:#FFFFFF!important;"> here</a></p><p class=3D"=
+copyright" style=3D"font-family:'Verdana',Geneva,sans-serif;color:#FFFFFF!i=
+mportant;"> &copy; 2025 LazyFPL Limited </p><p style=3D"font-family:'Verdan=
+a',Geneva,sans-serif;color:#FFFFFF!important;"> LazyFPL C/O Larking Gowen 1=
+st Floor Prospect House, Rouen Road<br>Norwich, Norfolk NR11RE, United King=
+dom </p></td></tr><tr><td align=3D"left" valign=3D"top" height=3D"2" style=
+=3D"height:2px;"><a href=3D'http://link.mail.beehiiv.com/ss/c/u001.buCzdZXh=
+g7N8XCLgiSjXf3mSrNrimy9st_tD9qBl1zoYdpTPbMv_cUKRRZt9EtDvi-FUGYMkx_GFZaV3PWA=
+og4OY4KG7DCghJIVK3UZOYCc/4kz/jYnzCHLZQOKj5CoD8kOuVw/h19/h001.TMheyG8K2iFGT-=
+ZKjFzH4bk6EZfuwxeOiHGAeQ_sPBI' style=3D"color: #0e132b !important; cursor: =
+default; font-size: 1px; text-decoration: none;"> Terms of Service </a></td=
+></tr></table></td></tr></table></td></tr></td></tr></table></td></tr></tab=
+le></td></tr></table></td></tr></table></div></body></html>
+--86d0efaf9eb01eb20ceb90d922b12de10659173593633223cfc25db7c578--

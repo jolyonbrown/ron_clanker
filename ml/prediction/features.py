@@ -46,12 +46,17 @@ class FeatureEngineer:
                 - avg_assists: Average assists per game
                 - avg_bonus: Average bonus points
                 - avg_bps: Average BPS
+                - avg_influence: Average ICT influence component
+                - avg_creativity: Average ICT creativity component
+                - avg_threat: Average ICT threat component
+                - avg_ict_index: Average ICT index (sum of influence, creativity, threat)
                 - form_trend: Slope of last N games (improving/declining)
         """
         history = self.db.execute_query("""
             SELECT
                 gameweek, total_points, minutes, goals_scored, assists,
-                bonus, bps, clean_sheets, saves
+                bonus, bps, clean_sheets, saves,
+                influence, creativity, threat, ict_index
             FROM player_gameweek_history
             WHERE player_id = ?
             AND gameweek < ?
@@ -69,6 +74,10 @@ class FeatureEngineer:
                 'avg_bps': 0.0,
                 'avg_clean_sheets': 0.0,
                 'avg_saves': 0.0,
+                'avg_influence': 0.0,
+                'avg_creativity': 0.0,
+                'avg_threat': 0.0,
+                'avg_ict_index': 0.0,
                 'form_trend': 0.0,
                 'games_played': 0
             }
@@ -93,6 +102,10 @@ class FeatureEngineer:
             'avg_bps': np.mean([h['bps'] for h in history]),
             'avg_clean_sheets': np.mean([h['clean_sheets'] for h in history]),
             'avg_saves': np.mean([h['saves'] for h in history]),
+            'avg_influence': np.mean([h['influence'] or 0 for h in history]),
+            'avg_creativity': np.mean([h['creativity'] or 0 for h in history]),
+            'avg_threat': np.mean([h['threat'] or 0 for h in history]),
+            'avg_ict_index': np.mean([h['ict_index'] or 0 for h in history]),
             'form_trend': form_trend,
             'games_played': games_played
         }
@@ -216,7 +229,8 @@ class FeatureEngineer:
             SELECT
                 id, web_name, element_type, team_id, now_cost,
                 selected_by_percent, form, points_per_game,
-                minutes, goals_scored, assists, clean_sheets
+                minutes, goals_scored, assists, clean_sheets,
+                influence, creativity, threat, ict_index
             FROM players
             WHERE id = ?
         """, (player_id,))
@@ -248,6 +262,12 @@ class FeatureEngineer:
             'fpl_form': float(p['form'] or 0),
             'fpl_points_per_game': float(p['points_per_game'] or 0),
 
+            # Current ICT metrics
+            'current_influence': float(p['influence'] or 0),
+            'current_creativity': float(p['creativity'] or 0),
+            'current_threat': float(p['threat'] or 0),
+            'current_ict_index': float(p['ict_index'] or 0),
+
             # Recent form (last 5 games)
             'form_avg_points': recent_form['avg_points'],
             'form_avg_minutes': recent_form['avg_minutes'],
@@ -257,6 +277,10 @@ class FeatureEngineer:
             'form_avg_bps': recent_form['avg_bps'],
             'form_avg_clean_sheets': recent_form['avg_clean_sheets'],
             'form_avg_saves': recent_form['avg_saves'],
+            'form_avg_influence': recent_form['avg_influence'],
+            'form_avg_creativity': recent_form['avg_creativity'],
+            'form_avg_threat': recent_form['avg_threat'],
+            'form_avg_ict_index': recent_form['avg_ict_index'],
             'form_trend': recent_form['form_trend'],
             'form_games_played': recent_form['games_played'],
 

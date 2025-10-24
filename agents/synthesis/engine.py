@@ -28,6 +28,7 @@ from intelligence.chip_strategy import ChipStrategyAnalyzer
 from intelligence.fixture_optimizer import FixtureOptimizer
 from ml.prediction.model import PlayerPerformancePredictor
 from ml.prediction.features import FeatureEngineer
+from ml.prediction.news_adjustment import NewsAwarePredictionAdjuster
 from models.price_change import PriceChangePredictor
 
 logger = logging.getLogger('ron_clanker.synthesis')
@@ -66,6 +67,7 @@ class DecisionSynthesisEngine:
             model_dir=Path('models/prediction')
         )
         self.price_predictor = PriceChangePredictor()
+        self.news_adjuster = NewsAwarePredictionAdjuster(self.db)
 
         # State
         self.current_gw = None
@@ -98,9 +100,9 @@ class DecisionSynthesisEngine:
         """
         logger.info(f"DecisionSynthesis: Running ML predictions for GW{gameweek}")
 
-        # Load trained models
+        # Load trained models (auto-detect latest version)
         try:
-            self.performance_predictor.load_models(version='latest')
+            self.performance_predictor.load_models(version=None)  # Auto-detect latest
         except Exception as e:
             logger.warning(f"DecisionSynthesis: Could not load models: {e}")
             logger.warning("DecisionSynthesis: Will use fallback predictions")
@@ -144,10 +146,15 @@ class DecisionSynthesisEngine:
         logger.info(f"DecisionSynthesis: Generated {len(predictions)} predictions")
         print(f"\n📊 ML Predictions: Generated {len(predictions)} predictions for all players")
 
-        # Store to database
-        self._store_predictions(predictions, gameweek)
+        # Apply news-based adjustments
+        print(f"\n📰 Applying news intelligence adjustments...")
+        adjusted_predictions = self.news_adjuster.adjust_predictions(predictions, gameweek)
+        print(f"   ✓ Adjusted {len([k for k in predictions.keys() if predictions[k] != adjusted_predictions.get(k, predictions[k])])} predictions based on news")
 
-        return predictions
+        # Store to database (store adjusted predictions)
+        self._store_predictions(adjusted_predictions, gameweek)
+
+        return adjusted_predictions
 
     def _fallback_predictions(self, gameweek: int) -> Dict[int, float]:
         """

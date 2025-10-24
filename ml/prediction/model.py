@@ -346,13 +346,43 @@ class PlayerPerformancePredictor:
             joblib.dump(self.feature_columns, feature_path)
             logger.info(f"Saved feature columns to {feature_path}")
 
-    def load_models(self, version: str = 'latest'):
+    def get_latest_model_version(self) -> str:
+        """
+        Auto-detect the most recently trained model version.
+
+        Returns:
+            Model version string (e.g., 'gw9_ict') or 'latest' if none found
+        """
+        import glob
+        import os
+
+        # Find all model files and get their modification times
+        model_files = glob.glob(str(self.model_dir / 'ensemble_1_*.pkl'))
+
+        if not model_files:
+            logger.warning("No model files found, defaulting to 'latest'")
+            return 'latest'
+
+        # Get the most recently modified model file
+        latest_file = max(model_files, key=os.path.getmtime)
+
+        # Extract version from filename: ensemble_1_VERSION.pkl -> VERSION
+        version = Path(latest_file).stem.replace('ensemble_1_', '')
+
+        logger.info(f"Auto-detected latest model version: {version}")
+        return version
+
+    def load_models(self, version: str = None):
         """
         Load trained stacked ensemble models from disk.
 
         Args:
-            version: Version identifier for the models
+            version: Version identifier for the models. If None, auto-detects latest trained model.
         """
+        # Auto-detect latest version if not specified
+        if version is None:
+            version = self.get_latest_model_version()
+            logger.info(f"Using auto-detected model version: {version}")
         # Load feature columns first
         feature_path = self.model_dir / f'feature_columns_{version}.pkl'
         if feature_path.exists():

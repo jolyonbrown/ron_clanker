@@ -28,10 +28,26 @@ def main():
     parser = argparse.ArgumentParser(description='Train ML prediction models')
     parser.add_argument('--version', type=str, default='latest',
                        help='Model version identifier (default: latest)')
-    parser.add_argument('--train-gws', type=str, default='1-7',
-                       help='Training gameweeks range (default: 1-7)')
+    parser.add_argument('--train-gws', type=str, default=None,
+                       help='Training gameweeks range (e.g., 1-8). If not specified, uses GW1 to latest finished GW')
 
     args = parser.parse_args()
+
+    # Initialize DB to detect latest finished gameweek
+    db = Database()
+
+    # Auto-detect training range if not specified
+    if args.train_gws is None:
+        latest_finished = db.execute_query("""
+            SELECT MAX(id) as max_gw
+            FROM gameweeks
+            WHERE finished = 1
+        """)
+        max_gw = latest_finished[0]['max_gw'] if latest_finished and latest_finished[0]['max_gw'] else 1
+        args.train_gws = f'1-{max_gw}'
+        print(f"Auto-detected training range: GW{args.train_gws} (latest finished gameweek)")
+
+    # Continue with original args handling...
 
     start_time = datetime.now()
 
@@ -46,8 +62,7 @@ def main():
     # Parse gameweek range
     gw_start, gw_end = map(int, args.train_gws.split('-'))
 
-    # Initialize
-    db = Database()
+    # db already initialized above for auto-detection
     feature_engineer = FeatureEngineer(db)
     predictor = PlayerPerformancePredictor(model_dir=project_root / 'models' / 'prediction')
 
@@ -130,13 +145,14 @@ def main():
 
     # Display metrics
     print("\n   Model Performance:")
-    print(f"   {'Position':<15} {'Train RMSE':<12} {'Test RMSE':<12} {'Test R²':<10}")
+    print(f"   {'Position':<15} {'Train Samples':<12} {'Test RMSE':<12} {'Test R²':<10}")
     print("   " + "-" * 60)
 
     for pos, metrics in all_metrics.items():
         pos_name = position_names[pos]
-        print(f"   {pos_name:<15} {metrics['train_rmse']:<12.3f} "
-              f"{metrics['test_rmse']:<12.3f} {metrics['test_r2']:<10.3f}")
+        ensemble_metrics = metrics['ensemble']
+        print(f"   {pos_name:<15} {metrics['train_samples']:<12} "
+              f"{ensemble_metrics['test_rmse']:<12.3f} {ensemble_metrics['test_r2']:<10.3f}")
 
     # Step 3: Save models
     print("\n" + "-" * 80)
