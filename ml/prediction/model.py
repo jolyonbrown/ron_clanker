@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import Ridge
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import joblib
 
@@ -240,6 +240,253 @@ class PlayerPerformancePredictor:
         )
 
         return metrics
+
+    def train_position_model_cv(
+        self,
+        position: int,
+        X: np.ndarray,
+        y: np.ndarray,
+        gameweeks: np.ndarray = None,
+        n_splits: int = 5
+    ) -> Dict:
+        """
+        Train a STACKED ENSEMBLE using TimeSeriesSplit cross-validation.
+
+        This method respects temporal ordering - never trains on future data.
+        More robust than fixed splits, especially with limited data.
+
+        Process:
+        1. Use TimeSeriesSplit to create temporal folds
+        2. For each fold: train base models, generate meta-features
+        3. Aggregate performance across folds
+        4. Train final model on all data
+        5. Return cross-validated metrics
+
+        Args:
+            position: Player position (1-4)
+            X: Feature matrix
+            y: Target values
+            gameweeks: Optional gameweek indices for proper temporal ordering
+            n_splits: Number of CV folds (default 5)
+
+        Returns:
+            Dict with cross-validated training metrics
+        """
+        logger.info(f"Training position {position} with TimeSeriesSplit CV ({n_splits} folds)")
+
+        # Sort by gameweek if provided (ensures temporal ordering)
+        if gameweeks is not None:
+            sort_idx = np.argsort(gameweeks)
+            X = X[sort_idx]
+            y = y[sort_idx]
+
+        tscv = TimeSeriesSplit(n_splits=n_splits)
+
+        # Track metrics across folds
+        fold_metrics = {
+            'rf_rmse': [], 'gb_rmse': [], 'xgb_rmse': [],
+            'ensemble_rmse': [], 'ensemble_mae': [], 'ensemble_r2': []
+        }
+
+        # Cross-validation loop
+        for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
+            X_train_fold, X_test_fold = X[train_idx], X[test_idx]
+            y_train_fold, y_test_fold = y[train_idx], y[test_idx]
+
+            # Further split train into train/val for meta-learner
+            split_point = int(len(X_train_fold) * 0.8)
+            X_train = X_train_fold[:split_point]
+            y_train = y_train_fold[:split_point]
+            X_val = X_train_fold[split_point:]
+            y_val = y_train_fold[split_point:]
+
+            # Train base models
+            base_models = []
+
+            rf = RandomForestRegressor(
+                n_estimators=50, max_depth=8, min_samples_split=10,
+                min_samples_leaf=5, random_state=42, n_jobs=-1
+            )
+            rf.fit(X_train, y_train)
+            base_models.append(('RandomForest', rf))
+            fold_metrics['rf_rmse'].append(
+                np.sqrt(mean_squared_error(y_test_fold, rf.predict(X_test_fold)))
+            )
+
+            gb = GradientBoostingRegressor(
+                n_estimators=50, learning_rate=0.1, max_depth=4,
+                min_samples_split=10, min_samples_leaf=5, random_state=42
+            )
+            gb.fit(X_train, y_train)
+            base_models.append(('GradientBoosting', gb))
+            fold_metrics['gb_rmse'].append(
+                np.sqrt(mean_squared_error(y_test_fold, gb.predict(X_test_fold)))
+            )
+
+            if XGBOOST_AVAILABLE:
+                xgb_model = xgb.XGBRegressor(
+                    n_estimators=50, learning_rate=0.1, max_depth=4,
+                    min_child_weight=5, random_state=42, verbosity=0, n_jobs=-1
+                )
+                xgb_model.fit(X_train, y_train)
+                base_models.append(('XGBoost', xgb_model))
+                fold_metrics['xgb_rmse'].append(
+                    np.sqrt(mean_squared_error(y_test_fold, xgb_model.predict(X_test_fold)))
+                )
+
+            # Generate meta-features for validation set
+            meta_features_val = np.column_stack([
+                model.predict(X_val) for _, model in base_models
+            ])
+
+            # Train meta-learner
+            meta_model = Ridge(alpha=1.0)
+            meta_model.fit(meta_features_val, y_val)
+
+            # Evaluate ensemble on test fold
+            meta_features_test = np.column_stack([
+                model.predict(X_test_fold) for _, model in base_models
+            ])
+            y_pred = meta_model.predict(meta_features_test)
+
+            fold_metrics['ensemble_rmse'].append(
+                np.sqrt(mean_squared_error(y_test_fold, y_pred))
+            )
+            fold_metrics['ensemble_mae'].append(
+                mean_absolute_error(y_test_fold, y_pred)
+            )
+            fold_metrics['ensemble_r2'].append(
+                r2_score(y_test_fold, y_pred)
+            )
+
+            logger.debug(f"  Fold {fold+1}: RMSE={fold_metrics['ensemble_rmse'][-1]:.3f}")
+
+        # Train final model on ALL data
+        logger.info("Training final model on all data...")
+
+        # Split all data for meta-learner training
+        split_point = int(len(X) * 0.85)
+        X_train_final = X[:split_point]
+        y_train_final = y[:split_point]
+        X_val_final = X[split_point:]
+        y_val_final = y[split_point:]
+
+        # Final base models
+        final_base_models = []
+
+        rf_final = RandomForestRegressor(
+            n_estimators=50, max_depth=8, min_samples_split=10,
+            min_samples_leaf=5, random_state=42, n_jobs=-1
+        )
+        rf_final.fit(X_train_final, y_train_final)
+        final_base_models.append(('RandomForest', rf_final))
+
+        gb_final = GradientBoostingRegressor(
+            n_estimators=50, learning_rate=0.1, max_depth=4,
+            min_samples_split=10, min_samples_leaf=5, random_state=42
+        )
+        gb_final.fit(X_train_final, y_train_final)
+        final_base_models.append(('GradientBoosting', gb_final))
+
+        if XGBOOST_AVAILABLE:
+            xgb_final = xgb.XGBRegressor(
+                n_estimators=50, learning_rate=0.1, max_depth=4,
+                min_child_weight=5, random_state=42, verbosity=0, n_jobs=-1
+            )
+            xgb_final.fit(X_train_final, y_train_final)
+            final_base_models.append(('XGBoost', xgb_final))
+
+        # Final meta-learner
+        meta_features_val_final = np.column_stack([
+            model.predict(X_val_final) for _, model in final_base_models
+        ])
+        meta_model_final = Ridge(alpha=1.0)
+        meta_model_final.fit(meta_features_val_final, y_val_final)
+
+        # Store final ensemble
+        self.models[position] = {
+            'base_models': final_base_models,
+            'meta_model': meta_model_final
+        }
+
+        # Aggregate CV metrics
+        metrics = {
+            'position': position,
+            'cv_method': 'TimeSeriesSplit',
+            'n_splits': n_splits,
+            'total_samples': len(X),
+            'cv_results': {
+                'mean_rmse': float(np.mean(fold_metrics['ensemble_rmse'])),
+                'std_rmse': float(np.std(fold_metrics['ensemble_rmse'])),
+                'mean_mae': float(np.mean(fold_metrics['ensemble_mae'])),
+                'std_mae': float(np.std(fold_metrics['ensemble_mae'])),
+                'mean_r2': float(np.mean(fold_metrics['ensemble_r2'])),
+                'std_r2': float(np.std(fold_metrics['ensemble_r2'])),
+            },
+            'base_model_cv': {
+                'rf_mean_rmse': float(np.mean(fold_metrics['rf_rmse'])),
+                'gb_mean_rmse': float(np.mean(fold_metrics['gb_rmse'])),
+                'xgb_mean_rmse': float(np.mean(fold_metrics['xgb_rmse'])) if fold_metrics['xgb_rmse'] else None,
+            },
+            'meta_weights': dict(zip(
+                [name for name, _ in final_base_models],
+                meta_model_final.coef_.tolist()
+            ))
+        }
+
+        logger.info(
+            f"Position {position} CV complete:\n"
+            f"  CV RMSE: {metrics['cv_results']['mean_rmse']:.3f} (+/- {metrics['cv_results']['std_rmse']:.3f})\n"
+            f"  CV MAE: {metrics['cv_results']['mean_mae']:.3f} (+/- {metrics['cv_results']['std_mae']:.3f})\n"
+            f"  CV R2: {metrics['cv_results']['mean_r2']:.3f} (+/- {metrics['cv_results']['std_r2']:.3f})"
+        )
+
+        return metrics
+
+    def train_all_models_cv(
+        self,
+        features_by_position: Dict[int, List[Dict]],
+        targets_by_position: Dict[int, List[float]],
+        gameweeks_by_position: Dict[int, List[int]] = None,
+        n_splits: int = 5
+    ) -> Dict:
+        """
+        Train models for all positions using TimeSeriesSplit CV.
+
+        Args:
+            features_by_position: Dict mapping position -> list of feature dicts
+            targets_by_position: Dict mapping position -> list of actual points
+            gameweeks_by_position: Optional dict mapping position -> list of gameweek numbers
+            n_splits: Number of CV folds
+
+        Returns:
+            Dict with all training metrics including CV results
+        """
+        all_metrics = {}
+        position_names = {1: 'Goalkeepers', 2: 'Defenders', 3: 'Midfielders', 4: 'Forwards'}
+
+        for position in [1, 2, 3, 4]:
+            if position not in features_by_position or not features_by_position[position]:
+                logger.warning(f"No training data for position {position}")
+                continue
+
+            logger.info(f"Training {position_names[position]} with TimeSeriesSplit CV...")
+
+            features = features_by_position[position]
+            targets = targets_by_position[position]
+
+            X, y = self.prepare_training_data(features, targets)
+
+            # Get gameweeks if available
+            gameweeks = None
+            if gameweeks_by_position and position in gameweeks_by_position:
+                gameweeks = np.array(gameweeks_by_position[position])
+
+            metrics = self.train_position_model_cv(position, X, y, gameweeks, n_splits)
+            all_metrics[position] = metrics
+
+        logger.info(f"All models trained with CV: {len(all_metrics)} positions")
+        return all_metrics
 
     def train_all_models(self, features_by_position: Dict[int, List[Dict]],
                          targets_by_position: Dict[int, List[float]]) -> Dict:
