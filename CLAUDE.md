@@ -13,6 +13,31 @@ This project implements a fully autonomous Fantasy Premier League management sys
 
 ---
 
+## ⚠️ CRITICAL: Data Sources and Truth
+
+**THE FPL API IS THE SOURCE OF TRUTH FOR ALL PLAYER AND TEAM DATA.**
+
+Claude's training data is OUTDATED and MUST NOT be used for:
+- Player team assignments (transfers happen mid-season!)
+- Player prices, form, or points
+- Team strengths or fixture difficulty
+- Any current season statistics
+
+**Trust hierarchy:**
+1. **FPL API data** (via database) - ALWAYS trust this
+2. **ML model predictions** trained on API data - trust these
+3. **External news/intelligence** we process - trust this
+4. **Claude's training knowledge** - NEVER trust for current season data
+
+**Examples of training data errors to avoid:**
+- Assuming a player is still at their old club (e.g., transfers after season start)
+- Questioning ML predictions based on outdated player knowledge
+- Doubting fixture difficulty ratings based on last season's performance
+
+When in doubt, QUERY THE DATABASE - don't rely on memory.
+
+---
+
 ## 🚨 CURRENT SEASON STATUS (2025/26)
 
 **Date**: Saturday, October 4th 2025

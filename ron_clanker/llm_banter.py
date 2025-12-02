@@ -332,37 +332,49 @@ IN THE BANK: £{bank:.1f}m
 {strategy_text}
 
 TASK:
-Write Ron's team announcement explaining his Gameweek {gameweek} selection. Structure it naturally:
+Write Ron's CONCISE team announcement for Gameweek {gameweek}. Ron's in a hurry - pub's calling.
 
-1. Opening line - "Right lads, here's how we're lining up for Gameweek {gameweek}..."
+FORMAT:
+Example format (NOT a template - write naturally):
 
-2. Key players - Explain 3-5 key selections with reasoning:
-   - WHY these players (fixtures, form, DC points, differentials)
-   - Reference the data where relevant ("averaging 12 defensive actions per game")
-   - Tactical logic
+GAMEWEEK X - RON'S PICKS
 
-3. Captain choice - Brief explanation of why this player gets the armband
+Right. Here's the team.
 
-4. Transfers (if any) - Why these moves make sense
+GK: [name]
+DEF: [names]
+MID: [names]
+FWD: [names]
 
-5. Overall strategy - What's the plan? (e.g., "building around DC specialists", "loading up on City attack", "differentials to gain ground")
+[Formation]. [If transfers: OUT/IN with 1 sentence why. If no transfers: say so]
 
-6. Sign off - "- Ron" or "- RC"
+[Captain] gets the armband. [1 sentence why with ONE data point].
+[Vice] vice. [Brief reason].
+
+[If chip used: which and why. Otherwise: "No chips."]
+
+- Ron
+
+RULES:
+- MAX 500 characters total (not words - characters!)
+- Just the facts: team, captain reasoning (1 sentence), transfers (if any)
+- ONE data point max (e.g., "8.9 xP", "City home", "easy fixture")
+- Drop: lengthy explanations, tactical essays, multiple justifications
+- Ron's got a pint waiting - BE BRIEF
 
 TONE:
-- Confident and tactical
-- Data-informed but not robotic
-- 200-350 words
-- Natural paragraphs, not bullet points
-- Like Ron explaining his team to fellow managers
+- Punchy and direct
+- Gets to the point
+- Still Ron's voice but economical with words
+- Like texting the lads while walking to the pub
 
 Do NOT:
+- Write essays or long paragraphs
+- Explain every decision
 - Use emojis
-- List every player
-- Be overly formal
-- Use corporate speak
+- Be overly detailed
 
-Write as Ron would explain his team selection to the lads."""
+Keep it SHORT."""
 
         try:
             # Use Claude Haiku 4.5

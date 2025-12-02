@@ -224,9 +224,9 @@ def display_gameweek_squad(picks_data, bootstrap, gameweek, verbose=False):
         for sub in auto_subs:
             player_out = players.get(sub['element_out'], {})
             player_in = players.get(sub['element_in'], {})
-            print(f"  OUT: {player_out.get('web_name', f'Player {sub["element_out"]}')} -> "
-                  f"IN: {player_in.get('web_name', f'Player {sub["element_in"]}')} "
-                  f"({sub['event']} mins)")
+            out_name = player_out.get('web_name', f"Player {sub['element_out']}")
+            in_name = player_in.get('web_name', f"Player {sub['element_in']}")
+            print(f"  OUT: {out_name} -> IN: {in_name} ({sub['event']} mins)")
 
 
 def display_detailed_player_performance(picks_data, bootstrap, gameweek, verbose=False):

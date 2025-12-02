@@ -249,12 +249,23 @@ class TransferOptimizer:
                 'value_score': avg_xp / (p['now_cost'] / 10.0) if p['now_cost'] > 0 else 0
             })
 
-        pos_players_with_value.sort(key=lambda x: x['value_score'])
+        # Sort by value_score BUT exclude high-performing premiums
+        # Don't treat premiums with xP > 5.0 as "weak" regardless of value_score
+        # They serve different purpose (captain options, consistent high scores)
+        weak_candidates = [
+            p for p in pos_players_with_value
+            if p['avg_xp'] < 5.0  # Only consider truly underperforming players
+        ]
+        weak_candidates.sort(key=lambda x: x['value_score'])
 
-        # Consider replacing bottom 2 players
+        # If no truly weak players, consider lowest value_score players anyway
+        if not weak_candidates:
+            weak_candidates = sorted(pos_players_with_value, key=lambda x: x['value_score'])
+
+        # Consider replacing bottom 2 weak players
         transfer_options = []
 
-        for weak_player in pos_players_with_value[:2]:
+        for weak_player in weak_candidates[:2]:
             # Find replacements
             max_price = weak_player['now_cost'] / 10.0 + bank + 1.0  # Can upgrade by bank + £1m
 
@@ -323,11 +334,15 @@ class TransferOptimizer:
         """Find replacement players for a position within budget."""
 
         # Get all available players in this position
+        # CRITICAL: Filter out injured ('i'), suspended ('s'), and unavailable ('u')
+        # Only include available ('a') or doubtful ('d') with reasonable chance
         all_players = self.db.execute_query("""
-            SELECT id, web_name, element_type, now_cost, selected_by_percent
+            SELECT id, web_name, element_type, now_cost, selected_by_percent,
+                   status, chance_of_playing_next_round
             FROM players
             WHERE element_type = ?
-            AND status != 'u'
+            AND status IN ('a', 'd')
+            AND (chance_of_playing_next_round IS NULL OR chance_of_playing_next_round >= 50)
             AND id NOT IN ({})
             AND now_cost <= ?
         """.format(','.join('?' * len(current_team_ids))),

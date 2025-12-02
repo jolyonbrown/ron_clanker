@@ -78,17 +78,33 @@ class Database:
             INSERT INTO players (
                 id, code, first_name, second_name, web_name, team_id,
                 element_type, now_cost, selected_by_percent, form,
-                points_per_game, total_points, status, news,
-                chance_of_playing_next_round,
+                points_per_game, total_points, minutes, goals_scored, assists,
+                clean_sheets, goals_conceded, own_goals, penalties_saved,
+                penalties_missed, yellow_cards, red_cards, saves, bonus, bps,
+                status, news, chance_of_playing_next_round,
                 influence, creativity, threat, ict_index,
+                tackles, interceptions, clearances_blocks_interceptions, recoveries,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 now_cost = excluded.now_cost,
                 selected_by_percent = excluded.selected_by_percent,
                 form = excluded.form,
                 points_per_game = excluded.points_per_game,
                 total_points = excluded.total_points,
+                minutes = excluded.minutes,
+                goals_scored = excluded.goals_scored,
+                assists = excluded.assists,
+                clean_sheets = excluded.clean_sheets,
+                goals_conceded = excluded.goals_conceded,
+                own_goals = excluded.own_goals,
+                penalties_saved = excluded.penalties_saved,
+                penalties_missed = excluded.penalties_missed,
+                yellow_cards = excluded.yellow_cards,
+                red_cards = excluded.red_cards,
+                saves = excluded.saves,
+                bonus = excluded.bonus,
+                bps = excluded.bps,
                 status = excluded.status,
                 news = excluded.news,
                 chance_of_playing_next_round = excluded.chance_of_playing_next_round,
@@ -96,6 +112,10 @@ class Database:
                 creativity = excluded.creativity,
                 threat = excluded.threat,
                 ict_index = excluded.ict_index,
+                tackles = excluded.tackles,
+                interceptions = excluded.interceptions,
+                clearances_blocks_interceptions = excluded.clearances_blocks_interceptions,
+                recoveries = excluded.recoveries,
                 updated_at = CURRENT_TIMESTAMP
         """
         params = (
@@ -105,10 +125,18 @@ class Database:
             player_data.get('element_type'), player_data.get('now_cost'),
             player_data.get('selected_by_percent'), player_data.get('form'),
             player_data.get('points_per_game'), player_data.get('total_points'),
+            player_data.get('minutes', 0), player_data.get('goals_scored', 0),
+            player_data.get('assists', 0), player_data.get('clean_sheets', 0),
+            player_data.get('goals_conceded', 0), player_data.get('own_goals', 0),
+            player_data.get('penalties_saved', 0), player_data.get('penalties_missed', 0),
+            player_data.get('yellow_cards', 0), player_data.get('red_cards', 0),
+            player_data.get('saves', 0), player_data.get('bonus', 0), player_data.get('bps', 0),
             player_data.get('status'), player_data.get('news'),
             player_data.get('chance_of_playing_next_round'),
             player_data.get('influence'), player_data.get('creativity'),
-            player_data.get('threat'), player_data.get('ict_index')
+            player_data.get('threat'), player_data.get('ict_index'),
+            player_data.get('tackles', 0), player_data.get('interceptions', 0),
+            player_data.get('clearances_blocks_interceptions', 0), player_data.get('recoveries', 0)
         )
         return self.execute_update(query, params)
 

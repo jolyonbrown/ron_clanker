@@ -77,6 +77,10 @@ async def collect_data():
                 'strength': team.get('strength'),
                 'strength_overall_home': team.get('strength_overall_home'),
                 'strength_overall_away': team.get('strength_overall_away'),
+                'strength_attack_home': team.get('strength_attack_home'),
+                'strength_attack_away': team.get('strength_attack_away'),
+                'strength_defence_home': team.get('strength_defence_home'),
+                'strength_defence_away': team.get('strength_defence_away'),
             }
             db.upsert_team(team_data)
 

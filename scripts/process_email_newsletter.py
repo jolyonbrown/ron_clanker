@@ -165,17 +165,16 @@ def main():
         return 1
 
     print("🤖 Processing with Claude Haiku...")
+    print(f"   Content length: {len(text_content)} characters")
 
-    # Limit content to first 8000 chars to avoid truncation
-    if len(text_content) > 8000:
-        print(f"   ⚠️  Content is long ({len(text_content)} chars), using first 8000 chars")
-        text_content = text_content[:8000]
+    if len(text_content) > 20000:
+        print(f"   Large content - will process in batches")
 
     print()
 
     intelligence = processor.process_news_article(
         title=subject,
-        content=text_content,
+        content=text_content,  # Full content - batching handled automatically
         source=f'Email: {eml_path.name}',
         url=None
     )
@@ -245,7 +244,7 @@ def main():
                     INSERT INTO decisions (
                         gameweek, decision_type, decision_data, reasoning,
                         agent_source, created_at
-                    ) VALUES (9, 'news_intelligence', ?, ?, 'email_processor', CURRENT_TIMESTAMP)
+                    ) VALUES (11, 'news_intelligence', ?, ?, 'email_processor', CURRENT_TIMESTAMP)
                 """, (
                     f"Player: {player['name']}, Status: {player['status']}, Sentiment: {player['sentiment']}",
                     f"Confidence: {int(player['confidence']*100)}%, Sources: Email Newsletter, Details: {player['details']}"

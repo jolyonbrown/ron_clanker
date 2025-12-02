@@ -1,0 +1,128 @@
+{
+  "gameweek": 10,
+  "squad": [
+    {
+      "player_id": 582,
+      "web_name": "Kudus",
+      "position": 3,
+      "price": 6.8,
+      "expected_points": 10.013521587786455,
+      "ownership": 32.2
+    },
+    {
+      "player_id": 7,
+      "web_name": "Calafiori",
+      "position": 2,
+      "price": 5.8,
+      "expected_points": 9.720828981185456,
+      "ownership": 15.7
+    },
+    {
+      "player_id": 136,
+      "web_name": "Thiago",
+      "position": 4,
+      "price": 6.2,
+      "expected_points": 8.773796152961104,
+      "ownership": 7.5
+    },
+    {
+      "player_id": 260,
+      "web_name": "Gu\u00e9hi",
+      "position": 2,
+      "price": 4.9,
+      "expected_points": 8.742613761281063,
+      "ownership": 33.0
+    },
+    {
+      "player_id": 256,
+      "web_name": "Mu\u00f1oz",
+      "position": 2,
+      "price": 5.7,
+      "expected_points": 8.38801960689229,
+      "ownership": 14.7
+    },
+    {
+      "player_id": 419,
+      "web_name": "Grealish",
+      "position": 3,
+      "price": 6.9,
+      "expected_points": 8.281350305984105,
+      "ownership": 18.0
+    },
+    {
+      "player_id": 5,
+      "web_name": "Gabriel",
+      "position": 2,
+      "price": 6.5,
+      "expected_points": 8.096890857130097,
+      "ownership": 38.2
+    },
+    {
+      "player_id": 257,
+      "web_name": "Lacroix",
+      "position": 2,
+      "price": 5.0,
+      "expected_points": 7.856435108219989,
+      "ownership": 3.7
+    },
+    {
+      "player_id": 612,
+      "web_name": "L.Paquet\u00e1",
+      "position": 3,
+      "price": 5.9,
+      "expected_points": 7.846556502150703,
+      "ownership": 2.6
+    },
+    {
+      "player_id": 237,
+      "web_name": "Enzo",
+      "position": 3,
+      "price": 6.7,
+      "expected_points": 7.64402144393188,
+      "ownership": 14.5
+    },
+    {
+      "player_id": 205,
+      "web_name": "Cullen",
+      "position": 3,
+      "price": 5.0,
+      "expected_points": 7.519499625388473,
+      "ownership": 2.4
+    },
+    {
+      "player_id": 430,
+      "web_name": "Haaland",
+      "position": 4,
+      "price": 14.8,
+      "expected_points": 7.3230939464207,
+      "ownership": 68.9
+    },
+    {
+      "player_id": 178,
+      "web_name": "Welbeck",
+      "position": 4,
+      "price": 6.4,
+      "expected_points": 6.386518519442909,
+      "ownership": 6.5
+    },
+    {
+      "player_id": 565,
+      "web_name": "Vicario",
+      "position": 1,
+      "price": 5.1,
+      "expected_points": 4.7058929489873895,
+      "ownership": 10.4
+    },
+    {
+      "player_id": 1,
+      "web_name": "Raya",
+      "position": 1,
+      "price": 5.8,
+      "expected_points": 4.60499923811118,
+      "ownership": 30.3
+    }
+  ],
+  "total_cost": 97.5,
+  "captain": 582,
+  "vice_captain": 7
+}

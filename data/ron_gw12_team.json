@@ -1,0 +1,139 @@
+{
+  "gameweek": 12,
+  "team_selection": {
+    "formation": "5-3-2",
+    "starting_xi": [
+      {
+        "name": "Roefs",
+        "team": "SUN",
+        "position": "GKP",
+        "price": 4.7,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Chalobah",
+        "team": "CHE",
+        "position": "DEF",
+        "price": 5.1,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Guéhi",
+        "team": "CRY",
+        "position": "DEF",
+        "price": 5.1,
+        "is_captain": true,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Virgil",
+        "team": "LIV",
+        "position": "DEF",
+        "price": 6.0,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Senesi",
+        "team": "BOU",
+        "position": "DEF",
+        "price": 5.0,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Richards",
+        "team": "CRY",
+        "position": "DEF",
+        "price": 4.5,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Ndiaye",
+        "team": "EVE",
+        "position": "MID",
+        "price": 6.6,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Semenyo",
+        "team": "BOU",
+        "position": "MID",
+        "price": 8.0,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Cullen",
+        "team": "BUR",
+        "position": "MID",
+        "price": 5.0,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "Haaland",
+        "team": "MCI",
+        "position": "FWD",
+        "price": 14.9,
+        "is_captain": false,
+        "is_vice_captain": false
+      },
+      {
+        "name": "João Pedro",
+        "team": "CHE",
+        "position": "FWD",
+        "price": 7.5,
+        "is_captain": false,
+        "is_vice_captain": true
+      }
+    ],
+    "bench": [
+      {
+        "name": "Pope",
+        "team": "NEW",
+        "position": "GKP",
+        "price": 5.2,
+        "bench_order": 1
+      },
+      {
+        "name": "Sarr",
+        "team": "CRY",
+        "position": "MID",
+        "price": 6.7,
+        "bench_order": 2
+      },
+      {
+        "name": "Garner",
+        "team": "EVE",
+        "position": "MID",
+        "price": 5.0,
+        "bench_order": 3
+      },
+      {
+        "name": "Thiago",
+        "team": "BRE",
+        "position": "FWD",
+        "price": 6.4,
+        "bench_order": 4
+      }
+    ],
+    "captain": "Guéhi",
+    "vice_captain": "João Pedro"
+  },
+  "team_value": {
+    "squad_value": 101.4,
+    "bank": 5.7,
+    "total_budget": 107.1
+  },
+  "transfers": {
+    "made": 2,
+    "cost": 0
+  },
+  "chip_used": null,
+  "notes": "Emergency selection made as deadline approached. Selected team retrieved from FPL API after system crash lost /tmp/ file."
+}

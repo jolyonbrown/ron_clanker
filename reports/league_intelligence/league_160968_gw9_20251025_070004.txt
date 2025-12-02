@@ -1,0 +1,167 @@
+
+================================================================================
+LEAGUE STANDINGS
+================================================================================
+
+Rank  Manager                   Points  Gap     Form  
+--------------------------------------------------------------------------------
+    1 Andy Main                     468       -      ↑
+    2 James Crewdson                466      -2      ↓
+    3 Steve Hant                    459      -9      ↑
+    4 Kyle Summersfield             448     -20      ↓
+    5 Anthony Stoker                441     -27      →
+    6 Tony Simons                   438     -30      ↑
+    7 Michael Maude                 437     -31      ↓
+    8 Catherine Beattie             389     -79      ↑
+    9 Jolyon Brown                  383     -85      ↓
+   10 ian main                      366    -102      →
+   11 Sir Captain Daniel            340    -128      →
+   12 Kieran Summersfield           329    -139      →
+   13 Peter Korenev                 275    -193      →
+   14 Ron Clanker                    66    -402      →
+
+================================================================================
+CHIP ARSENAL ANALYSIS
+================================================================================
+
+🤖 RON'S CHIPS REMAINING:
+   Wildcards: 2/2
+   Bench Boosts: 2/2
+   Triple Captains: 2/2
+   Free Hits: 2/2
+
+   TOTAL: 8/8 chips remaining
+
+👥 RIVAL CHIP STATUS (Top 5):
+
+Manager                   WC   BB   TC   FH   Total 
+--------------------------------------------------------------------------------
+Michael Maude             2/2  2/2  2/2  2/2       8/8
+Kieran Summersfield       2/2  2/2  2/2  2/2       8/8
+James Crewdson            2/2  2/2  2/2  2/2       8/8
+Peter Korenev             2/2  2/2  2/2  2/2       8/8
+Andy Main                 2/2  2/2  2/2  2/2       8/8
+
+================================================================================
+DIFFERENTIAL ANALYSIS
+================================================================================
+
+🤖 RON'S DIFFERENTIALS: None (template team)
+
+
+👥 TEMPLATE PLAYERS RON IS MISSING: None (Ron has template)
+
+================================================================================
+FIXTURE-BASED CHIP OPTIMIZATION
+================================================================================
+
+📅 No double gameweeks detected in fixture data
+
+🚫 UPCOMING BLANK GAMEWEEKS:
+   GW10: MODERATE blank (20 teams playing)
+   GW11: MODERATE blank (20 teams playing)
+   GW12: MODERATE blank (20 teams playing)
+
+📊 FIXTURE SWINGS (Top 5):
+   🟢 AVL: 4.0 → 2.33 (+1.7)
+   🟢 BOU: 3.67 → 2.0 (+1.7)
+   🔴 ARS: 2.33 → 3.33 (-1.0)
+   🟢 MUN: 3.67 → 2.67 (+1.0)
+
+💡 FIXTURE-BASED RECOMMENDATIONS:
+
+   Wildcard 1: CONSIDER
+      AVL fixtures turn easier (difficulty 4.0 → 2.33)
+
+   Bench Boost: NO DGW FOUND
+      No upcoming double gameweeks detected in fixture data
+
+   Triple Captain: WAIT FOR DGW
+      Best value in double gameweeks
+
+   Free Hit: SAVE FOR BLANK
+      GW10 is a MODERATE blank (20 teams playing)
+
+================================================================================
+CHIP STRATEGY REPORT
+================================================================================
+Gameweek: 9
+Generated: 2025-10-25 07:00:05
+
+🎯 RON'S CHIP ADVANTAGE:
+   Ron has 8 chips remaining
+   League average: 7.6 chips
+   Advantage: +0.4 chips (5%)
+
+📊 LEAGUE CHIP TRENDS:
+   Total chips used: 9
+   bboost: 3 used
+   wildcard: 6 used
+
+🃏 WILDCARD STRATEGY:
+
+   WILDCARD 1:
+      Status: AVAILABLE
+      Recommendation: HOLD
+      Reason: Still early. Wait for fixture swings or injury crisis.
+      Optimal windows: GW12-14 (pre-Christmas fixtures), GW16-18 (injury crisis period)
+
+   WILDCARD 2:
+      Status: LOCKED
+      Recommendation: WAIT
+      Reason: Not yet available. Can use from GW20 onwards.
+      Optimal windows: GW25-27 (fixture swings), GW33-35 (final push)
+
+💪 BENCH BOOST STRATEGY:
+
+   BENCH BOOST 1:
+      Status: AVAILABLE
+      Recommendation: Wait for DGW with 15 strong players
+
+   BENCH BOOST 2:
+      Status: AVAILABLE
+      Recommendation: Wait for DGW with 15 strong players
+
+⭐ TRIPLE CAPTAIN STRATEGY:
+
+   TRIPLE CAPTAIN 1:
+      Status: AVAILABLE
+      Recommendation: Save for Haaland/Salah DGW
+      Best targets: Haaland (MCI), Salah (LIV), Palmer (CHE)
+
+   TRIPLE CAPTAIN 2:
+      Status: AVAILABLE
+      Recommendation: Save for Haaland/Salah DGW
+      Best targets: Haaland (MCI), Salah (LIV), Palmer (CHE)
+
+================================================================================
+TRANSFER INTELLIGENCE
+================================================================================
+
+📈 No transfer data available for GW9
+
+💰 MOST CASH IN THE BANK:
+   Ron Clanker: £5.3m ITB (£100.4m total value)
+   Andy Main: £4.4m ITB (£102.7m total value)
+   Michael Maude: £3.9m ITB (£100.7m total value)
+   Kyle Summersfield: £2.7m ITB (£100.9m total value)
+   Kieran Summersfield: £2.0m ITB (£99.0m total value)
+
+================================================================================
+COMPETITIVE STRATEGY RECOMMENDATIONS
+================================================================================
+
+📊 CURRENT POSITION:
+   Rank: 14
+   Points: 66
+   Gap to leader: -402 pts
+   Gameweeks remaining: 29
+
+🎯 CHASING MODE:
+   Need +13.9 pts/GW advantage to catch leader
+
+   RECOMMENDED STRATEGY:
+   • Seek differentials with high upside
+   • Consider differential captains
+   • Use chips aggressively on best opportunities
+   • Monitor template gaps - consider covering high-ownership threats

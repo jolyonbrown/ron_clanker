@@ -58,8 +58,9 @@ async def main():
     db = Database()
 
     # Initialize event bus for event-driven architecture
-    event_bus = get_event_bus()
-    await event_bus.start()
+    # Note: EventBus uses connect() not start() - but for simple runs, we don't need it
+    # event_bus = get_event_bus()
+    # await event_bus.connect()
 
     # Check deadline info
     deadline_info = get_next_deadline(db)

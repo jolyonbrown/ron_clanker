@@ -175,7 +175,7 @@ def main():
                     INSERT INTO decisions (
                         gameweek, decision_type, decision_data, reasoning,
                         agent_source, created_at
-                    ) VALUES (9, 'news_intelligence', ?, ?, 'youtube_processor', CURRENT_TIMESTAMP)
+                    ) VALUES (11, 'news_intelligence', ?, ?, 'youtube_processor', CURRENT_TIMESTAMP)
                 """, (
                     f"Player: {player['name']}, Status: {player['status']}, Sentiment: {player['sentiment']}",
                     f"Confidence: {int(player['confidence']*100)}%, Sources: YouTube, Details: {player['details']}"
