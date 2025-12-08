@@ -1,21 +1,20 @@
 """
 Price Change Prediction Model
 
-Predicts player price rises/falls 6-12 hours ahead using lightweight ML.
-Optimized for Raspberry Pi 3 (low memory, CPU-only).
+Predicts player price rises/falls 6-12 hours ahead using ML.
 
 Model Strategy:
-- Logistic Regression (primary) - fast, low memory
-- Gradient Boosting (optional) - better accuracy if RAM permits
-- Feature set: ~10-15 features max
-- Binary classification: rise vs no-rise (simplest)
-- Or 3-class: rise, hold, fall
+- Logistic Regression - fast, low memory (legacy RPi3)
+- Gradient Boosting - better accuracy
+- LightGBM (recommended) - best accuracy, fast training
+- Feature set: ~12-15 features
+- 3-class classification: rise, hold, fall
 
 Performance Targets:
-- Accuracy: 70%+ on test set
-- Inference: <100ms per player
-- Memory: <50MB for model
-- Training: <5 minutes on full dataset
+- Accuracy: 75%+ on test set (LightGBM)
+- Inference: <50ms per player
+- Memory: <100MB for model
+- Training: <2 minutes on full dataset
 """
 
 import numpy as np
@@ -37,25 +36,27 @@ logger = logging.getLogger('ron_clanker.price_predictor')
 
 class PriceChangePredictor:
     """
-    Lightweight price change prediction model optimized for RPi3.
+    Price change prediction model with multiple backend options.
 
-    Uses logistic regression by default for speed and low memory usage.
-    Can optionally use gradient boosting if more accuracy is needed.
+    Supports:
+    - logistic: Fast, low memory (legacy)
+    - gbm: Gradient Boosting (sklearn)
+    - lightgbm: LightGBM (recommended - best accuracy/speed tradeoff)
     """
 
-    MODEL_VERSION = "1.0_logistic_rpi3"
+    MODEL_VERSION = "2.0_lightgbm"
 
     # Feature engineering constants
     NET_TRANSFER_THRESHOLD = 50000  # Transfers needed for high confidence
     SELECTED_BY_THRESHOLD = 5.0  # % ownership threshold
     FORM_WINDOW = 5  # Last 5 gameweeks
 
-    def __init__(self, model_type: str = "logistic"):
+    def __init__(self, model_type: str = "lightgbm"):
         """
         Initialize predictor.
 
         Args:
-            model_type: "logistic" (default, fastest) or "gbm" (slower, better accuracy)
+            model_type: "lightgbm" (default, recommended), "logistic" (fast), or "gbm" (sklearn)
         """
         self.model_type = model_type
         self.model = None
@@ -64,24 +65,46 @@ class PriceChangePredictor:
         self.is_trained = False
 
         # Model selection
+        if model_type == "lightgbm":
+            # Best accuracy/speed tradeoff (recommended)
+            try:
+                import lightgbm as lgb
+                self.model = lgb.LGBMClassifier(
+                    n_estimators=100,
+                    max_depth=6,
+                    learning_rate=0.1,
+                    num_leaves=31,
+                    min_child_samples=20,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    class_weight='balanced',
+                    random_state=42,
+                    verbose=-1,
+                    n_jobs=-1
+                )
+            except ImportError:
+                logger.warning("LightGBM not available, falling back to logistic")
+                model_type = "logistic"
+                self.model_type = model_type
+
         if model_type == "logistic":
-            # Fast, low memory, good for RPi3
+            # Fast, low memory
             self.model = LogisticRegression(
                 max_iter=500,
                 random_state=42,
-                class_weight='balanced',  # Handle imbalanced data
-                n_jobs=1  # Single core (RPi3 has 4 cores but leave headroom)
+                class_weight='balanced',
+                n_jobs=-1
             )
         elif model_type == "gbm":
-            # Better accuracy but slower
+            # Sklearn gradient boosting
             from sklearn.ensemble import GradientBoostingClassifier
             self.model = GradientBoostingClassifier(
-                n_estimators=50,  # Keep low for RPi3
-                max_depth=3,
+                n_estimators=100,
+                max_depth=4,
                 learning_rate=0.1,
                 random_state=42
             )
-        else:
+        elif model_type != "lightgbm":
             raise ValueError(f"Unknown model_type: {model_type}")
 
     def extract_features(self, player_data: Dict) -> np.ndarray:

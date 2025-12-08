@@ -12,7 +12,68 @@ venv/bin/python scripts/collect_fpl_data.py
 
 ---
 
-### 2. Track Ron's Performance
+### 2. Update ML Models with Gameweek Results
+```bash
+venv/bin/python scripts/update_ml_models.py
+```
+**Purpose**: Updates all ML models with latest gameweek data:
+- **Elo Ratings**: Updates team attack/defence Elo from completed match results
+- **Captain Optimizer**: Retrains weekly if model >7 days old
+- **xP Ensemble**: Checks performance, reports if retrain needed
+
+**What it does**:
+1. Loads match results from completed gameweek
+2. Updates Elo ratings for each team (separate attack/defence ratings)
+3. Checks captain model age and retrains if stale
+4. Reports xP model performance metrics
+
+**Expected output**:
+```
+============================================================
+UPDATING ELO RATINGS
+============================================================
+Processing GW14 results...
+Updated 10 match results
+
+Top 5 teams by Elo:
+  1. ARS - 1632
+  2. MCI - 1615
+  3. LIV - 1598
+  4. CHE - 1542
+  5. TOT - 1521
+
+============================================================
+UPDATING CAPTAIN OPTIMIZER
+============================================================
+Model is 3.2 days old - skipping (retrain weekly)
+
+============================================================
+CHECKING XP MODEL PERFORMANCE
+============================================================
+  GK: v1 - RMSE: 1.82, samples: 2400
+  DEF: v1 - RMSE: 2.15, samples: 8600
+  MID: v1 - RMSE: 2.43, samples: 10200
+  FWD: v1 - RMSE: 2.89, samples: 4200
+```
+
+**Options**:
+```bash
+# Update only Elo ratings
+venv/bin/python scripts/update_ml_models.py --elo
+
+# Update only captain model
+venv/bin/python scripts/update_ml_models.py --captain
+
+# Force retrain even if not needed
+venv/bin/python scripts/update_ml_models.py --force
+
+# Specify gameweek explicitly
+venv/bin/python scripts/update_ml_models.py --gw 14
+```
+
+---
+
+### 3. Track Ron's Performance
 ```bash
 venv/bin/python scripts/track_ron_team.py
 ```
@@ -29,7 +90,7 @@ venv/bin/python scripts/track_ron_team.py
 
 ---
 
-### 3. Generate Ron's Post-Match Review
+### 4. Generate Ron's Post-Match Review
 ```bash
 venv/bin/python scripts/review_gameweek.py --gw N
 ```
@@ -66,7 +127,7 @@ Next up: GW12. Fixtures turn against us. Time to plan.
 
 ---
 
-### 4. Review Prediction Accuracy
+### 5. Review Prediction Accuracy
 ```bash
 sqlite3 data/ron_clanker.db "
 SELECT
@@ -90,7 +151,7 @@ LIMIT 15;
 
 ---
 
-### 5. Update Learning Metrics
+### 6. Update Learning Metrics
 ```bash
 venv/bin/python scripts/update_learning_metrics.py --gw N
 ```

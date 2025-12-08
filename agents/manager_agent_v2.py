@@ -28,6 +28,7 @@ from infrastructure.events import Event, EventType, EventPriority
 from agents.synthesis.engine import DecisionSynthesisEngine
 from agents.transfer_optimizer import TransferOptimizer
 from intelligence.chip_strategy import ChipStrategyAnalyzer
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +396,135 @@ class RonManager(BaseAgent):
 
         return squad
 
+    def _get_scout_intelligence(self, player_names: List[str], hours: int = 72) -> Dict[str, Dict]:
+        """
+        Fetch recent Scout intelligence for specific players.
+
+        Scout intelligence can override FPL API data when it has more recent
+        information about injuries, suspensions, or rotation risks.
+
+        Args:
+            player_names: List of player web_names to check
+            hours: How far back to look (default 72h for gameweek coverage)
+
+        Returns:
+            Dict mapping player_name -> {'status': str, 'confidence': float, 'reason': str}
+        """
+        cutoff = datetime.now() - timedelta(hours=hours)
+
+        # Query news_intelligence from decisions table
+        intel_rows = self.db.execute_query("""
+            SELECT decision_data, reasoning, created_at
+            FROM decisions
+            WHERE decision_type = 'news_intelligence'
+              AND created_at > ?
+            ORDER BY created_at DESC
+        """, (cutoff.isoformat(),))
+
+        # Also check youtube_intelligence table
+        youtube_rows = self.db.execute_query("""
+            SELECT player_name, intelligence_type, details, confidence, severity
+            FROM youtube_intelligence
+            WHERE extracted_at > ?
+            ORDER BY extracted_at DESC
+        """, (cutoff.isoformat(),))
+
+        intelligence = {}
+
+        # Parse news_intelligence entries
+        for row in intel_rows or []:
+            try:
+                data = row.get('decision_data', '')
+                reasoning = row.get('reasoning', '')
+
+                # Parse: "Player: X, Status: Y, Sentiment: Z"
+                if 'Player: ' not in data:
+                    continue
+
+                player_start = data.index('Player: ') + 8
+                player_end = data.index(',', player_start)
+                player_name = data[player_start:player_end].strip()
+
+                # Only include if we're tracking this player
+                matching_name = None
+                for squad_name in player_names:
+                    if (squad_name.lower() in player_name.lower() or
+                        player_name.lower() in squad_name.lower()):
+                        matching_name = squad_name
+                        break
+
+                if not matching_name:
+                    continue
+
+                # Extract status
+                status = 'NEUTRAL'
+                if 'Status: ' in data:
+                    status_start = data.index('Status: ') + 8
+                    status_end = data.index(',', status_start) if ',' in data[status_start:] else len(data)
+                    status = data[status_start:status_end].strip()
+
+                # Extract confidence
+                confidence = 0.7
+                if 'Confidence: ' in reasoning:
+                    try:
+                        conf_start = reasoning.index('Confidence: ') + 12
+                        conf_end = reasoning.index('%', conf_start)
+                        confidence = float(reasoning[conf_start:conf_end]) / 100.0
+                    except:
+                        pass
+
+                # Only override if this is bad news with high confidence
+                if status in ['INJURED', 'DOUBT', 'SUSPENDED'] and confidence >= 0.7:
+                    if matching_name not in intelligence:
+                        intelligence[matching_name] = {
+                            'status': status,
+                            'confidence': confidence,
+                            'reason': f"Scout: {status} (conf: {confidence:.0%})"
+                        }
+
+            except Exception as e:
+                logger.debug(f"Error parsing news intelligence: {e}")
+                continue
+
+        # Parse youtube_intelligence entries
+        for row in youtube_rows or []:
+            try:
+                player_name = row.get('player_name', '')
+                intel_type = row.get('intelligence_type', '')
+                details = row.get('details', '')
+                confidence = row.get('confidence', 0.85)
+
+                # Match to squad player
+                matching_name = None
+                for squad_name in player_names:
+                    if (squad_name.lower() in player_name.lower() or
+                        player_name.lower() in squad_name.lower()):
+                        matching_name = squad_name
+                        break
+
+                if not matching_name:
+                    continue
+
+                # Only include injury/suspension intel
+                if intel_type in ['INJURY', 'SUSPENSION'] and confidence >= 0.75:
+                    if matching_name not in intelligence:
+                        intelligence[matching_name] = {
+                            'status': intel_type,
+                            'confidence': confidence,
+                            'reason': f"Scout (YouTube): {details[:50]}"
+                        }
+
+            except Exception as e:
+                logger.debug(f"Error parsing youtube intelligence: {e}")
+                continue
+
+        if intelligence:
+            logger.info(f"Ron: Scout found intelligence on {len(intelligence)} squad players")
+            for name, intel in intelligence.items():
+                logger.info(f"  🔍 {name}: {intel['status']} ({intel['confidence']:.0%} conf)")
+
+        return intelligence
+
     def _assign_squad_positions(self, squad: List[Dict]) -> List[Dict]:
         """
         Assign positions 1-15 (1-11 starting, 12-15 bench).
@@ -420,7 +550,69 @@ class RonManager(BaseAgent):
             pos_name = ['GKP', 'DEF', 'MID', 'FWD'][player['element_type'] - 1]
             by_position[pos_name].append(player)
 
+        # CRITICAL: Handle injured, suspended, and doubtful players
+        # Force unavailable players to bench by setting effective_xP to very negative
+
+        # First, fetch Scout intelligence that might override FPL data
+        player_names = [p.get('web_name', '') for p in squad]
+        scout_intel = self._get_scout_intelligence(player_names, hours=72)
+
+        unavailable_players = []
+        for player in squad:
+            status = player.get('status', 'a')
+            chance = player.get('chance_of_playing_next_round')
+            news = player.get('news', '')
+            name = player.get('web_name', 'Unknown')
+
+            # Determine if player should be forced to bench
+            force_bench = False
+            reason = None
+
+            # PRIORITY 1: FPL API status (most authoritative for suspensions)
+            if status == 'i':  # Injured
+                force_bench = True
+                reason = f"INJURED (FPL) - {news}" if news else "INJURED (FPL)"
+            elif status == 's':  # Suspended
+                force_bench = True
+                reason = f"SUSPENDED (FPL) - {news}" if news else "SUSPENDED (FPL)"
+            elif status == 'u':  # Unavailable
+                force_bench = True
+                reason = f"UNAVAILABLE (FPL) - {news}" if news else "UNAVAILABLE (FPL)"
+            elif chance is not None and chance < 25:
+                force_bench = True
+                reason = f"LOW CHANCE ({chance}%) - {news}" if news else f"LOW CHANCE ({chance}%)"
+
+            # PRIORITY 2: Scout intelligence can override FPL "available" status
+            # This catches injuries not yet reflected in FPL API
+            if not force_bench and name in scout_intel:
+                intel = scout_intel[name]
+                if intel['status'] in ['INJURED', 'SUSPENSION'] and intel['confidence'] >= 0.8:
+                    # High confidence Scout intel overrides FPL
+                    force_bench = True
+                    reason = intel['reason']
+                    logger.info(f"Ron: 🔍 Scout override for {name} - {intel['reason']}")
+                elif intel['status'] == 'DOUBT' and intel['confidence'] >= 0.8:
+                    # High confidence doubt - log warning but don't force bench
+                    logger.warning(f"Ron: ⚠️ Scout reports {name} DOUBTFUL - {intel['reason']}")
+
+            # Log doubtful players from FPL data
+            if not force_bench and chance is not None and chance < 75:
+                logger.warning(f"Ron: ⚠️ {name} is DOUBTFUL ({chance}% chance) - {news}")
+
+            if force_bench:
+                # Set effective xP to very negative to force to bench
+                player['_original_xP'] = player.get('xP', 0)
+                player['xP'] = -100  # Will sort to bottom
+                player['_unavailable'] = True
+                player['_unavailable_reason'] = reason
+                unavailable_players.append((name, reason))
+                logger.warning(f"Ron: 🚫 {name} BENCHED - {reason}")
+
+        if unavailable_players:
+            logger.info(f"Ron: {len(unavailable_players)} player(s) forced to bench due to availability")
+
         # Sort each position by xP (expected points) - highest first
+        # Unavailable players will sort to bottom due to xP = -100
         for pos in by_position:
             by_position[pos].sort(
                 key=lambda x: x.get('xP', 0),
@@ -507,6 +699,12 @@ class RonManager(BaseAgent):
             by_position['FWD'][i]['position'] = position_number
             position_number += 1
 
+        # Restore original xP values for unavailable players (for display/logging)
+        for player in squad:
+            if '_original_xP' in player:
+                player['xP'] = player['_original_xP']
+                del player['_original_xP']
+
         return squad
 
     def _select_captain(
@@ -526,8 +724,13 @@ class RonManager(BaseAgent):
         Returns:
             Squad with captaincy assigned
         """
-        # Get starting XI only
-        starting_xi = [p for p in squad if p.get('position', 16) <= 11]
+        # Get starting XI only - exclude any unavailable players that slipped through
+        starting_xi = [
+            p for p in squad
+            if p.get('position', 16) <= 11
+            and not p.get('_unavailable', False)
+            and p.get('status', 'a') not in ('i', 's', 'u')
+        ]
 
         if not starting_xi:
             logger.error("Ron: No starting XI found for captain selection!")
@@ -539,8 +742,17 @@ class RonManager(BaseAgent):
             player['is_vice_captain'] = False
             player['multiplier'] = 1
 
-        # Sort starting XI by xP (highest first)
-        starting_xi.sort(key=lambda x: x.get('xP', 0), reverse=True)
+        # Sort starting XI by xP (highest first), but deprioritize doubtful players
+        def captain_score(player):
+            xp = player.get('xP', 0)
+            chance = player.get('chance_of_playing_next_round')
+            # Penalize doubtful players for captain selection
+            if chance is not None and chance < 75:
+                xp *= (chance / 100)  # Scale down by availability chance
+                logger.debug(f"Ron: {player['web_name']} captain score reduced due to {chance}% availability")
+            return xp
+
+        starting_xi.sort(key=captain_score, reverse=True)
 
         # Captain = highest xP
         if len(starting_xi) >= 1:

@@ -291,6 +291,90 @@ def display_detailed_player_performance(picks_data, bootstrap, gameweek, verbose
     print(f"Total Points: {total_points}")
 
 
+def sync_current_team_from_fpl(team_id: int, gameweek: int = None, verbose: bool = False) -> bool:
+    """
+    Sync current_team table with actual FPL team data.
+
+    This ensures the database reflects the actual team on FPL website,
+    which is critical before making team selections.
+
+    Args:
+        team_id: FPL team ID
+        gameweek: Specific gameweek (default: current)
+        verbose: Print detailed output
+
+    Returns:
+        True if sync successful, False otherwise
+    """
+    from data.database import Database
+
+    try:
+        # Fetch FPL data
+        bootstrap = fetch_bootstrap_data()
+        entry = fetch_team_entry(team_id)
+        players_lookup, teams_lookup = build_player_lookup(bootstrap)
+
+        # Determine gameweek
+        gw = gameweek or entry['current_event']
+
+        # Fetch picks for gameweek
+        picks = fetch_team_picks(team_id, gw)
+
+        if not picks or 'picks' not in picks:
+            print(f"❌ No picks data for GW{gw}")
+            return False
+
+        # Build team data for database
+        team_data = []
+        for pick in picks['picks']:
+            player_id = pick['element']
+            player = players_lookup.get(player_id, {})
+
+            team_data.append({
+                'player_id': player_id,
+                'position': pick['position'],
+                'is_captain': pick['is_captain'],
+                'is_vice_captain': pick['is_vice_captain'],
+                'multiplier': pick['multiplier'],
+                'purchase_price': player.get('now_cost', 0),  # Best estimate
+                'selling_price': player.get('now_cost', 0),   # Best estimate
+            })
+
+        # Update database
+        db = Database()
+
+        # Clear existing current_team
+        db.execute_update("DELETE FROM current_team")
+
+        # Insert new team
+        for player_data in team_data:
+            db.execute_update("""
+                INSERT INTO current_team
+                (player_id, position, is_captain, is_vice_captain, multiplier, purchase_price, selling_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                player_data['player_id'],
+                player_data['position'],
+                player_data['is_captain'],
+                player_data['is_vice_captain'],
+                player_data['multiplier'],
+                player_data['purchase_price'],
+                player_data['selling_price']
+            ))
+
+        if verbose:
+            print(f"\n✅ Synced current_team table with GW{gw} picks ({len(team_data)} players)")
+            print(f"   Captain: {next((players_lookup[p['player_id']]['web_name'] for p in team_data if p['is_captain']), 'N/A')}")
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error syncing current_team: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def display_recent_transfers(transfers_data, bootstrap, num_transfers=10):
     """Display recent transfers"""
     players, teams = build_player_lookup(bootstrap)
@@ -336,6 +420,8 @@ def main():
                        help='Show detailed player-by-player performance')
     parser.add_argument('--save', action='store_true',
                        help='Save tracking data to file')
+    parser.add_argument('--sync', action='store_true',
+                       help='Sync current_team table with actual FPL team')
 
     args = parser.parse_args()
 
@@ -350,6 +436,17 @@ def main():
         print('   FPL_TEAM_ID=YOUR_TEAM_ID')
         print("\nOr use: python scripts/track_ron_team.py --team-id YOUR_TEAM_ID")
         sys.exit(1)
+
+    # Handle --sync flag (quick sync without full tracking)
+    if args.sync:
+        print(f"\n🔄 Syncing current_team table from FPL API (Team ID: {team_id})...")
+        success = sync_current_team_from_fpl(team_id, args.gameweek, verbose=True)
+        if success:
+            print("✅ Sync complete!")
+            sys.exit(0)
+        else:
+            print("❌ Sync failed!")
+            sys.exit(1)
 
     try:
         print(f"\n🔍 Fetching Ron's team data (ID: {team_id})...")

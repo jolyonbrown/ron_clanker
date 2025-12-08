@@ -272,7 +272,9 @@ class Database:
                 p.now_cost,
                 p.form,
                 p.points_per_game,
-                p.status
+                p.status,
+                p.chance_of_playing_next_round,
+                p.news
             FROM current_team ct
             JOIN players p ON ct.player_id = p.id
             ORDER BY ct.position

@@ -165,22 +165,39 @@ class MLPredictionService:
 
         logger.info(f"MLPredictionService initialized (models_loaded={self.models_loaded})")
 
-    def load_models(self, version: str = None) -> bool:
+    def load_models(self, version: str = None, use_registry: bool = True) -> bool:
         """
         Load trained prediction models.
 
         Args:
             version: Specific version to load (e.g., 'gw13_full').
                      If None, auto-detects latest trained model.
+            use_registry: If True, consult model registry for active models.
+                          Default True.
 
         Returns:
             True if models loaded successfully, False otherwise.
 
         Example:
-            service.load_models()  # Load latest
+            service.load_models()  # Load latest from registry
             service.load_models('gw10_ict')  # Load specific version
+            service.load_models(use_registry=False)  # Skip registry, use symlinks
         """
         try:
+            # Try loading from registry first
+            if use_registry and version is None:
+                loaded_version = self._load_from_registry()
+                if loaded_version:
+                    self.model_version = loaded_version
+                    self.available_positions = [
+                        pos for pos, model in self._performance_predictor.models.items()
+                        if model is not None
+                    ]
+                    self.models_loaded = len(self.available_positions) > 0
+                    logger.info(f"Models loaded from registry: version={self.model_version}")
+                    return self.models_loaded
+
+            # Fall back to direct loading
             self._performance_predictor.load_models(version=version)
             self.model_version = version or self._performance_predictor.get_latest_model_version()
             self.available_positions = [
@@ -194,6 +211,34 @@ class MLPredictionService:
             logger.error(f"Failed to load models: {e}")
             self.models_loaded = False
             return False
+
+    def _load_from_registry(self) -> Optional[str]:
+        """Load active models from registry. Returns version string or None."""
+        try:
+            from ml.model_registry import ModelRegistry
+            import joblib
+
+            registry = ModelRegistry()
+            loaded_any = False
+            version = None
+
+            for pos in [1, 2, 3, 4]:
+                active = registry.get_active_model('ensemble', 'xp_prediction', pos)
+                if active and Path(active['file_path']).exists():
+                    model = joblib.load(active['file_path'])
+                    self._performance_predictor.models[pos] = model
+                    loaded_any = True
+                    version = active['version']  # Use last loaded version
+
+                    # Load feature columns if available
+                    if active.get('feature_columns_path') and Path(active['feature_columns_path']).exists():
+                        self._performance_predictor.feature_columns = joblib.load(active['feature_columns_path'])
+
+            return version if loaded_any else None
+
+        except Exception as e:
+            logger.debug(f"Registry loading failed, falling back: {e}")
+            return None
 
     def predict_player_points(
         self,
@@ -346,12 +391,30 @@ class MLPredictionService:
                 - feature_columns: List[str] if available
                 - model_dir: str
                 - price_predictor_available: bool
+                - registry_info: Dict with active model info from registry
 
         Example:
             info = service.get_model_info()
             if not info['models_loaded']:
                 print("Warning: Using fallback predictions")
         """
+        # Get registry info if available
+        registry_info = {}
+        try:
+            from ml.model_registry import ModelRegistry
+            registry = ModelRegistry()
+            for pos in [1, 2, 3, 4]:
+                active = registry.get_active_model('ensemble', 'xp_prediction', pos)
+                if active:
+                    registry_info[pos] = {
+                        'id': active['id'],
+                        'version': active['version'],
+                        'training_samples': active.get('training_samples'),
+                        'metrics': active.get('metrics', {})
+                    }
+        except Exception as e:
+            logger.debug(f"Registry info not available: {e}")
+
         return {
             'models_loaded': self.models_loaded,
             'model_version': self.model_version,
@@ -364,7 +427,8 @@ class MLPredictionService:
                 2: 'Defender',
                 3: 'Midfielder',
                 4: 'Forward'
-            }
+            },
+            'registry_info': registry_info
         }
 
     def get_feature_importance(self, position: int, top_n: int = 10) -> List[Tuple[str, float]]:

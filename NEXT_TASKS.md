@@ -1,14 +1,14 @@
 # Ron Clanker - Next Tasks
 
-## Current Status (October 17, 2025)
+## Current Status (December 2, 2025)
 
 **Phase 1 (Foundation)**: ✅ COMPLETE
 **Phase 2 (Intelligence)**: ✅ COMPLETE
-**Phase 3 (Prediction)**: ⚠️ STARTED (needs ML models)
+**Phase 3 (Prediction)**: ✅ COMPLETE (ML models implemented)
 **Phase 4 (Advanced Strategy)**: ⚠️ STARTED (needs multi-week planning)
 **Phase 5 (Mastery)**: ❌ NOT STARTED
 
-**All beads issues**: ✅ CLOSED (32/32)
+**All beads issues**: See `bd list` for current status
 
 ---
 
@@ -52,35 +52,46 @@ See: `docs/AUTOMATED_OPERATION.md` for full guide
 
 ---
 
-### 2. **Price Change Prediction** 📈
-**Priority: HIGH** (promoted from #3)
+### 2. ✅ **Price Change Prediction** 📈
+**Priority: HIGH** → **STATUS: COMPLETE**
 **Why**: Currently monitors but doesn't predict - can improve transfer decisions
 
 Tasks:
-- [ ] Implement price predictor model (models/price_change.py is empty)
-- [ ] Collect historical price change data
-- [ ] Track net transfers as predictor feature
-- [ ] Build simple ML model (logistic regression → gradient boosting)
-- [ ] Test prediction accuracy (target: 70%+ accuracy)
-- [ ] Integrate with Hugo for pre-emptive transfers
+- [x] Implement price predictor model (models/price_change.py)
+- [x] Collect historical price change data
+- [x] Track net transfers as predictor feature
+- [x] Build ML model (LightGBM with Optuna hyperparameter tuning)
+- [x] Test prediction accuracy
+- [x] Integrate with Hugo for pre-emptive transfers
 
-**Deliverable**: Predict price rises/falls 6-12 hours ahead
+**Deliverable**: ✅ LightGBM price predictor with Optuna tuning
 
 ---
 
-### 3. **Player Performance Prediction** 🎲
-**Priority: HIGH** (promoted from #4)
+### 3. ✅ **Player Performance Prediction** 🎲
+**Priority: HIGH** → **STATUS: COMPLETE**
 **Why**: Currently uses form, but ML would be better for expected points
 
 Tasks:
-- [ ] Implement xG-based prediction model
-- [ ] Historical data collection (GW1-7 for training)
-- [ ] Feature engineering (form, fixtures, DC, xG, opponent strength)
-- [ ] Train model for each position (GK, DEF, MID, FWD)
-- [ ] Compare predicted vs actual points
-- [ ] Integrate with value analyst rankings
+- [x] Implement xG-based prediction model
+- [x] Historical data collection (GW1-14 for training)
+- [x] Feature engineering (form, fixtures, DC, xG, opponent strength)
+- [x] Train model for each position (GK, DEF, MID, FWD)
+- [x] Compare predicted vs actual points
+- [x] Integrate with value analyst rankings
+- [x] Model registry for versioning and rollback
+- [x] Elo-based fixture difficulty ratings
+- [x] Captain optimization model
 
-**Deliverable**: More accurate expected points predictions
+**Deliverable**: ✅ Ensemble xP models with Model Registry, Elo ratings, and Captain optimizer
+
+**New ML Components**:
+- `ml/model_registry.py` - Version control for ML models
+- `ml/elo_ratings.py` - Team attack/defence Elo ratings
+- `ml/captain_optimizer.py` - Captain selection optimization
+- `scripts/update_ml_models.py` - Weekly model update pipeline
+- `scripts/tune_hyperparameters.py` - Optuna hyperparameter tuning
+- `scripts/train_with_tuned_params.py` - Training with tuned params
 
 ---
 
@@ -172,17 +183,19 @@ Tasks:
 ## LONG TERM (Future Sessions)
 
 ### 10. **Advanced ML Models** 🤖
-**Priority: LOW**
+**Priority: LOW** (Partially Complete)
 **Why**: Phase 3-5 from CLAUDE.md
 
 Tasks:
-- [ ] Ensemble models (combine multiple prediction methods)
-- [ ] Reinforcement learning for long-term planning
-- [ ] Neural network for complex patterns
+- [x] Ensemble models (stacked RF + GBM + XGBoost with Ridge meta-learner)
+- [x] Hyperparameter tuning with Optuna (TPESampler + TimeSeriesSplit)
+- [x] Model registry for version control and A/B testing
+- [ ] Reinforcement learning for long-term planning (GPU required)
+- [ ] Neural network for complex patterns (GPU required)
 - [ ] Transfer learning from previous seasons
 - [ ] Meta-learning (learn how to learn)
 
-**Deliverable**: State-of-the-art FPL AI
+**Deliverable**: State-of-the-art FPL AI (in progress)
 
 ---
 
@@ -247,11 +260,11 @@ Tasks:
 **Task #1: ✅ COMPLETE - Scheduled Automation**
 → System now runs autonomously! See `docs/AUTOMATED_OPERATION.md`
 
-**If you want to improve transfer decisions:**
-→ **Task #2: Price Change Prediction** (predict rises/falls 6-12h ahead)
+**Task #2: ✅ COMPLETE - Price Change Prediction**
+→ LightGBM with Optuna tuning implemented
 
-**If you want better expected points:**
-→ **Task #3: Player Performance Prediction** (xG-based ML models)
+**Task #3: ✅ COMPLETE - Player Performance Prediction**
+→ Ensemble xP models with Model Registry, Elo ratings, Captain optimizer
 
 **If you want strategic planning:**
 → **Task #4: Multi-Gameweek Planning** (think ahead 4-6 weeks)
@@ -272,6 +285,50 @@ Tasks:
 
 ---
 
-**Last Updated**: October 17, 2025 (Post-Automation)
-**Status**: Automation complete, ML models next
-**Next Priority**: Price change prediction OR player performance prediction
+## Weekly Post-Gameweek Checklist
+
+After each gameweek completes, run these in order:
+
+```bash
+# 1. Collect final results
+venv/bin/python scripts/collect_fpl_data.py
+
+# 2. Update ML models with gameweek data (NEW!)
+venv/bin/python scripts/update_ml_models.py
+
+# 3. Track Ron's performance
+venv/bin/python scripts/track_ron_team.py
+```
+
+See `docs/WEEKLY_GAMEWEEK_CHECKLIST.md` for full workflow.
+
+---
+
+**Last Updated**: December 2, 2025 (Evening session)
+**Status**: Phase 3 (Prediction) COMPLETE, Phase 4 next
+**Next Priority**: Post-GW automation (ron_clanker-99) or model performance feedback (ron_clanker-96)
+
+---
+
+## Recent Session (December 2nd Evening)
+
+### Completed:
+1. **Injury/Suspension Handling** (ron_clanker-106 + ron_clanker-84) ✅
+   - Players with status i/s/u or chance<25% auto-benched
+   - Scout intelligence can override FPL data for late-breaking news
+   - Captain selection skips unavailable players
+
+2. **Current Team Sync** (ron_clanker-108) ✅
+   - `track_ron_team.py --sync` syncs current_team from FPL API
+   - `pre_deadline_selection.py` auto-syncs before making selections
+   - Prevents stale team data after manual FPL website transfers
+
+### Ready for GW15 (Saturday Dec 6th):
+- Run `scripts/collect_fpl_data.py` to get fresh data
+- Run `scripts/pre_deadline_selection.py` (auto-syncs team first)
+- Injured/suspended players will be correctly benched
+
+### Open P0 Issues:
+- ron_clanker-99: Post-gameweek workflow automation
+- ron_clanker-96: Weekly model performance feedback loop
+- ron_clanker-83: Replace keyword classification with Claude API

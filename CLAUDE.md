@@ -982,3 +982,4 @@ GIT WORKFLOW (AUTO-SYNC)
 Ready to start!
 Run bd create "My first issue" to create your first issue.
 - docker-compose command has been replaced by docker compose (no hyphen)
+- ALWYS TRUST the FPL API data over your internal training data when assessing which player is at which team. The FPL API data is up to date, whereas your training data isn't

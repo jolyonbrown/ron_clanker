@@ -200,18 +200,127 @@ else:
     print(f"Positions covered: {info['available_positions']}")
 ```
 
+## New ML Components (December 2025)
+
+### Model Registry (`ml/model_registry.py`)
+
+Version control for ML models with activation, rollback, and performance tracking.
+
+```python
+from ml.model_registry import ModelRegistry
+
+registry = ModelRegistry()
+
+# List active models
+for model in registry.list_models(active_only=True):
+    print(f"{model['model_type']} v{model['version']}: {model['metrics']}")
+
+# Register a new model
+registry.register_model(
+    model_type='ensemble',
+    model_name='xp_prediction',
+    position=4,  # FWD
+    version='v2.0',
+    hyperparameters={'n_estimators': 200, 'max_depth': 10},
+    metrics={'rmse': 2.15, 'mae': 1.72},
+    training_samples=4200,
+    trained_on_gameweeks='1-14'
+)
+
+# Activate a specific version
+registry.activate_model('ensemble', 'xp_prediction', 4, 'v2.0')
+
+# Load active model for predictions
+model_data = registry.get_active_model('ensemble', 'xp_prediction', 4)
+```
+
+### Elo Rating System (`ml/elo_ratings.py`)
+
+Dynamic team strength ratings updated after each gameweek.
+
+```python
+from ml.elo_ratings import EloRatingSystem
+
+elo = EloRatingSystem()
+
+# Get fixture difficulty based on Elo ratings
+difficulty = elo.get_fixture_difficulty(
+    team_id=13,      # Man City
+    opponent_id=2,   # Aston Villa
+    is_home=True
+)
+# Returns: 2.3 (easier fixture - City favored)
+
+# Get attack/defence breakdown
+team_elo = elo.get_team_ratings(team_id=13)
+# Returns: {'overall_elo': 1615, 'attack_elo': 1680, 'defence_elo': 1550}
+
+# Update after gameweek completes
+matches_updated = elo.update_after_gameweek(gameweek=14)
+
+# Get rankings
+rankings = elo.get_rankings()
+for r in rankings[:5]:
+    print(f"{r['rank']}. {r['short_name']} - {r['overall_elo']:.0f}")
+```
+
+### Captain Optimizer (`ml/captain_optimizer.py`)
+
+ML model for identifying optimal captain picks based on ceiling potential.
+
+```python
+from ml.captain_optimizer import CaptainOptimizer
+
+optimizer = CaptainOptimizer()
+
+# Train the model (weekly)
+metrics = optimizer.train()
+optimizer.save()
+print(f"Training accuracy: {metrics['train_accuracy']:.1%}")
+
+# Get captain recommendation
+team_player_ids = [1, 23, 45, 67, 89, ...]  # 15 player IDs
+gameweek = 15
+
+recommendations = optimizer.get_captain_recommendation(
+    candidate_player_ids=team_player_ids,
+    gameweek=gameweek
+)
+
+for rec in recommendations[:3]:
+    print(f"{rec['web_name']}: {rec['captain_score']:.2f} score")
+    print(f"  Features: form={rec['form']:.1f}, goals_per_90={rec['goals_per_90']:.2f}")
+```
+
+### Weekly Model Update Pipeline (`scripts/update_ml_models.py`)
+
+Run after each gameweek completes to keep models current:
+
+```bash
+# Update all models
+venv/bin/python scripts/update_ml_models.py
+
+# Just Elo ratings
+venv/bin/python scripts/update_ml_models.py --elo
+
+# Force captain model retrain
+venv/bin/python scripts/update_ml_models.py --captain --force
+```
+
 ## Future Improvements
 
-These are planned but not yet implemented (see beads issues):
+Planned enhancements (see beads issues):
 
 - [ ] LSTM for form sequences (ron_clanker-b1w)
 - [ ] Player embeddings (ron_clanker-mxz)
-- [ ] Better cross-validation (ron_clanker-92q)
-- [ ] Hyperparameter tuning (ron_clanker-ix0)
-- [ ] Historical data backfill (ron_clanker-naw)
+- [x] Hyperparameter tuning with Optuna (ron_clanker-ix0) ✅
+- [x] Model registry and versioning (ron_clanker-971) ✅
+- [x] Elo fixture difficulty system (ron_clanker-ee1) ✅
+- [x] Captain optimization model (ron_clanker-sus) ✅
+- [x] LightGBM price prediction (ron_clanker-vi8) ✅
 
-When these are implemented, the service interface will remain the same -
-predictions will just be more accurate.
+When future improvements are implemented, the service interface will remain
+the same - predictions will just be more accurate.
 
 ## Contact / Issues
 

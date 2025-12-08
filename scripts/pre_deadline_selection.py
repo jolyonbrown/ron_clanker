@@ -19,9 +19,40 @@ sys.path.insert(0, str(project_root))
 from agents.manager_agent_v2 import RonManager
 from data.database import Database
 from infrastructure.event_bus import EventBus, get_event_bus
+from utils.config import load_config
 import logging
 
 logger = logging.getLogger('ron_clanker.pre_deadline')
+
+
+def sync_current_team(db: Database) -> bool:
+    """
+    Sync current_team table with actual FPL team before selection.
+
+    This prevents using stale team data when transfers were made manually
+    on the FPL website.
+    """
+    from scripts.track_ron_team import sync_current_team_from_fpl, get_team_id
+
+    config = load_config()
+    team_id = config.get('team_id')
+
+    if not team_id:
+        logger.warning("PreDeadline: No team_id configured, skipping sync")
+        return False
+
+    try:
+        print("\n🔄 Syncing current_team with FPL API...")
+        success = sync_current_team_from_fpl(team_id, verbose=True)
+        if success:
+            logger.info("PreDeadline: current_team synced successfully")
+            return True
+        else:
+            logger.error("PreDeadline: Failed to sync current_team")
+            return False
+    except Exception as e:
+        logger.error(f"PreDeadline: Error syncing current_team: {e}")
+        return False
 
 
 def get_next_deadline(db: Database) -> Optional[dict]:
@@ -90,6 +121,16 @@ async def main():
     elif time_until > 8:
         print("\n⚠️  WARNING: More than 8 hours until deadline")
         print("  This script should run 6 hours before deadline")
+
+    # CRITICAL: Sync current_team with actual FPL team before selection
+    # This prevents using stale team data when transfers were made manually
+    print("\n" + "-" * 80)
+    print("SYNCING CURRENT TEAM FROM FPL API")
+    print("-" * 80)
+
+    if not sync_current_team(db):
+        print("⚠️  Could not sync current_team - proceeding with existing data")
+        print("  Run: venv/bin/python scripts/track_ron_team.py --sync")
 
     # Initialize manager (EVENT-DRIVEN)
     print("\n" + "-" * 80)
