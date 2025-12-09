@@ -566,6 +566,45 @@ class LearningSystem:
 
 ## 💻 Technical Stack
 
+### Environment Setup
+
+**All Python commands must run inside the virtual environment.**
+
+```bash
+# First time setup on a new machine:
+cd /path/to/ron_clanker
+python3.11 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# For GPU support (PyTorch with CUDA):
+# First, detect your CUDA version:
+nvidia-smi  # Look for "CUDA Version: X.Y" in top right
+# Or: nvcc --version
+
+# Then install matching PyTorch:
+# CUDA 12.1: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# CUDA 12.4: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# CUDA 11.8: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# CPU only: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+**Running commands:**
+```bash
+# Always activate first:
+source venv/bin/activate
+
+# Or use full path:
+venv/bin/python scripts/some_script.py
+venv/bin/pytest tests/
+```
+
+**Claude Code sessions should:**
+- Check if venv exists, create if not
+- Activate venv before running Python commands
+- Use `venv/bin/python` or `venv/bin/pip` for one-off commands
+
 ### Core Technologies
 
 **Backend**:
