@@ -3,7 +3,7 @@
 Player Performance Prediction Models
 
 Position-specific models to predict expected points for next gameweek.
-Uses STACKED ENSEMBLE: RandomForest + GradientBoosting + XGBoost + Meta-learner
+Uses STACKED ENSEMBLE: RandomForest + GradientBoosting + XGBoost + Neural (MLP/LSTM) + Meta-learner
 """
 
 import logging
@@ -24,6 +24,14 @@ except ImportError:
     XGBOOST_AVAILABLE = False
     logging.warning("XGBoost not available, falling back to RF+GB ensemble")
 
+# Neural network support (optional - requires PyTorch)
+try:
+    from .neural_models import PositionNeuralEnsemble, DEVICE
+    NEURAL_AVAILABLE = True
+except ImportError:
+    NEURAL_AVAILABLE = False
+    logging.info("Neural models not available (PyTorch not installed)")
+
 logger = logging.getLogger('ron_clanker.ml.prediction')
 
 
@@ -42,12 +50,14 @@ class PlayerPerformancePredictor:
     - Captures different aspects of player performance
     """
 
-    def __init__(self, model_dir: Path = None):
+    def __init__(self, model_dir: Path = None, use_neural: bool = True, neural_version: str = None):
         """
         Initialize stacked ensemble predictor.
 
         Args:
             model_dir: Directory to save/load trained models
+            use_neural: Whether to include neural models (MLP/LSTM) in ensemble
+            neural_version: Version tag for neural models (e.g., 'gpu_20251209_1741')
         """
         self.model_dir = model_dir or Path('models/prediction')
         self.model_dir.mkdir(parents=True, exist_ok=True)
@@ -64,7 +74,51 @@ class PlayerPerformancePredictor:
         # Feature columns (will be set during training)
         self.feature_columns = None
 
-        logger.info(f"PlayerPerformancePredictor: Initialized with stacking ensemble (XGBoost: {XGBOOST_AVAILABLE})")
+        # Neural models (optional GPU-accelerated models)
+        self.use_neural = use_neural and NEURAL_AVAILABLE
+        self.neural_ensemble = None
+        self.neural_version = neural_version
+
+        if self.use_neural:
+            self._load_neural_models()
+
+        logger.info(
+            f"PlayerPerformancePredictor: Initialized with stacking ensemble "
+            f"(XGBoost: {XGBOOST_AVAILABLE}, Neural: {self.use_neural})"
+        )
+
+    def _load_neural_models(self):
+        """Load pre-trained neural models if available."""
+        try:
+            neural_dir = Path('models/neural')
+            if not neural_dir.exists():
+                logger.info("No neural models directory found, skipping neural integration")
+                self.use_neural = False
+                return
+
+            self.neural_ensemble = PositionNeuralEnsemble(model_dir=neural_dir, use_lstm=True)
+
+            # Auto-detect version if not specified
+            if self.neural_version is None:
+                # Find the most recent model version
+                import glob
+                mlp_files = glob.glob(str(neural_dir / 'pos_1' / 'mlp_*.pt'))
+                if mlp_files:
+                    import os
+                    latest = max(mlp_files, key=os.path.getmtime)
+                    self.neural_version = Path(latest).stem.replace('mlp_', '')
+                    logger.info(f"Auto-detected neural model version: {self.neural_version}")
+                else:
+                    logger.info("No neural models found, disabling neural integration")
+                    self.use_neural = False
+                    return
+
+            self.neural_ensemble.load_all(self.neural_version)
+            logger.info(f"Loaded neural models (version: {self.neural_version})")
+
+        except Exception as e:
+            logger.warning(f"Failed to load neural models: {e}")
+            self.use_neural = False
 
     def prepare_training_data(self, features_list: List[Dict], targets: List[float]) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -522,12 +576,17 @@ class PlayerPerformancePredictor:
         logger.info(f"All models trained: {len(all_metrics)} positions")
         return all_metrics
 
-    def predict(self, features: Dict) -> float:
+    def predict(self, features: Dict, form_sequence: np.ndarray = None) -> float:
         """
         Predict expected points for a single player using stacked ensemble.
 
+        The prediction combines:
+        1. Traditional ML models (RF, GB, XGBoost)
+        2. Neural models (MLP, LSTM) if available and loaded
+
         Args:
             features: Feature dict from FeatureEngineer
+            form_sequence: Optional form sequence for LSTM (shape: seq_len, seq_features)
 
         Returns:
             Predicted points for next gameweek
@@ -548,12 +607,85 @@ class PlayerPerformancePredictor:
             pred = model.predict(X)[0]
             base_predictions.append(pred)
 
+        # Add neural model predictions if available
+        if self.use_neural and self.neural_ensemble is not None:
+            mlp_pred, lstm_pred = self._get_neural_predictions(position, X, form_sequence)
+            if mlp_pred is not None:
+                base_predictions.append(mlp_pred)
+            if lstm_pred is not None:
+                base_predictions.append(lstm_pred)
+
         # Stack predictions and use meta-learner
-        meta_features = np.array([base_predictions])
-        prediction = ensemble['meta_model'].predict(meta_features)[0]
+        # Note: If we have more predictions than the meta-learner was trained for,
+        # we need to average the extra neural predictions separately
+        n_base = len(ensemble['base_models'])
+        if len(base_predictions) > n_base:
+            # Meta-learner only knows about original base models
+            # Average neural predictions with ensemble prediction
+            traditional_pred = ensemble['meta_model'].predict(
+                np.array([base_predictions[:n_base]])
+            )[0]
+            neural_preds = base_predictions[n_base:]
+            neural_avg = np.mean(neural_preds)
+
+            # Weighted combination: 70% traditional, 30% neural
+            prediction = 0.7 * traditional_pred + 0.3 * neural_avg
+        else:
+            meta_features = np.array([base_predictions])
+            prediction = ensemble['meta_model'].predict(meta_features)[0]
 
         # Ensure non-negative prediction
         return max(0.0, prediction)
+
+    def _get_neural_predictions(
+        self,
+        position: int,
+        X: np.ndarray,
+        form_sequence: np.ndarray = None
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Get predictions from neural models.
+
+        Args:
+            position: Player position (1-4)
+            X: Feature matrix for MLP (may include player_id column which we exclude)
+            form_sequence: Form sequence for LSTM
+
+        Returns:
+            (mlp_prediction, lstm_prediction) - either can be None
+        """
+        mlp_pred = None
+        lstm_pred = None
+
+        try:
+            # Neural models trained without player_id and position columns
+            # Position is not needed as input since models are position-specific
+            # Remove any player identifier and position columns
+            X_neural = X
+            if self.feature_columns:
+                skip_cols = 0
+                for col in self.feature_columns:
+                    if col in ('player_id', 'player_code', 'position'):
+                        skip_cols += 1
+                    else:
+                        break
+                if skip_cols > 0:
+                    X_neural = X[:, skip_cols:]
+
+            if position in self.neural_ensemble.mlp_models:
+                mlp_preds = self.neural_ensemble.mlp_models[position].predict(X_neural)
+                mlp_pred = float(mlp_preds[0])
+
+            if form_sequence is not None and position in self.neural_ensemble.lstm_models:
+                # Add batch dimension
+                seq = form_sequence.reshape(1, *form_sequence.shape)
+                lstm_preds = self.neural_ensemble.lstm_models[position].predict(seq)
+                lstm_pred = float(lstm_preds[0])
+
+        except Exception as e:
+            logger.warning(f"Neural prediction failed for position {position}: {e}")
+
+        return mlp_pred, lstm_pred
 
     def predict_batch(self, features_list: List[Dict]) -> List[float]:
         """

@@ -136,7 +136,29 @@ class TransferOptimizer:
                 horizon=horizon
             )
 
-        # Step 5: Make roll vs make vs chip decision
+        # Step 5: Multi-transfer optimization when FT > 1
+        if free_transfers > 1 and all_options:
+            if self.verbose:
+                print(f"\n📋 Multi-Transfer Optimization ({free_transfers} FTs available)...")
+
+            recommended_transfers = self.optimize_multi_transfers(
+                all_options=all_options,
+                free_transfers=free_transfers,
+                current_team=current_team,
+                bank=bank,
+                min_gain_threshold=1.5,  # Lower threshold when multiple FTs
+                horizon=horizon
+            )
+
+            if self.verbose and recommended_transfers:
+                total_gain = sum(t.total_gain for t in recommended_transfers)
+                print(f"\n  📊 Multi-transfer summary: {len(recommended_transfers)} transfers "
+                      f"for +{total_gain:.1f}pts total over {horizon} GWs")
+        else:
+            # Single transfer (or none)
+            recommended_transfers = [all_options[0]] if all_options and all_options[0].avg_gain_per_gw >= 2.0 else []
+
+        # Step 6: Make roll vs make vs chip decision
         decision = self._decide_roll_vs_make_vs_chip(
             best_option=all_options[0] if all_options else None,
             free_transfers=free_transfers,
@@ -144,14 +166,27 @@ class TransferOptimizer:
             chip_recommendation=chip_recommendation
         )
 
-        # Step 6: Format output
+        # Override decision if we have multiple recommended transfers
+        if len(recommended_transfers) > 1:
+            total_gain = sum(t.total_gain for t in recommended_transfers)
+            decision = {
+                'action': 'MAKE_MULTI',
+                'reasoning': (f'{len(recommended_transfers)} transfers recommended using '
+                             f'{free_transfers} FTs. Total gain: +{total_gain:.1f}pts over '
+                             f'{horizon} GWs.')
+            }
+
+        # Step 7: Format output
         result = {
-            'recommendation': decision['action'],  # 'MAKE', 'ROLL', or 'CHIP'
+            'recommendation': decision['action'],  # 'MAKE', 'MAKE_MULTI', 'ROLL', or 'CHIP'
             'best_transfer': all_options[0] if all_options else None,
+            'recommended_transfers': recommended_transfers,  # NEW: list of transfers to make
             'top_3_transfers': all_options[:3],
             'by_position': position_options,
             'reasoning': decision['reasoning'],
             'chip_recommendation': chip_recommendation,
+            'free_transfers': free_transfers,
+            'transfers_to_make': len(recommended_transfers),
             'data_visible': True
         }
 
@@ -617,6 +652,94 @@ class TransferOptimizer:
                          f'{free_transfers} free transfers. Not urgent enough.')
         }
 
+    def optimize_multi_transfers(
+        self,
+        all_options: List[TransferOption],
+        free_transfers: int,
+        current_team: List[Dict],
+        bank: float,
+        min_gain_threshold: float = 1.5,  # Minimum pts/GW to be worth a transfer
+        horizon: int = 4
+    ) -> List[TransferOption]:
+        """
+        Greedy multi-transfer optimization when FT > 1.
+
+        Strategy:
+        1. Start with best single transfer
+        2. Remove conflicting options (same player out)
+        3. Update budget after each transfer
+        4. Repeat until FTs exhausted or no good options remain
+
+        Args:
+            all_options: All ranked transfer options
+            free_transfers: Number of free transfers available
+            current_team: Current squad
+            bank: Current budget
+            min_gain_threshold: Minimum avg gain per GW to make transfer
+            horizon: Planning horizon (GWs)
+
+        Returns:
+            List of recommended transfers (up to free_transfers count)
+        """
+        if not all_options or free_transfers < 1:
+            return []
+
+        recommended = []
+        remaining_budget = bank
+        used_player_out_ids = set()  # Track players already transferred out
+        used_player_in_ids = set()   # Track players already transferred in
+
+        # Get current squad player IDs
+        current_player_ids = {p['player_id'] for p in current_team}
+
+        for _ in range(free_transfers):
+            # Find best valid option
+            best_option = None
+
+            for opt in all_options:
+                # Skip if player already being transferred out
+                if opt.player_out_id in used_player_out_ids:
+                    continue
+
+                # Skip if player already being transferred in
+                if opt.player_in_id in used_player_in_ids:
+                    continue
+
+                # Skip if player in already in squad (and not being transferred out)
+                if opt.player_in_id in current_player_ids and opt.player_in_id not in used_player_out_ids:
+                    continue
+
+                # Check budget (player out sale price - player in cost)
+                net_cost = opt.player_in_price - opt.player_out_price
+                if net_cost > remaining_budget:
+                    continue
+
+                # Check if gain meets threshold
+                if opt.avg_gain_per_gw < min_gain_threshold:
+                    continue
+
+                best_option = opt
+                break
+
+            if best_option is None:
+                # No more valid options
+                break
+
+            # Add to recommended list
+            recommended.append(best_option)
+
+            # Update state
+            used_player_out_ids.add(best_option.player_out_id)
+            used_player_in_ids.add(best_option.player_in_id)
+            remaining_budget -= (best_option.player_in_price - best_option.player_out_price)
+
+            if self.verbose:
+                print(f"  ✓ Transfer {len(recommended)}/{free_transfers}: "
+                      f"{best_option.player_out_name} → {best_option.player_in_name} "
+                      f"(+{best_option.total_gain:.1f}pts, remaining budget: £{remaining_budget:.1f}m)")
+
+        return recommended
+
     def _print_analysis(self, result: Dict, current_gw: int, horizon: int):
         """Print comprehensive transfer analysis."""
 
@@ -705,6 +828,17 @@ class TransferOptimizer:
                 print(f"  Type: {best_chip['chip_type']}")
                 print(f"  Expected value: {best_chip['expected_value']:.1f} points")
                 print(f"  Next steps: {best_chip.get('reason', 'Rebuild team')}")
+
+        elif result['recommendation'] == 'MAKE_MULTI' and result.get('recommended_transfers'):
+            transfers = result['recommended_transfers']
+            total_gain = sum(t.total_gain for t in transfers)
+            print(f"\nExecute {len(transfers)} Transfers (using {result.get('free_transfers', len(transfers))} FTs):")
+            for i, t in enumerate(transfers, 1):
+                print(f"\n  Transfer {i}:")
+                print(f"    OUT: {t.player_out_name} (£{t.player_out_price:.1f}m)")
+                print(f"    IN:  {t.player_in_name} (£{t.player_in_price:.1f}m)")
+                print(f"    Gain: {t.total_gain:+.1f}pts over {len(t.gw_predictions)} GWs ({t.avg_gain_per_gw:+.1f}/GW)")
+            print(f"\n  Total Expected Gain: {total_gain:+.1f} points")
 
         elif result['recommendation'] == 'MAKE' and result['best_transfer']:
             best = result['best_transfer']

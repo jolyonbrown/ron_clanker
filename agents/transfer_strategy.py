@@ -17,7 +17,7 @@ FPL Transfer Rules:
 - 1 free transfer per gameweek
 - Max 5 free transfers can be banked
 - Each additional transfer = -4 points
-- Special: GW15→GW16 everyone gets 5 FTs (AFCON)
+- Special events may grant additional FTs (fetched from API)
 - Wildcard/Free Hit preserves banked transfers
 """
 
@@ -30,6 +30,7 @@ from agents.base_agent import BaseAgent
 from agents.data_collector import DataCollector
 from data.database import Database
 from infrastructure.events import Event, EventType, EventPriority
+from services.free_transfer_tracker import FreeTransferTracker
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +110,13 @@ class TransferStrategyAgent(BaseAgent):
         super().__init__(agent_name="hugo")
         self.data_collector = data_collector or DataCollector()
         self.db = database or Database()
+        self.ft_tracker = FreeTransferTracker()
 
         # State
         self._fixture_analysis: Optional[Dict] = None
         self._value_rankings: Optional[Dict] = None
         self._current_squad: Optional[List[Dict]] = None
-        self._free_transfers_available: int = 1  # Default starting value
+        self._ft_data: Optional[Dict] = None  # Cached FT data from API
 
         logger.info("Hugo (Transfer Strategist) initialized")
 
@@ -578,27 +580,105 @@ class TransferStrategyAgent(BaseAgent):
             reasoning=reasoning
         )
 
-    def _get_available_free_transfers(self, gameweek: int) -> int:
+    def _get_available_free_transfers(
+        self,
+        gameweek: int,
+        team_id: Optional[int] = None,
+        override_ft: Optional[int] = None
+    ) -> int:
         """
-        Get number of free transfers available.
+        Get number of free transfers available from FPL API.
 
-        In real implementation, query database for current FT count.
-        For now, return default logic.
+        Fetches actual FT count by calculating from transfer history.
+        Special events (like AFCON) are reflected in the API data.
 
         Args:
-            gameweek: Current gameweek
+            gameweek: Target gameweek
+            team_id: FPL entry team ID (optional, uses config if not provided)
+            override_ft: Manual override for special cases
 
         Returns:
             Number of free transfers (1-5)
         """
-        # TODO: Query database for actual FT count
-        # For now, assume 1 FT per week (standard case)
+        from utils.config import get_team_id
 
-        # Special case: GW16 gets topped up to 5 (AFCON)
-        if gameweek == 16:
-            return self.MAX_BANKED_TRANSFERS
+        # Get team_id from config if not provided
+        if team_id is None:
+            team_id = get_team_id()
 
-        return self._free_transfers_available
+        if team_id is None:
+            logger.warning("No team_id available, defaulting to 1 FT")
+            return 1
+
+        try:
+            # Fetch FT data from API (use cached if available for same GW)
+            if self._ft_data is None or self._ft_data.get('target_gw') != gameweek:
+                self._ft_data = self.ft_tracker.get_available_free_transfers(
+                    team_id=team_id,
+                    target_gw=gameweek,
+                    override_ft=override_ft
+                )
+
+            free_transfers = self._ft_data['free_transfers']
+            logger.info(
+                f"FT check GW{gameweek}: {free_transfers} available "
+                f"({self._ft_data['calculation']})"
+            )
+            return free_transfers
+
+        except Exception as e:
+            logger.error(f"Error fetching FT data: {e}, defaulting to 1")
+            return 1
+
+    def get_transfer_budget_info(
+        self,
+        gameweek: int,
+        team_id: Optional[int] = None,
+        override_ft: Optional[int] = None
+    ) -> Dict:
+        """
+        Get full transfer budget info including FTs, bank, and team value.
+
+        Public method for use by other modules (e.g., pre_deadline_selection).
+
+        Args:
+            gameweek: Target gameweek
+            team_id: FPL entry team ID (optional, uses config if not provided)
+            override_ft: Manual override for special cases
+
+        Returns:
+            {
+                'free_transfers': int,
+                'bank': float,
+                'team_value': float,
+                'banked_before': int,
+                'last_gw_transfers': int,
+                'calculation': str,
+                'is_override': bool,
+            }
+        """
+        from utils.config import get_team_id
+
+        if team_id is None:
+            team_id = get_team_id()
+
+        if team_id is None:
+            logger.warning("No team_id available, returning defaults")
+            return {
+                'free_transfers': 1,
+                'bank': 0.0,
+                'team_value': 100.0,
+                'banked_before': 0,
+                'last_gw_transfers': 0,
+                'calculation': 'No team_id - using defaults',
+                'is_override': False,
+            }
+
+        return self.ft_tracker.get_available_free_transfers(
+            team_id=team_id,
+            target_gw=gameweek,
+            override_ft=override_ft
+        )
 
     def _identify_transfer_targets_out(self, gameweek: int) -> List[Dict]:
         """

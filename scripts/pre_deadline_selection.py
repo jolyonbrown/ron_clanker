@@ -4,8 +4,15 @@ Pre-Deadline Team Selection
 
 Runs 6 hours before each gameweek deadline to make autonomous team selection.
 Should be scheduled via cron or triggered by deadline monitoring.
+
+Usage:
+    python pre_deadline_selection.py                    # Auto-detect GW and FTs
+    python pre_deadline_selection.py --gameweek 16      # Specific gameweek
+    python pre_deadline_selection.py --free-transfers 5 # Override FT count
+    python pre_deadline_selection.py --gameweek 16 --free-transfers 5
 """
 
+import argparse
 import asyncio
 import sys
 import json
@@ -19,6 +26,8 @@ sys.path.insert(0, str(project_root))
 from agents.manager_agent_v2 import RonManager
 from data.database import Database
 from infrastructure.event_bus import EventBus, get_event_bus
+from services.free_transfer_tracker import FreeTransferTracker
+from services.chip_availability import ChipAvailabilityService
 from utils.config import load_config
 import logging
 
@@ -76,7 +85,7 @@ def get_next_deadline(db: Database) -> Optional[dict]:
     }
 
 
-async def main():
+async def main(args):
     """Run pre-deadline team selection."""
 
     start_time = datetime.now(timezone.utc)
@@ -96,14 +105,21 @@ async def main():
     # Check deadline info
     deadline_info = get_next_deadline(db)
 
-    if not deadline_info:
+    if not deadline_info and not args.gameweek:
         print("\n❌ ERROR: Cannot determine next deadline")
         print("Run: venv/bin/python scripts/collect_fpl_data.py")
         return 1
 
-    gameweek = deadline_info['gameweek']
-    deadline = deadline_info['deadline']
-    name = deadline_info['name']
+    # Use command-line gameweek if provided, otherwise auto-detect
+    if args.gameweek:
+        gameweek = args.gameweek
+        deadline = deadline_info['deadline'] if deadline_info else "Unknown"
+        name = f"Gameweek {gameweek}"
+        print(f"\n⚙️  Using command-line gameweek: {gameweek}")
+    else:
+        gameweek = deadline_info['gameweek']
+        deadline = deadline_info['deadline']
+        name = deadline_info['name']
 
     print(f"\nNext Deadline: {name}")
     print(f"  Gameweek: {gameweek}")
@@ -132,6 +148,87 @@ async def main():
         print("⚠️  Could not sync current_team - proceeding with existing data")
         print("  Run: venv/bin/python scripts/track_ron_team.py --sync")
 
+    # Fetch available free transfers from FPL API
+    print("\n" + "-" * 80)
+    print("FETCHING FREE TRANSFER DATA")
+    print("-" * 80)
+
+    config = load_config()
+    team_id = config.get('team_id')
+    ft_tracker = FreeTransferTracker()
+
+    # Use command-line override if provided
+    override_ft = args.free_transfers if args.free_transfers else None
+
+    try:
+        ft_data = ft_tracker.get_available_free_transfers(
+            team_id=team_id,
+            target_gw=gameweek,
+            override_ft=override_ft
+        )
+        free_transfers = ft_data['free_transfers']
+        bank = ft_data['bank']
+
+        print(f"✓ Free Transfers: {free_transfers}")
+        print(f"  Bank: £{bank:.1f}m")
+        print(f"  Team Value: £{ft_data['team_value']:.1f}m")
+        print(f"  Calculation: {ft_data['calculation']}")
+
+        if ft_data.get('is_override'):
+            print(f"  ⚠️  Command-line override applied (--free-transfers {override_ft})")
+
+    except Exception as e:
+        logger.error(f"PreDeadline: Error fetching FT data: {e}")
+        print(f"⚠️  Could not fetch FT data: {e}")
+        if override_ft:
+            print(f"  Using command-line override: {override_ft} free transfers")
+            free_transfers = override_ft
+        else:
+            print("  Defaulting to 1 free transfer")
+            free_transfers = 1
+        bank = 0.0
+
+    # Fetch chip availability from FPL API
+    print("\n" + "-" * 80)
+    print("CHIP AVAILABILITY")
+    print("-" * 80)
+
+    chip_service = ChipAvailabilityService()
+    chip_summary = None
+
+    try:
+        chip_summary = chip_service.get_chip_summary(team_id, current_gw=gameweek)
+
+        print(f"✓ Chips loaded from API ({chip_summary['total_chips']} defined this season)")
+
+        if chip_summary['available']:
+            print(f"\n  Available ({len(chip_summary['available'])}):")
+            for chip in chip_summary['available']:
+                window = f"GW{chip['start_event']}-{chip['stop_event']}"
+                expiry = f" [EXPIRES in {chip['gws_until_expiry']} GWs!]" if chip['expires_soon'] else ""
+                print(f"    - {chip['display_name']}: {window}{expiry}")
+
+        if chip_summary['used']:
+            print(f"\n  Already Used ({len(chip_summary['used'])}):")
+            for chip in chip_summary['used']:
+                print(f"    - {chip['display_name']}: used in GW{chip['used_in_gw']}")
+
+        if chip_summary['expiring_soon']:
+            print(f"\n  ⚠️  EXPIRING SOON ({len(chip_summary['expiring_soon'])}):")
+            for chip in chip_summary['expiring_soon']:
+                print(f"    - {chip['display_name']}: {chip['gws_until_expiry']} GWs left!")
+            print("     Consider using before window closes!")
+
+        if chip_summary['expired']:
+            print(f"\n  Expired/Missed ({len(chip_summary['expired'])}):")
+            for chip in chip_summary['expired']:
+                print(f"    - {chip['display_name']}: window was GW{chip['start_event']}-{chip['stop_event']}")
+
+    except Exception as e:
+        logger.warning(f"PreDeadline: Could not fetch chip data: {e}")
+        print(f"⚠️  Could not fetch chip data: {e}")
+        print("   Chip strategy will use cached data if available")
+
     # Initialize manager (EVENT-DRIVEN)
     print("\n" + "-" * 80)
     print("INITIALIZING RON CLANKER (Event-Driven Manager)")
@@ -143,12 +240,13 @@ async def main():
     # Make team selection
     print("\n" + "-" * 80)
     print(f"SELECTING TEAM FOR GAMEWEEK {gameweek}")
+    print(f"Free Transfers Available: {free_transfers}")
     print("-" * 80)
 
     try:
         # Make weekly decision (transfers, captain, chip usage)
         # Returns dict with keys: squad, transfers, chip_used, announcement
-        result = await ron.make_weekly_decision(gameweek)
+        result = await ron.make_weekly_decision(gameweek, free_transfers=free_transfers, bank=bank)
 
         transfers = result['transfers']
         chip_used = result['chip_used']
@@ -238,7 +336,6 @@ async def main():
     # Cleanup event-driven components
     try:
         await ron.stop()
-        await event_bus.stop()
     except Exception as e:
         logger.warning(f"PreDeadline: Error during cleanup: {e}")
 
@@ -257,9 +354,36 @@ async def main():
     return 0
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Pre-deadline team selection for Ron Clanker',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python pre_deadline_selection.py                     # Auto-detect GW and FTs
+  python pre_deadline_selection.py --gameweek 16       # Specific gameweek
+  python pre_deadline_selection.py --free-transfers 5  # Override FT count (e.g., AFCON)
+  python pre_deadline_selection.py -g 16 -f 5          # Short form
+        """
+    )
+    parser.add_argument(
+        '-g', '--gameweek',
+        type=int,
+        help='Target gameweek (default: auto-detect next GW)'
+    )
+    parser.add_argument(
+        '-f', '--free-transfers',
+        type=int,
+        help='Override free transfer count (e.g., 5 for AFCON special event)'
+    )
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
+    args = parse_args()
     try:
-        exit_code = asyncio.run(main())
+        exit_code = asyncio.run(main(args))
         sys.exit(exit_code)
     except KeyboardInterrupt:
         print("\n\nPre-deadline selection cancelled by user.")

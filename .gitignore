@@ -226,3 +226,6 @@ config/crontab
 models/**/*.pkl
 ml/**/*.pkl
 *.pkl
+
+# Archived old files
+archive/

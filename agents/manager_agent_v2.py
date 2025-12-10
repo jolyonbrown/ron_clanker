@@ -19,7 +19,6 @@ from datetime import datetime
 from agents.base_agent import BaseAgent
 from agents.data_collector import DataCollector
 from rules.rules_engine import RulesEngine
-from ron_clanker.persona import RonClanker
 from ron_clanker.llm_banter import generate_team_announcement
 from data.database import Database
 from infrastructure.events import Event, EventType, EventPriority
@@ -72,7 +71,6 @@ class RonManager(BaseAgent):
         self.db = database or Database()
         self.data_collector = data_collector or DataCollector()
         self.rules_engine = RulesEngine()
-        self.ron = RonClanker()
 
         # Configuration
         self.config = self._load_config()
@@ -884,7 +882,9 @@ class RonManager(BaseAgent):
         squad: List[Dict],
         gameweek: int,
         transfers: List[Dict] = None,
-        chip_used: str = None
+        chip_used: str = None,
+        free_transfers: int = 1,
+        bank: float = 0.0
     ) -> str:
         """
         Generate Ron's team announcement using LLM (Claude Haiku).
@@ -894,22 +894,12 @@ class RonManager(BaseAgent):
             gameweek: Gameweek number
             transfers: List of transfers made (optional)
             chip_used: Name of chip used (optional)
+            free_transfers: Number of free transfers available
+            bank: Money in bank (in millions)
 
         Returns:
             Natural language announcement in Ron's voice
         """
-        # Get free transfers and bank (if available)
-        free_transfers = 1  # Default
-        bank = 0.0
-
-        try:
-            # Try to get actual bank balance
-            team_id = self.db.config.get('team_id')
-            if team_id:
-                # Could fetch from FPL API if needed
-                pass
-        except:
-            pass
 
         # Use LLM-powered announcement generator
         try:
@@ -1005,7 +995,8 @@ Captain: {captain['web_name']}
     async def make_weekly_decision(
         self,
         gameweek: int,
-        free_transfers: int = 1
+        free_transfers: int = 1,
+        bank: float = 0.0
     ) -> Dict[str, Any]:
         """
         Master orchestration method for weekly team decisions.
@@ -1025,6 +1016,7 @@ Captain: {captain['web_name']}
         Args:
             gameweek: Target gameweek
             free_transfers: Number of free transfers available
+            bank: Money in bank (in millions, e.g., 0.5 = £0.5m)
 
         Returns:
             Dict with keys: squad, transfers, chip_used, announcement
@@ -1087,7 +1079,8 @@ Captain: {captain['web_name']}
         transfers = await self.decide_transfers(
             current_team=current_team,
             gameweek=gameweek,
-            free_transfers=free_transfers
+            free_transfers=free_transfers,
+            bank=bank
         )
 
         if transfers:
@@ -1135,7 +1128,9 @@ Captain: {captain['web_name']}
             squad=new_team,
             gameweek=gameweek,
             transfers=transfers,
-            chip_used=chip_used
+            chip_used=chip_used,
+            free_transfers=free_transfers,
+            bank=bank
         )
 
         # 10. Publish TEAM_SELECTED event
@@ -1266,8 +1261,8 @@ Captain: {captain['web_name']}
                     gameweek=gameweek,
                     player_out_id=transfer['player_out'].get('player_id', transfer['player_out'].get('id')),
                     player_in_id=transfer['player_in'].get('player_id', transfer['player_in'].get('id')),
-                    cost=transfer.get('cost', 0),
-                    is_free=transfer.get('is_free', True),
+                    transfer_cost=transfer.get('cost', 0),
+                    is_free_transfer=transfer.get('is_free', True),
                     reasoning=transfer.get('reasoning', '')
                 )
 
@@ -1291,7 +1286,8 @@ Captain: {captain['web_name']}
         self,
         current_team: List[Dict[str, Any]],
         gameweek: int,
-        free_transfers: int = 1
+        free_transfers: int = 1,
+        bank: float = None
     ) -> List[Dict[str, Any]]:
         """
         Decide on transfers for the gameweek.
@@ -1315,22 +1311,63 @@ Captain: {captain['web_name']}
                 for player in current_team:
                     ml_predictions[player['player_id']] = player.get('xP', 2.0)
 
+                # Use provided bank, or fetch from FT tracker
+                if bank is None:
+                    from services.free_transfer_tracker import FreeTransferTracker
+                    ft_tracker = FreeTransferTracker()
+                    team_id = self.config.get('team_id')
+                    bank = 0.0
+                    if team_id:
+                        try:
+                            ft_data = ft_tracker.get_available_free_transfers(team_id, gameweek)
+                            bank = ft_data.get('bank', 0.0)
+                        except Exception:
+                            pass
+
                 result = self.transfer_optimizer.optimize_transfers(
                     current_team=current_team,
                     ml_predictions=ml_predictions,
                     current_gw=gameweek,
                     free_transfers=free_transfers,
-                    bank=0.0,  # TODO: get actual bank from team state
+                    bank=bank,
                     horizon=4,
                     ron_entry_id=self.config.get('team_id'),
                     league_id=self.config.get('league_id')
                 )
 
-                transfers = result.get('transfers', [])
-                logger.info(f"Ron: TransferOptimizer recommends {len(transfers)} transfer(s)")
+                # Handle both single and multi-transfer recommendations
+                raw_transfers = result.get('recommended_transfers', []) or result.get('transfers', [])
+                logger.info(f"Ron: TransferOptimizer recommends {len(raw_transfers)} transfer(s)")
 
                 if result.get('chip_recommendation'):
                     logger.info(f"Ron: Chip vs Transfer comparison: {result['chip_recommendation'].get('recommendation', 'N/A')}")
+
+                # Convert TransferOption objects to dict format expected by rest of codebase
+                transfers = []
+                for t in raw_transfers:
+                    # TransferOption is a dataclass with player_out_id, player_in_id, etc.
+                    # Include element_type for formation assignment
+                    transfer_dict = {
+                        'player_out': {
+                            'id': t.player_out_id,
+                            'player_id': t.player_out_id,
+                            'web_name': t.player_out_name,
+                            'now_cost': int(t.player_out_price * 10),  # Convert to FPL format
+                            'element_type': t.position  # 1=GK, 2=DEF, 3=MID, 4=FWD
+                        },
+                        'player_in': {
+                            'id': t.player_in_id,
+                            'player_id': t.player_in_id,
+                            'web_name': t.player_in_name,
+                            'now_cost': int(t.player_in_price * 10),
+                            'element_type': t.position  # Same position as player out
+                        },
+                        'reasoning': f"+{t.total_gain:.1f}pts over 4 GWs ({t.avg_gain_per_gw:.1f}/GW)",
+                        'total_gain': t.total_gain,
+                        'avg_gain_per_gw': t.avg_gain_per_gw
+                    }
+                    transfers.append(transfer_dict)
+                    logger.info(f"  Transfer: {t.player_out_name} → {t.player_in_name} (+{t.total_gain:.1f}pts)")
 
                 return transfers
 

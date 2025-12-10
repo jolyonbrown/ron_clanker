@@ -1,18 +1,12 @@
 # Ron Clanker FPL Management System - Dependencies
-
-# Core
-python>=3.11
+# Requires Python 3.11+ (sqlite3 and asyncio are built-in)
 
 # Database
-sqlite3  # Built-in with Python
 psycopg2-binary>=2.9.9  # PostgreSQL adapter
 redis>=5.0.0  # Redis client for event bus
 
 # Event-driven architecture
 celery>=5.3.4  # Task queue and scheduler
-
-# Async support
-asyncio  # Built-in with Python
 
 # Data processing
 pandas>=2.0.0
