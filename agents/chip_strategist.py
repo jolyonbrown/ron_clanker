@@ -1,19 +1,13 @@
 """
 Chip Strategist Agent - "Terry"
 
-Optimizes chip timing for maximum points gain.
+DEPRECATED: This event-driven agent is deprecated. Chip decisions are now handled
+directly by the manager agent using services.chip_strategy.ChipStrategyService.
 
-Chips Available (2 of each per season):
-- Bench Boost: Bench players' points count for one GW
-- Triple Captain: Captain points tripled (instead of 2x)
-- Free Hit: Unlimited free transfers for one GW, team reverts after
-- Wildcard: All transfers free for one GW
+For new code, use:
+    from services.chip_strategy import ChipStrategyService
 
-Rules:
-- First set: Available from start until GW19 deadline
-- Second set: Available after GW19 deadline
-- Cannot use same chip in consecutive GWs (Free Hit)
-- Playing Wildcard/Free Hit retains banked FTs
+This module remains for backwards compatibility with the event-driven architecture.
 """
 
 import logging

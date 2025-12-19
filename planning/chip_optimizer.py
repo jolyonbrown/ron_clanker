@@ -2,17 +2,11 @@
 """
 Chip Timing Optimization for Multi-Gameweek Planning
 
-Optimizes when to use FPL chips:
-- Wildcard (rebuild entire team) - 2 available: GW1-19, GW20-38
-- Bench Boost (all 15 players score) - 2 available
-- Triple Captain (3x points instead of 2x) - 2 available
-- Free Hit (one-week team, reverts after) - 2 available
+DEPRECATED: This module is deprecated. Use services.chip_strategy.ChipStrategyService
+for chip decisions. This module remains for backwards compatibility with multi-GW planning.
 
-NEW 2025/26 Rules:
-- TWO of each chip (first/second half)
-- First half chips must be used by GW19 deadline
-- Second half chips available from GW20 onwards
-- Cannot carry chips over between halves
+For new code, use:
+    from services.chip_strategy import ChipStrategyService
 """
 
 import logging

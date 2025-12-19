@@ -16,7 +16,6 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from data.database import Database
-from intelligence.chip_strategy import ChipStrategyAnalyzer
 
 logger = logging.getLogger('ron_clanker.transfer_optimizer')
 
@@ -59,9 +58,15 @@ class TransferOptimizer:
     - Decide roll vs make based on expected value
     """
 
-    def __init__(self, database: Database, chip_strategy: Optional[ChipStrategyAnalyzer] = None):
+    def __init__(self, database: Database, chip_strategy=None):
+        """
+        Initialize transfer optimizer.
+
+        Args:
+            database: Database instance
+            chip_strategy: Deprecated, chip decisions now handled by manager
+        """
         self.db = database
-        self.chip_strategy = chip_strategy
         self.verbose = True  # Always show data for transparency
         logger.info("TransferOptimizer initialized")
 
@@ -124,17 +129,9 @@ class TransferOptimizer:
 
         all_options.sort(key=lambda x: x.total_gain, reverse=True)
 
-        # Step 4: Get chip recommendations (if chip_strategy available)
+        # Step 4: Chip decisions now handled by manager separately
+        # TransferOptimizer focuses purely on transfer recommendations
         chip_recommendation = None
-        if self.chip_strategy and ron_entry_id and league_id:
-            chip_recommendation = self._evaluate_chip_vs_transfer(
-                current_gw=current_gw,
-                ron_entry_id=ron_entry_id,
-                league_id=league_id,
-                best_transfer_option=all_options[0] if all_options else None,
-                current_team=current_team,
-                horizon=horizon
-            )
 
         # Step 5: Multi-transfer optimization when FT > 1
         if free_transfers > 1 and all_options:
@@ -158,15 +155,7 @@ class TransferOptimizer:
             # Single transfer (or none)
             recommended_transfers = [all_options[0]] if all_options and all_options[0].avg_gain_per_gw >= 2.0 else []
 
-        # Step 6: Make roll vs make vs chip decision
-        decision = self._decide_roll_vs_make_vs_chip(
-            best_option=all_options[0] if all_options else None,
-            free_transfers=free_transfers,
-            current_gw=current_gw,
-            chip_recommendation=chip_recommendation
-        )
-
-        # Override decision if we have multiple recommended transfers
+        # Step 6: Make roll vs make decision (chip decisions handled by manager separately)
         if len(recommended_transfers) > 1:
             total_gain = sum(t.total_gain for t in recommended_transfers)
             decision = {
@@ -174,6 +163,23 @@ class TransferOptimizer:
                 'reasoning': (f'{len(recommended_transfers)} transfers recommended using '
                              f'{free_transfers} FTs. Total gain: +{total_gain:.1f}pts over '
                              f'{horizon} GWs.')
+            }
+        elif recommended_transfers:
+            decision = {
+                'action': 'MAKE',
+                'reasoning': f'Transfer gains +{recommended_transfers[0].total_gain:.1f}pts over {horizon} GWs.'
+            }
+        elif free_transfers < 2:
+            # Roll to accumulate FTs if no good transfers
+            decision = {
+                'action': 'ROLL',
+                'reasoning': 'No transfers meet minimum threshold. Rolling FT.'
+            }
+        else:
+            # Have multiple FTs but no good transfers - still roll
+            decision = {
+                'action': 'ROLL',
+                'reasoning': f'Have {free_transfers} FTs but no transfers meet threshold.'
             }
 
         # Step 7: Format output
@@ -411,189 +417,6 @@ class TransferOptimizer:
 
         return replacements
 
-    def _evaluate_chip_vs_transfer(
-        self,
-        current_gw: int,
-        ron_entry_id: int,
-        league_id: int,
-        best_transfer_option: Optional[TransferOption],
-        current_team: List[Dict],
-        horizon: int
-    ) -> Optional[Dict]:
-        """
-        Evaluate chip usage vs transfer options.
-
-        Returns chip recommendation with expected value comparison.
-        """
-
-        # Get all chip recommendations from ChipStrategyAnalyzer
-        wc_recs = self.chip_strategy.recommend_wildcard_timing(current_gw, ron_entry_id)
-        bb_recs = self.chip_strategy.recommend_bench_boost(current_gw, ron_entry_id)
-        tc_recs = self.chip_strategy.recommend_triple_captain(current_gw, ron_entry_id)
-
-        # Evaluate each chip type
-        chip_options = []
-
-        # Wildcard evaluation
-        for wc_name, wc_rec in wc_recs.items():
-            if wc_rec['recommendation'] in ['URGENT', 'CONSIDER', 'USE NOW']:
-                # Estimate wildcard value
-                # Rough heuristic: count weak players (< 3.0 xP/GW avg)
-                weak_players = sum(1 for p in current_team if p.get('avg_xp', 5.0) < 3.0)
-
-                # Wildcard value = weak_players * 3pts/GW * horizon
-                wc_expected_value = weak_players * 3.0 * horizon
-
-                chip_options.append({
-                    'chip_type': 'wildcard',
-                    'chip_number': 1 if '1' in wc_name else 2,
-                    'chip_name': wc_name.replace('_', ' ').title(),
-                    'expected_value': wc_expected_value,
-                    'recommendation': wc_rec['recommendation'],
-                    'reason': wc_rec['reason'],
-                    'action_type': 'DEFER_TRANSFERS',
-                    'urgency': wc_rec['recommendation']
-                })
-
-        # Bench Boost evaluation
-        for bb_name, bb_rec in bb_recs.items():
-            if bb_rec['status'] == 'AVAILABLE':
-                # BB value: avg bench xP for this GW
-                # For now, conservative estimate: 10 points from bench
-                bb_expected_value = 10.0
-
-                chip_options.append({
-                    'chip_type': 'bench_boost',
-                    'chip_number': 1 if '1' in bb_name else 2,
-                    'chip_name': bb_name.replace('_', ' ').title(),
-                    'expected_value': bb_expected_value,
-                    'recommendation': bb_rec['recommendation'],
-                    'reason': bb_rec.get('optimal_use', 'Use when bench is strong'),
-                    'action_type': 'COORDINATE',
-                    'urgency': 'LOW'
-                })
-
-        # Triple Captain evaluation
-        for tc_name, tc_rec in tc_recs.items():
-            if tc_rec['status'] == 'AVAILABLE':
-                # TC value: double captain points
-                # Conservative: 15 extra points from premium captain
-                tc_expected_value = 15.0
-
-                chip_options.append({
-                    'chip_type': 'triple_captain',
-                    'chip_number': 1 if '1' in tc_name else 2,
-                    'chip_name': tc_name.replace('_', ' ').title(),
-                    'expected_value': tc_expected_value,
-                    'recommendation': tc_rec['recommendation'],
-                    'reason': tc_rec.get('optimal_use', 'Use on premium player DGW'),
-                    'action_type': 'COORDINATE',
-                    'urgency': 'LOW'
-                })
-
-        if not chip_options:
-            return None
-
-        # Sort by expected value
-        chip_options.sort(key=lambda x: x['expected_value'], reverse=True)
-
-        best_chip = chip_options[0]
-
-        # Compare with best transfer
-        transfer_ev = best_transfer_option.total_gain if best_transfer_option else 0.0
-
-        return {
-            'best_chip': best_chip,
-            'all_chip_options': chip_options,
-            'chip_ev': best_chip['expected_value'],
-            'transfer_ev': transfer_ev,
-            'chip_wins': best_chip['expected_value'] > transfer_ev,
-            'ev_difference': best_chip['expected_value'] - transfer_ev
-        }
-
-    def _decide_roll_vs_make_vs_chip(
-        self,
-        best_option: Optional[TransferOption],
-        free_transfers: int,
-        current_gw: int,
-        chip_recommendation: Optional[Dict]
-    ) -> Dict:
-        """
-        Decide whether to make a transfer, roll, or use a chip.
-
-        Decision hierarchy:
-        1. Check if chip recommended with higher EV than transfer
-        2. If Wildcard/Free Hit urgent: DEFER transfers, use chip
-        3. If BB/TC available: COORDINATE with transfers
-        4. Otherwise: normal roll vs make logic
-        """
-
-        # Check chip recommendation first
-        if chip_recommendation and chip_recommendation['chip_wins']:
-            best_chip = chip_recommendation['best_chip']
-
-            # Wildcard/Free Hit: DEFER all transfers
-            if best_chip['action_type'] == 'DEFER_TRANSFERS':
-                return {
-                    'action': 'CHIP',
-                    'chip_type': best_chip['chip_type'],
-                    'chip_number': best_chip['chip_number'],
-                    'chip_name': best_chip['chip_name'],
-                    'reasoning': (
-                        f"{best_chip['chip_name']} recommended: {best_chip['reason']}\n"
-                        f"Expected value: {best_chip['expected_value']:.1f}pts "
-                        f"vs {chip_recommendation['transfer_ev']:.1f}pts from transfer.\n"
-                        f"DEFER transfers and rebuild team."
-                    )
-                }
-
-            # BB/TC: Mention as alternative
-            elif best_chip['action_type'] == 'COORDINATE':
-                # Don't override transfer, but show chip as option
-                pass
-
-        # Normal roll vs make logic (from original method)
-        if not best_option:
-            return {
-                'action': 'ROLL',
-                'reasoning': 'No beneficial transfer options found'
-            }
-
-        avg_gain = best_option.avg_gain_per_gw
-
-        # Not worth a free transfer
-        if avg_gain < 2.0:
-            return {
-                'action': 'ROLL',
-                'reasoning': (f'Best option only gains {avg_gain:.1f}pts/GW '
-                             f'(threshold: 2.0pts/GW). Roll to build 2FT.')
-            }
-
-        # Worth a free transfer
-        if free_transfers >= 1 and avg_gain >= 2.0:
-            return {
-                'action': 'MAKE',
-                'reasoning': (f'Best option gains {avg_gain:.1f}pts/GW '
-                             f'({best_option.total_gain:.1f}pts total). '
-                             f'Good value for free transfer.')
-            }
-
-        # Worth a hit (-4 points)
-        if free_transfers == 0 and avg_gain >= 4.0:
-            return {
-                'action': 'MAKE',
-                'reasoning': (f'Best option gains {avg_gain:.1f}pts/GW '
-                             f'({best_option.total_gain:.1f}pts total). '
-                             f'Worth taking -4 hit.')
-            }
-
-        # Default: roll
-        return {
-            'action': 'ROLL',
-            'reasoning': (f'Best option gains {avg_gain:.1f}pts/GW but have '
-                         f'{free_transfers} free transfers. Not urgent enough.')
-        }
-
     def _decide_roll_vs_make(
         self,
         best_option: Optional[TransferOption],
@@ -779,38 +602,8 @@ class TransferOptimizer:
                 print(f"     GW{gw}: {xp_out:.1f} → {xp_in:.1f} ({xp_in-xp_out:+.1f})")
             print(f"   Alternatives: {opt.alternatives_count} other options in position")
 
-        # Show chip analysis if available
-        if result.get('chip_recommendation'):
-            chip_rec = result['chip_recommendation']
-            print("\n" + "="*80)
-            print("CHIP VS TRANSFER ANALYSIS")
-            print("="*80)
-
-            best_chip = chip_rec['best_chip']
-            print(f"\n🎯 Best Chip Option: {best_chip['chip_name']}")
-            print(f"   Expected Value: {chip_rec['chip_ev']:.1f} points")
-            print(f"   Reason: {best_chip['reason']}")
-            print(f"   Action Type: {best_chip['action_type']}")
-
-            print(f"\n📊 Best Transfer Option: ", end="")
-            if result['best_transfer']:
-                print(f"{result['best_transfer'].player_out_name} → {result['best_transfer'].player_in_name}")
-                print(f"   Expected Value: {chip_rec['transfer_ev']:.1f} points")
-            else:
-                print("None available")
-                print(f"   Expected Value: 0.0 points")
-
-            print(f"\n⚖️  Comparison:")
-            if chip_rec['chip_wins']:
-                print(f"   CHIP WINS by {chip_rec['ev_difference']:+.1f} points")
-            else:
-                print(f"   TRANSFER WINS by {-chip_rec['ev_difference']:+.1f} points")
-
-            # Show all chip options
-            if len(chip_rec['all_chip_options']) > 1:
-                print(f"\n   Other chip options:")
-                for chip in chip_rec['all_chip_options'][1:]:
-                    print(f"   - {chip['chip_name']}: {chip['expected_value']:.1f}pts ({chip['recommendation']})")
+        # Note: Chip decisions are now handled separately by ChipStrategyService
+        # via the manager agent, not by the transfer optimizer
 
         print("\n" + "="*80)
         print("RECOMMENDATION")
@@ -819,17 +612,7 @@ class TransferOptimizer:
         print(f"\nAction: {result['recommendation']}")
         print(f"Reasoning: {result['reasoning']}")
 
-        if result['recommendation'] == 'CHIP':
-            chip_rec = result.get('chip_recommendation')
-            if chip_rec:
-                best_chip = chip_rec['best_chip']
-                print(f"\nExecute Chip:")
-                print(f"  Chip: {best_chip['chip_name']}")
-                print(f"  Type: {best_chip['chip_type']}")
-                print(f"  Expected value: {best_chip['expected_value']:.1f} points")
-                print(f"  Next steps: {best_chip.get('reason', 'Rebuild team')}")
-
-        elif result['recommendation'] == 'MAKE_MULTI' and result.get('recommended_transfers'):
+        if result['recommendation'] == 'MAKE_MULTI' and result.get('recommended_transfers'):
             transfers = result['recommended_transfers']
             total_gain = sum(t.total_gain for t in transfers)
             print(f"\nExecute {len(transfers)} Transfers (using {result.get('free_transfers', len(transfers))} FTs):")

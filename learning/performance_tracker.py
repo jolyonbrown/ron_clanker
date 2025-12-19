@@ -327,3 +327,173 @@ class PerformanceTracker:
                     )
 
         return biases
+
+    def analyze_by_price_bracket(self, last_n_weeks: int = 4) -> Dict:
+        """
+        Analyze prediction accuracy by player price bracket.
+
+        Price brackets:
+            - Premium: >= 10.0m
+            - Mid-price: 6.0m - 9.9m
+            - Budget: < 6.0m
+
+        Returns:
+            Dict with accuracy metrics by price bracket
+        """
+        logger.info(f"Analyzing prediction accuracy by price bracket over last {last_n_weeks} gameweeks")
+
+        # Get recent gameweeks
+        recent_gws = self.db.execute_query("""
+            SELECT DISTINCT gameweek
+            FROM player_predictions
+            WHERE gameweek >= (SELECT MAX(gameweek) - ? FROM player_predictions)
+            ORDER BY gameweek DESC
+        """, (last_n_weeks,))
+
+        if not recent_gws:
+            return {'error': 'Insufficient data for price bracket analysis'}
+
+        gws = [row['gameweek'] for row in recent_gws]
+
+        # Get predictions with player prices
+        results = self.db.execute_query(f"""
+            SELECT
+                pp.predicted_points - pgh.total_points as error,
+                p.now_cost as price,
+                p.element_type as position
+            FROM player_predictions pp
+            JOIN player_gameweek_history pgh
+                ON pp.player_id = pgh.player_id AND pp.gameweek = pgh.gameweek
+            JOIN players p ON pp.player_id = p.id
+            WHERE pp.gameweek IN ({','.join('?' * len(gws))})
+        """, tuple(gws))
+
+        if not results:
+            return {'error': 'No prediction data found'}
+
+        import numpy as np
+
+        # Categorize by price bracket
+        brackets = {
+            'premium': {'min': 100, 'max': float('inf'), 'errors': []},  # >= 10.0m (prices in 0.1m units)
+            'mid_price': {'min': 60, 'max': 99, 'errors': []},           # 6.0m - 9.9m
+            'budget': {'min': 0, 'max': 59, 'errors': []}                # < 6.0m
+        }
+
+        for row in results:
+            price = row['price']
+            error = row['error']
+
+            for bracket_name, bracket in brackets.items():
+                if bracket['min'] <= price <= bracket['max']:
+                    bracket['errors'].append(error)
+                    break
+
+        analysis = {'by_bracket': {}, 'recommendations': []}
+
+        for bracket_name, bracket in brackets.items():
+            if bracket['errors']:
+                errors = bracket['errors']
+                mean_error = np.mean(errors)
+                rmse = np.sqrt(np.mean([e**2 for e in errors]))
+                mae = np.mean([abs(e) for e in errors])
+
+                analysis['by_bracket'][bracket_name] = {
+                    'sample_size': len(errors),
+                    'mean_error': mean_error,
+                    'rmse': rmse,
+                    'mae': mae,
+                    'bias': 'over' if mean_error > 0.5 else ('under' if mean_error < -0.5 else 'neutral')
+                }
+
+                if abs(mean_error) > 0.5:
+                    direction = 'overestimating' if mean_error > 0 else 'underestimating'
+                    analysis['recommendations'].append(
+                        f"{bracket_name.replace('_', ' ').title()} players: Consistently {direction} by {abs(mean_error):.2f} pts"
+                    )
+
+        return analysis
+
+    def get_learning_adjustments(self, last_n_weeks: int = 4) -> Dict:
+        """
+        Generate recommended adjustments based on accumulated learnings.
+
+        Returns adjustments that can be applied to model predictions:
+            - Position bias corrections
+            - Price bracket corrections
+            - Overall calibration factor
+
+        These can be used by prediction models to adjust their outputs.
+        """
+        logger.info("Generating learning adjustments from recent performance")
+
+        # Get position biases
+        position_biases = self.identify_systematic_biases(last_n_weeks)
+        price_biases = self.analyze_by_price_bracket(last_n_weeks)
+
+        adjustments = {
+            'position_corrections': {},
+            'price_bracket_corrections': {},
+            'applied_from_gw': None,
+            'generated_at': datetime.now().isoformat()
+        }
+
+        # Position corrections (subtract bias from predictions)
+        if 'by_position' in position_biases:
+            for pos, data in position_biases['by_position'].items():
+                if data['sample_size'] >= 20:  # Only apply with sufficient data
+                    adjustments['position_corrections'][pos] = -data['mean_error']
+
+        # Price bracket corrections
+        if 'by_bracket' in price_biases:
+            for bracket, data in price_biases['by_bracket'].items():
+                if data['sample_size'] >= 30:  # Only apply with sufficient data
+                    adjustments['price_bracket_corrections'][bracket] = -data['mean_error']
+
+        return adjustments
+
+    def save_learning_adjustments(self, adjustments: Dict, gameweek: int):
+        """
+        Save learning adjustments to database for use by prediction models.
+
+        Args:
+            adjustments: Dict from get_learning_adjustments()
+            gameweek: Gameweek these adjustments should apply from
+        """
+        import json
+
+        adjustments['applied_from_gw'] = gameweek
+
+        try:
+            self.db.execute_update("""
+                INSERT INTO learning_metrics
+                (metric_name, gameweek, value, recorded_at)
+                VALUES ('learning_adjustments', ?, ?, CURRENT_TIMESTAMP)
+            """, (gameweek, json.dumps(adjustments)))
+
+            logger.info(f"Saved learning adjustments for GW{gameweek}")
+
+        except Exception as e:
+            logger.error(f"Failed to save learning adjustments: {e}")
+
+    def get_active_adjustments(self) -> Dict:
+        """
+        Get the most recent learning adjustments for use in predictions.
+
+        Returns:
+            Dict with position and price bracket corrections
+        """
+        import json
+
+        result = self.db.execute_query("""
+            SELECT value
+            FROM learning_metrics
+            WHERE metric_name = 'learning_adjustments'
+            ORDER BY gameweek DESC
+            LIMIT 1
+        """)
+
+        if result:
+            return json.loads(result[0]['value'])
+
+        return {'position_corrections': {}, 'price_bracket_corrections': {}}

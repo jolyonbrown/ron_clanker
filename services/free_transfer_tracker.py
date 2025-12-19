@@ -3,6 +3,7 @@ Free Transfer Tracker Service
 
 Fetches and calculates available free transfers from FPL API.
 Uses the entry history endpoint to track transfer usage per gameweek.
+Supports special events (e.g., AFCON) via config/special_events.yaml.
 
 Usage:
     from services.free_transfer_tracker import FreeTransferTracker
@@ -14,12 +15,16 @@ Usage:
 
 import logging
 import requests
+from pathlib import Path
 from typing import Dict, Optional, List
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
 FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 MAX_BANKED_TRANSFERS = 5
+CONFIG_DIR = Path(__file__).parent.parent / "config"
 
 
 class FreeTransferTracker:
@@ -30,11 +35,38 @@ class FreeTransferTracker:
     - 1 free transfer per gameweek (accumulates after each deadline)
     - Max 5 banked free transfers (1 new + 4 max extra)
     - Wildcard/Free Hit doesn't consume normal FTs
-    - Special events (e.g., AFCON) may grant additional FTs
+    - Special events (e.g., AFCON) may grant additional FTs via config
     """
 
     def __init__(self):
         self._cache = {}
+        self._special_events = self._load_special_events()
+
+    def _load_special_events(self) -> Dict:
+        """Load special events config (FT top-ups, etc.)."""
+        config_path = CONFIG_DIR / "special_events.yaml"
+        if not config_path.exists():
+            logger.debug("No special_events.yaml found")
+            return {}
+        try:
+            with open(config_path) as f:
+                return yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.warning(f"Failed to load special_events.yaml: {e}")
+            return {}
+
+    def get_ft_topup_for_gw(self, target_gw: int) -> Optional[Dict]:
+        """
+        Check if a special FT top-up applies to this gameweek.
+
+        Returns the top-up config if applicable, None otherwise.
+        """
+        topups = self._special_events.get('ft_topups', [])
+        for topup in topups:
+            effective_from = topup.get('effective_from_gw')
+            if effective_from and target_gw >= effective_from:
+                return topup
+        return None
 
     def get_available_free_transfers(
         self,
@@ -160,6 +192,7 @@ class FreeTransferTracker:
         - Start with 0 banked FTs at beginning of season
         - Each GW: available = min(5, banked + 1)
         - After GW: banked = max(0, available - transfers_used)
+        - Apply special event top-ups (e.g., AFCON) when applicable
         - Repeat until target GW
         """
         current_history = history.get('current', [])
@@ -171,11 +204,17 @@ class FreeTransferTracker:
                 'banked_before': 0,
                 'last_gw_transfers': 0,
                 'calculation': "New team - 1 FT available",
+                'special_event': None,
             }
 
         # Track banked FTs through the season
         banked = 0
         last_transfers = 0
+        applied_topup = None
+
+        # Build set of GWs where top-ups apply
+        topups = self._special_events.get('ft_topups', [])
+        topup_triggers = {t['trigger_after_gw']: t for t in topups if 'trigger_after_gw' in t}
 
         for gw_data in current_history:
             gw_num = gw_data['event']
@@ -185,12 +224,18 @@ class FreeTransferTracker:
             available = min(MAX_BANKED_TRANSFERS, banked + 1)
 
             # Calculate what's banked after this GW
-            # If they used <= available, they banked the rest
-            # If they used > available, they took hits (banked = 0)
             if transfers_used <= available:
                 banked = available - transfers_used
             else:
                 banked = 0
+
+            # Apply top-up if this GW triggers one
+            if gw_num in topup_triggers:
+                topup = topup_triggers[gw_num]
+                topup_to = topup.get('topup_to', MAX_BANKED_TRANSFERS)
+                if banked < topup_to:
+                    banked = topup_to - 1  # -1 because we add 1 for next GW
+                    applied_topup = topup
 
             last_transfers = transfers_used
 
@@ -198,21 +243,35 @@ class FreeTransferTracker:
             if gw_num >= target_gw - 1:
                 break
 
+        # Check if top-up applies for target GW (if we haven't processed trigger GW yet)
+        if target_gw - 1 in topup_triggers and (not current_history or current_history[-1]['event'] < target_gw - 1):
+            topup = topup_triggers[target_gw - 1]
+            topup_to = topup.get('topup_to', MAX_BANKED_TRANSFERS)
+            banked = topup_to - 1
+            applied_topup = topup
+
         # Calculate FTs available for target GW
         free_transfers = min(MAX_BANKED_TRANSFERS, banked + 1)
 
         last_gw = current_history[-1]['event'] if current_history else 0
 
-        calculation = (
-            f"GW{last_gw}: used {last_transfers}, banked {banked} → "
-            f"GW{target_gw}: min(5, {banked}+1) = {free_transfers} FTs"
-        )
+        if applied_topup:
+            calculation = (
+                f"GW{last_gw}: {applied_topup['name']} top-up to {applied_topup['topup_to']} FTs → "
+                f"GW{target_gw}: {free_transfers} FTs"
+            )
+        else:
+            calculation = (
+                f"GW{last_gw}: used {last_transfers}, banked {banked} → "
+                f"GW{target_gw}: min(5, {banked}+1) = {free_transfers} FTs"
+            )
 
         return {
             'free_transfers': free_transfers,
             'banked_before': banked,
             'last_gw_transfers': last_transfers,
             'calculation': calculation,
+            'special_event': applied_topup['name'] if applied_topup else None,
         }
 
     def get_transfer_history(self, team_id: int) -> List[Dict]:

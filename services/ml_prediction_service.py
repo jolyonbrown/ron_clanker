@@ -154,11 +154,13 @@ class MLPredictionService:
         self._feature_engineer = FeatureEngineer(self._db)
         self._news_adjuster = None  # Lazy load
         self._price_predictor = None  # Lazy load
+        self._learning_adjustments = None  # Lazy load
 
         # State tracking
         self.models_loaded = False
         self.model_version = None
         self.available_positions = []
+        self.apply_learning_adjustments = True  # Enable feedback-based corrections
 
         if auto_load:
             self.load_models()
@@ -544,15 +546,18 @@ class MLPredictionService:
 
         if not features:
             logger.debug(f"No features for player {player_id}, using fallback")
-            return self._fallback_prediction(player_id)
-
-        if self.models_loaded:
+            raw_prediction = self._fallback_prediction(player_id)
+        elif self.models_loaded:
             # Use ML model
-            xp = self._performance_predictor.predict(features)
-            return float(max(0.0, xp))
+            raw_prediction = float(max(0.0, self._performance_predictor.predict(features)))
         else:
             # Fallback to form-based prediction
-            return self._fallback_prediction(player_id)
+            raw_prediction = self._fallback_prediction(player_id)
+
+        # Apply learning adjustments (bias corrections from previous gameweeks)
+        adjusted_prediction = self._apply_learning_adjustments_to_prediction(player_id, raw_prediction)
+
+        return adjusted_prediction
 
     def _fallback_prediction(self, player_id: int) -> float:
         """
@@ -595,6 +600,82 @@ class MLPredictionService:
         except Exception as e:
             logger.warning(f"News adjustment failed: {e}")
             return predictions
+
+    def _load_learning_adjustments(self) -> Dict:
+        """Load active learning adjustments from PerformanceTracker."""
+        if self._learning_adjustments is not None:
+            return self._learning_adjustments
+
+        try:
+            from learning.performance_tracker import PerformanceTracker
+            tracker = PerformanceTracker(self._db)
+            self._learning_adjustments = tracker.get_active_adjustments()
+            if self._learning_adjustments.get('position_corrections'):
+                logger.info(f"Loaded learning adjustments: {len(self._learning_adjustments['position_corrections'])} position corrections")
+            return self._learning_adjustments
+        except Exception as e:
+            logger.debug(f"No learning adjustments available: {e}")
+            self._learning_adjustments = {'position_corrections': {}, 'price_bracket_corrections': {}}
+            return self._learning_adjustments
+
+    def _apply_learning_adjustments_to_prediction(
+        self,
+        player_id: int,
+        raw_prediction: float
+    ) -> float:
+        """
+        Apply learned bias corrections to a single prediction.
+
+        Corrections are based on:
+        - Position-specific biases (DEF, MID, FWD, GK)
+        - Price bracket biases (Premium, Mid-price, Budget)
+        """
+        if not self.apply_learning_adjustments:
+            return raw_prediction
+
+        adjustments = self._load_learning_adjustments()
+
+        if not adjustments.get('position_corrections') and not adjustments.get('price_bracket_corrections'):
+            return raw_prediction
+
+        # Get player info for corrections
+        player = self._db.execute_query(
+            "SELECT element_type, now_cost FROM players WHERE id = ?",
+            (player_id,)
+        )
+
+        if not player:
+            return raw_prediction
+
+        position = player[0]['element_type']
+        price = player[0]['now_cost']
+
+        adjustment = 0.0
+
+        # Apply position correction
+        pos_names = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        pos_name = pos_names.get(position)
+        if pos_name and pos_name in adjustments.get('position_corrections', {}):
+            adjustment += adjustments['position_corrections'][pos_name]
+
+        # Apply price bracket correction
+        if price >= 100:
+            bracket = 'premium'
+        elif price >= 60:
+            bracket = 'mid_price'
+        else:
+            bracket = 'budget'
+
+        if bracket in adjustments.get('price_bracket_corrections', {}):
+            adjustment += adjustments['price_bracket_corrections'][bracket]
+
+        # Apply adjustment (don't go below 0)
+        adjusted = max(0.0, raw_prediction + adjustment)
+
+        if adjustment != 0:
+            logger.debug(f"Player {player_id}: {raw_prediction:.2f} -> {adjusted:.2f} (learning adjustment: {adjustment:+.2f})")
+
+        return adjusted
 
     def _get_player_for_price_prediction(self, player_id: int) -> Optional[Dict]:
         """Get player data formatted for price prediction."""

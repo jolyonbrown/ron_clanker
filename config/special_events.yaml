@@ -1,0 +1,23 @@
+# Special Events Configuration
+# These override normal FPL rules for specific gameweeks/periods
+# Update each season as FPL announces special rules
+
+season: "2025/26"
+
+# Free Transfer Top-ups
+# When triggered, manager's FT count is topped up TO the specified value
+ft_topups:
+  - name: "AFCON 2025/26"
+    description: "AFCON window - all managers topped up to 5 FTs"
+    trigger_after_gw: 15      # Applies after GW15 deadline passes
+    effective_from_gw: 16     # Available from GW16 onwards
+    topup_to: 5               # Top up TO this value (not add)
+    carry_over: true          # Can be banked across gameweeks
+
+# Future examples (commented out):
+# ft_topups:
+#   - name: "Winter World Cup 2026"
+#     trigger_after_gw: 12
+#     effective_from_gw: 13
+#     topup_to: 5
+#     carry_over: true

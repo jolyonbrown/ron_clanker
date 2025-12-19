@@ -34,7 +34,8 @@ class TestRulesEngine:
             {'id': 15, 'element_type': 4, 'now_cost': 70, 'team_id': 5, 'position': 11, 'is_captain': False, 'is_vice_captain': False},
         ]
 
-        is_valid, msg = self.engine.validate_team(expensive_team)
+        # check_budget=True for validating new team builds
+        is_valid, msg = self.engine.validate_team(expensive_team, check_budget=True)
         assert not is_valid
         assert "exceeds budget" in msg
 

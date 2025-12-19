@@ -146,7 +146,29 @@ def main():
                 print(f"  • {rec}")
                 report_lines.append(f"  • {rec}")
 
-    # 4. Performance Trends
+    # 4. Price Bracket Analysis
+    print("\n" + "-" * 80)
+    print("PRICE BRACKET ANALYSIS")
+    print("-" * 80)
+
+    price_analysis = tracker.analyze_by_price_bracket(last_n_weeks=4)
+
+    if 'by_bracket' in price_analysis:
+        print(f"\nPrediction accuracy by price bracket (last 4 GWs):")
+        for bracket, data in price_analysis['by_bracket'].items():
+            bracket_name = bracket.replace('_', ' ').title()
+            print(f"  {bracket_name:10s}: RMSE={data['rmse']:.2f}, MAE={data['mae']:.2f}, Bias={data['bias']} (n={data['sample_size']})")
+
+        report_lines.append("\nPRICE BRACKET ANALYSIS:")
+        for bracket, data in price_analysis['by_bracket'].items():
+            bracket_name = bracket.replace('_', ' ').title()
+            report_lines.append(f"  {bracket_name}: RMSE={data['rmse']:.2f}, Bias={data['bias']}")
+
+        if price_analysis.get('recommendations'):
+            for rec in price_analysis['recommendations']:
+                print(f"  Warning: {rec}")
+
+    # 5. Performance Trends
     print("\n" + "-" * 80)
     print("PERFORMANCE TRENDS")
     print("-" * 80)
@@ -156,6 +178,29 @@ def main():
         print(f"\nRMSE over last {len(rmse_trend)} gameweeks:")
         for gw_data in reversed(rmse_trend):
             print(f"  GW{gw_data['gameweek']}: {gw_data['value']:.2f}")
+
+    # 6. Generate and Save Learning Adjustments
+    print("\n" + "-" * 80)
+    print("LEARNING ADJUSTMENTS")
+    print("-" * 80)
+
+    adjustments = tracker.get_learning_adjustments(last_n_weeks=4)
+
+    print("\nPosition corrections to apply:")
+    for pos, correction in adjustments['position_corrections'].items():
+        direction = "subtract" if correction < 0 else "add"
+        print(f"  {pos}: {direction} {abs(correction):.2f} pts from predictions")
+
+    print("\nPrice bracket corrections to apply:")
+    for bracket, correction in adjustments['price_bracket_corrections'].items():
+        bracket_name = bracket.replace('_', ' ').title()
+        direction = "subtract" if correction < 0 else "add"
+        print(f"  {bracket_name}: {direction} {abs(correction):.2f} pts from predictions")
+
+    # Save adjustments for next gameweek
+    next_gw = args.gw + 1
+    tracker.save_learning_adjustments(adjustments, next_gw)
+    print(f"\nAdjustments saved and will apply from GW{next_gw}")
 
     duration = (datetime.now() - start_time).total_seconds()
 

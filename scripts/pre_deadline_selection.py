@@ -28,6 +28,7 @@ from data.database import Database
 from infrastructure.event_bus import EventBus, get_event_bus
 from services.free_transfer_tracker import FreeTransferTracker
 from services.chip_availability import ChipAvailabilityService
+from rules.rules_engine import RulesEngine
 from utils.config import load_config
 import logging
 
@@ -257,6 +258,65 @@ async def main(args):
         print(f"   Players: {len(squad)}")
         print(f"   Transfers: {len(transfers)}")
         print(f"   Chip used: {chip_used or 'None'}")
+
+        # Validate against FPL rules
+        print("\n" + "-" * 80)
+        print("RULES VALIDATION")
+        print("-" * 80)
+
+        rules_engine = RulesEngine()
+        validation_passed = True
+
+        # 1. Validate squad composition
+        try:
+            is_valid, error = rules_engine.validate_team(squad)
+            if is_valid:
+                print("✓ Squad composition valid (15 players, budget, position limits)")
+            else:
+                validation_passed = False
+                print(f"❌ Squad validation failed: {error}")
+        except Exception as e:
+            print(f"⚠️  Could not validate squad: {e}")
+
+        # 2. Validate formation (starting XI)
+        try:
+            is_valid, error = rules_engine.validate_starting_xi(squad)
+            if is_valid:
+                print("✓ Formation valid")
+            else:
+                validation_passed = False
+                print(f"❌ Formation invalid: {error}")
+        except Exception as e:
+            print(f"⚠️  Could not validate formation: {e}")
+
+        # 3. Validate transfer count vs free transfers
+        transfer_count = len(transfers) if transfers else 0
+        if transfer_count <= free_transfers:
+            print(f"✓ Transfers valid ({transfer_count} made, {free_transfers} free)")
+        elif chip_used in ['wildcard', 'freehit']:
+            print(f"✓ Transfers valid (unlimited due to {chip_used})")
+        else:
+            hits = (transfer_count - free_transfers) * 4
+            print(f"⚠️  Taking {transfer_count - free_transfers} hit(s) = -{hits}pts")
+
+        # 4. Check chip availability if used
+        if chip_used and chip_summary:
+            available_chips = [c['name'] for c in chip_summary.get('available', [])]
+            if chip_used in available_chips:
+                print(f"✓ Chip '{chip_used}' is available")
+            else:
+                validation_passed = False
+                print(f"❌ Chip '{chip_used}' not available!")
+
+        # 5. Check for special events (AFCON etc.)
+        ft_topup = rules_engine.get_ft_topup_for_gw(gameweek)
+        if ft_topup:
+            print(f"ℹ️  Special event active: {ft_topup['name']}")
+
+        if validation_passed:
+            print("\n✓ All rules validation passed")
+        else:
+            print("\n⚠️  Some rules validation failed - review team before submitting!")
 
         # Show announcement
         print("\n" + "=" * 80)

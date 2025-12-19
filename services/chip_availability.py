@@ -186,7 +186,7 @@ class ChipAvailabilityService:
         self,
         team_id: int,
         current_gw: Optional[int] = None,
-        expiry_warning_gws: int = 3
+        expiry_warning_gws: int = 4
     ) -> List[ChipStatus]:
         """
         Get list of available chips for a team.

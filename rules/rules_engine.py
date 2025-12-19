@@ -4,10 +4,16 @@ FPL Rules Engine
 Validates team selections, transfers, and chip usage against official FPL rules.
 """
 
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+
+import yaml
+
 from .scoring import PointsCalculator, validate_team_formation
+
+CONFIG_DIR = Path(__file__).parent.parent / "config"
 
 
 @dataclass
@@ -55,9 +61,17 @@ class TransferRules:
     # Second half chips available from GW20
     SECOND_HALF_START_GW = 20
 
-    # Special events
-    AFCON_FREE_TRANSFERS_GW = None  # TBD when AFCON occurs
-    AFCON_FREE_TRANSFERS = 5
+
+def load_special_events() -> Dict:
+    """Load special events from config/special_events.yaml."""
+    config_path = CONFIG_DIR / "special_events.yaml"
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path) as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return {}
 
 
 class RulesEngine:
@@ -71,21 +85,43 @@ class RulesEngine:
         self.constraints = TeamConstraints()
         self.transfer_rules = TransferRules()
         self.calculator = PointsCalculator()
+        self.special_events = load_special_events()
+
+    def get_ft_topups(self) -> List[Dict]:
+        """Get list of FT top-up events from config."""
+        return self.special_events.get('ft_topups', [])
+
+    def get_ft_topup_for_gw(self, gameweek: int) -> Optional[Dict]:
+        """Check if a special FT top-up applies to a gameweek."""
+        for topup in self.get_ft_topups():
+            effective_from = topup.get('effective_from_gw')
+            if effective_from and gameweek >= effective_from:
+                return topup
+        return None
 
     # ========================================================================
     # TEAM VALIDATION
     # ========================================================================
 
-    def validate_team(self, team: List[Dict[str, Any]]) -> Tuple[bool, str]:
+    def validate_team(
+        self,
+        team: List[Dict[str, Any]],
+        check_budget: bool = False
+    ) -> Tuple[bool, str]:
         """
         Validate a complete 15-player squad.
 
         Checks:
         - Correct number of players
         - Valid formation
-        - Budget constraint
+        - Budget constraint (only if check_budget=True)
         - Max 3 players per team
         - Starting XI is valid
+
+        Args:
+            team: List of 15 player dictionaries
+            check_budget: If True, validates against £100m initial budget.
+                         Set to False for existing teams (value rises over season)
         """
         # Basic count check
         if len(team) != self.constraints.TOTAL_PLAYERS:
@@ -96,15 +132,20 @@ class RulesEngine:
         if not is_valid:
             return False, msg
 
-        # Budget check
-        total_cost = sum(p.get('now_cost', 0) for p in team)
-        if total_cost > self.constraints.INITIAL_BUDGET:
-            return False, f"Team cost {total_cost/10:.1f}m exceeds budget {self.constraints.INITIAL_BUDGET/10:.1f}m"
+        # Budget check only for new team builds (check_budget=True)
+        # Existing teams can exceed £100m through player price rises
+        if check_budget:
+            total_cost = sum(p.get('now_cost', 0) for p in team)
+            if total_cost > self.constraints.INITIAL_BUDGET:
+                return False, f"Team cost {total_cost/10:.1f}m exceeds budget {self.constraints.INITIAL_BUDGET/10:.1f}m"
 
         # Max 3 players per team check
         team_counts = {}
         for player in team:
-            team_id = player.get('team')  # FPL API uses 'team' field
+            # Handle both 'team' (FPL API) and 'team_id' (database) field names
+            team_id = player.get('team_id') or player.get('team')
+            if team_id is None:
+                continue  # Skip if no team info available
             team_counts[team_id] = team_counts.get(team_id, 0) + 1
             if team_counts[team_id] > self.constraints.MAX_PLAYERS_PER_TEAM:
                 return False, f"Cannot have more than {self.constraints.MAX_PLAYERS_PER_TEAM} players from same team"

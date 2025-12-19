@@ -2,14 +2,16 @@
 """
 Chip Strategy Analyzer
 
-Helps Ron maximize chip value by:
-- Tracking rival chip usage
-- Identifying optimal chip timing windows
-- Comparing Ron's chip arsenal vs rivals
-- Recommending chip usage based on fixtures and competition
+DEPRECATED: This module is deprecated. Use services.chip_strategy.ChipStrategyService
+for chip decisions in the manager agent. This module remains for backwards compatibility
+with league intelligence features (rival chip tracking).
 
-Uses ChipAvailabilityService for API-driven chip definitions that adapt
-to any season's chip configuration automatically.
+For new code, use:
+    from services.chip_strategy import ChipStrategyService
+
+This module now focuses only on:
+- Tracking rival chip usage (league intelligence)
+- Comparing Ron's chip arsenal vs rivals
 """
 
 import logging
