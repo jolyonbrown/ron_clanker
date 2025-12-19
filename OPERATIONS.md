@@ -11,8 +11,8 @@ python scripts/collect_fpl_data.py
 # Pre-deadline team selection (run 6 hours before deadline)
 python scripts/pre_deadline_selection.py
 
-# Post-gameweek data collection
-python scripts/collect_post_gameweek_data.py
+# Post-gameweek workflow (unified - run after GW finishes)
+python scripts/post_gameweek_workflow.py
 
 # Track Ron's performance
 python scripts/track_ron_team.py --sync
@@ -41,12 +41,25 @@ python scripts/pre_deadline_selection.py --gameweek 16 --free-transfers 5
 python scripts/show_latest_team.py
 ```
 
-**IMPORTANT - GW16 AFCON Rule:**
-For GW16 (after GW15 deadline), all managers are topped up to 5 free transfers due to AFCON.
-Until automated detection is implemented, manually override with `--free-transfers 5`.
+**Special Events (AFCON etc.):**
+FT top-ups are now configured in `config/special_events.yaml` and applied automatically.
+No manual override needed - the system reads the config.
 
 ### Post-Gameweek (After all matches complete)
 
+**Recommended: Use the unified workflow script**
+```bash
+# Single command that orchestrates all post-GW tasks
+python scripts/post_gameweek_workflow.py
+
+# Or specify gameweek explicitly
+python scripts/post_gameweek_workflow.py --gw 15
+
+# Skip ML update (faster)
+python scripts/post_gameweek_workflow.py --skip-ml
+```
+
+**Manual steps (if running individually):**
 ```bash
 # 1. Collect results and update database
 python scripts/collect_post_gameweek_data.py
@@ -54,7 +67,10 @@ python scripts/collect_post_gameweek_data.py
 # 2. Track Ron's performance
 python scripts/track_ron_team.py --sync
 
-# 3. Update ML models with new data
+# 3. Performance review
+python scripts/post_gameweek_review.py --gw 15
+
+# 4. Update ML models with new data
 python scripts/update_ml_models.py
 ```
 
@@ -62,11 +78,17 @@ python scripts/update_ml_models.py
 
 ## Script Categories
 
+### Workflow Scripts
+| Script | Purpose | When to Use |
+|--------|---------|-------------|
+| `post_gameweek_workflow.py` | **Unified post-GW workflow** (orchestrates all steps) | After GW finishes |
+| `pre_deadline_selection.py` | Full team selection with ML predictions | 6 hours before deadline |
+
 ### Data Collection
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
 | `collect_fpl_data.py` | Sync players, teams, fixtures from FPL API | Daily |
-| `collect_post_gameweek_data.py` | Collect GW results after matches | Post-GW |
+| `collect_post_gameweek_data.py` | Collect GW results after matches | Post-GW (or via workflow) |
 | `collect_price_snapshots.py` | Record price changes | Hourly (automated) |
 
 ### Team Selection
@@ -164,9 +186,15 @@ Most scripts accept these parameters:
 
 ### Special Events
 
-| Event | Gameweek | Effect | Override |
-|-------|----------|--------|----------|
-| AFCON | GW16 | 5 free transfers (topped up after GW15 deadline) | `--free-transfers 5` |
+Configured in `config/special_events.yaml`. Update before each season.
+
+```yaml
+ft_topups:
+  - name: "AFCON 2025/26"
+    trigger_after_gw: 15    # Top-up after this GW deadline
+    effective_from_gw: 16   # Available from this GW
+    topup_to: 5
+```
 
 ---
 
@@ -229,20 +257,28 @@ python scripts/train_neural_models.py --check-gpu
 
 ## Known Issues / TODOs
 
-See `bd list --status open` for current tasks. Key issues:
-
-- **ron_clanker-ckn** [P0]: AFCON 5 FT top-up not auto-detected (use `--free-transfers 5` for GW16)
-- **ron_clanker-ht0** [P1]: Chip strategy not integrated into decision flow
-- **ron_clanker-53d** [P1]: FPL rules validation during selection needs implementation
+See `bd list --status open` for current tasks.
 
 ---
 
 ## Recent Changes (December 2025)
 
+- **Squad Optimizer** added for Wildcard/Free Hit chips (`services/squad_optimizer.py`):
+  - **Free Hit**: Builds optimal £100m squad for single GW, ignoring current squad
+  - **Wildcard**: Builds optimal squad using selling prices + bank for 4-GW horizon
+  - Automatically triggered when chip strategy recommends WC/FH
+  - Respects all FPL constraints (budget, positions, max 3 per team)
+  - Integrated with `manager_agent_v2.py` - rebuilds squad when WC/FH activated
+- **Chip strategy consolidated** into `services/chip_strategy.py`:
+  - BB/TC can be used alongside transfers (not mutually exclusive)
+  - WC/FH replace normal transfers
+  - Evaluates DGW/BGW, bench strength, captain xP
+- **Rules validation** added to `pre_deadline_selection.py`:
+  - Validates squad, formation, transfers, chip availability
+  - Checks special events (AFCON etc.)
+- Added `config/special_events.yaml` for FT top-ups (AFCON etc.) - auto-applied
 - Fixed bank parameter not being passed to transfer optimizer
 - Fixed transfer dict missing `element_type` causing formation errors
-- Fixed `log_transfer()` parameter names (`cost` → `transfer_cost`)
-- Added `--free-transfers` override flag to `pre_deadline_selection.py`
 
 ---
 

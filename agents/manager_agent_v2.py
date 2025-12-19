@@ -26,7 +26,8 @@ from infrastructure.events import Event, EventType, EventPriority
 # ML/Intelligence imports for decision making
 from agents.synthesis.engine import DecisionSynthesisEngine
 from agents.transfer_optimizer import TransferOptimizer
-from intelligence.chip_strategy import ChipStrategyAnalyzer
+from services.chip_strategy import ChipStrategyService
+from services.squad_optimizer import SquadOptimizer
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -80,13 +81,10 @@ class RonManager(BaseAgent):
         if use_ml:
             try:
                 self.synthesis_engine = DecisionSynthesisEngine(database=self.db)
-                self.chip_strategy = ChipStrategyAnalyzer(
-                    database=self.db,
-                    league_intel_service=None  # Will be added when available
-                )
+                self.chip_strategy = ChipStrategyService(database=self.db)
                 self.transfer_optimizer = TransferOptimizer(
                     database=self.db,
-                    chip_strategy=self.chip_strategy
+                    chip_strategy=None  # TransferOptimizer handles its own chip logic
                 )
                 logger.info("Ron: ML decision systems loaded (synthesis, transfers, chips)")
             except Exception as e:
@@ -129,17 +127,14 @@ class RonManager(BaseAgent):
         logger.info("Ron Clanker (Event-Driven Manager) initialized")
 
     def _load_config(self) -> Dict:
-        """Load configuration from file."""
-        import json
-        from pathlib import Path
+        """Load configuration from .env and ron_config.json."""
+        from utils.config import load_config
 
-        config_file = Path('config/ron_config.json')
-        if config_file.exists():
-            with open(config_file, 'r') as f:
-                return json.load(f)
+        config = load_config()
+        if not config.get('team_id'):
+            logger.warning("Ron: No team_id configured - chip analysis will be disabled")
 
-        logger.warning("Ron: No config file found, using defaults")
-        return {'team_id': None, 'league_id': None}
+        return config
 
     async def setup_subscriptions(self) -> None:
         """Subscribe to specialist analyses."""
@@ -944,48 +939,79 @@ Captain: {captain['web_name']}
         self,
         gameweek: int,
         squad: List[Dict[str, Any]],
-        chips_used: List[str]
-    ) -> Optional[str]:
+        transfers_needed: int = 0,
+        free_transfers: int = 1,
+        captain_xp: float = 0.0,
+        bench_xp: float = 0.0,
+    ) -> Optional[Dict[str, Any]]:
         """
         Decide whether to use a chip this gameweek.
 
-        Uses ChipStrategyAnalyzer if ML is enabled, otherwise no chips.
+        Key insight: Chips fall into two categories:
+        - TRANSFER chips (Wildcard, Free Hit): Replace normal transfers
+        - TEAM chips (Bench Boost, Triple Captain): Used alongside transfers
 
         Args:
             gameweek: Target gameweek
             squad: Current squad
-            chips_used: List of chips already used this season
+            transfers_needed: Number of transfers planned
+            free_transfers: Available free transfers
+            captain_xp: Expected points of planned captain
+            bench_xp: Total expected points of bench
 
         Returns:
-            Chip name to use (e.g., 'wildcard', 'bench_boost') or None
+            Dict with chip decision or None:
+            {
+                'chip_name': str,  # 'wildcard', 'freehit', 'bboost', '3xc'
+                'display_name': str,
+                'reason': str,
+                'replaces_transfers': bool,  # True for WC/FH
+            }
         """
-        if self.use_ml and self.chip_strategy:
-            try:
-                logger.info("Ron: Analyzing chip options...")
+        if not self.chip_strategy:
+            logger.info("Ron: Chip strategy not available")
+            return None
 
-                # Check each chip type individually
-                # ChipStrategyAnalyzer has separate methods for each chip
-                ron_entry_id = self.config.get('team_id')
-
-                # For now, keep it simple - only wildcard is relevant for early gameweeks
-                if 'wildcard1' not in chips_used and gameweek < 19:
-                    wc_result = self.chip_strategy.recommend_wildcard_timing(gameweek, ron_entry_id)
-                    if wc_result.get('use_now', False):
-                        confidence = wc_result.get('confidence', 0.5)
-                        if confidence >= 0.7:
-                            logger.info(f"Ron: Wildcard recommended (confidence: {confidence:.0%})")
-                            return 'wildcard'
-                        else:
-                            logger.info(f"Ron: Wildcard confidence {confidence:.0%} < 70%, saving chip")
-
-                logger.info("Ron: No chip recommended this gameweek")
+        try:
+            team_id = self.config.get('team_id')
+            if not team_id:
+                logger.warning("Ron: No team_id configured for chip analysis")
                 return None
 
-            except Exception as e:
-                logger.warning(f"Ron: ChipStrategyAnalyzer failed: {e}. No chip will be used.")
-                return None
-        else:
-            logger.info("Ron: Chip analysis not available (ML disabled), no chip will be used")
+            logger.info("Ron: Analyzing chip options...")
+
+            # Get best chip recommendation
+            recommendation = self.chip_strategy.get_recommended_chip(
+                team_id=team_id,
+                gameweek=gameweek,
+                squad=squad,
+                transfers_needed=transfers_needed,
+                free_transfers=free_transfers,
+                captain_xp=captain_xp,
+                bench_xp=bench_xp,
+            )
+
+            if recommendation and recommendation.use_chip:
+                logger.info(
+                    f"Ron: {recommendation.chip_display_name} recommended "
+                    f"(urgency: {recommendation.urgency}, EV: {recommendation.expected_value:.1f}pts)"
+                )
+                logger.info(f"Ron: Reason - {recommendation.reason}")
+
+                return {
+                    'chip_name': recommendation.chip_name,
+                    'display_name': recommendation.chip_display_name,
+                    'reason': recommendation.reason,
+                    'replaces_transfers': recommendation.replaces_transfers,
+                    'expected_value': recommendation.expected_value,
+                    'urgency': recommendation.urgency,
+                }
+
+            logger.info("Ron: No chip recommended this gameweek")
+            return None
+
+        except Exception as e:
+            logger.warning(f"Ron: Chip strategy failed: {e}. No chip will be used.")
             return None
 
     # ========================================================================
@@ -1102,15 +1128,102 @@ Captain: {captain['web_name']}
         new_team = self._select_captain(new_team, gameweek=gameweek)
 
         # 6. Decide chip usage
+        # Calculate context for chip decision
         logger.info("Ron: Evaluating chip usage...")
-        chip_used = await self.decide_chip_usage(
+
+        captain = next((p for p in new_team if p.get('is_captain')), None)
+        captain_xp = captain.get('xP', 0.0) if captain else 0.0
+
+        bench = [p for p in new_team if p.get('position', 0) > 11]
+        bench_xp = sum(p.get('xP', 0.0) for p in bench)
+
+        chip_decision = await self.decide_chip_usage(
             gameweek=gameweek,
             squad=new_team,
-            chips_used=self.chips_used
+            transfers_needed=len(transfers) if transfers else 0,
+            free_transfers=free_transfers,
+            captain_xp=captain_xp,
+            bench_xp=bench_xp,
         )
 
-        if chip_used:
-            logger.info(f"Ron: Using chip: {chip_used}")
+        chip_used = None
+        if chip_decision:
+            chip_used = chip_decision['chip_name']
+            logger.info(f"Ron: Using chip: {chip_decision['display_name']}")
+            logger.info(f"Ron: {chip_decision['reason']}")
+
+            # If chip replaces transfers (WC/FH), rebuild squad optimally
+            if chip_decision.get('replaces_transfers'):
+                logger.info("Ron: This chip replaces normal transfers - rebuilding squad")
+
+                try:
+                    squad_optimizer = SquadOptimizer(self.db)
+
+                    if chip_used == 'freehit':
+                        # Free Hit: Fresh £100m budget, single GW optimization
+                        logger.info("Ron: Activating FREE HIT - building optimal one-week squad")
+
+                        # Get single GW predictions
+                        predictions = {}
+                        if self.synthesis_engine:
+                            recs = self.synthesis_engine.synthesize_recommendations(gameweek)
+                            for p in recs.get('top_players', []):
+                                predictions[p['player_id']] = p.get('xp', 0)
+
+                        optimized = squad_optimizer.optimize_free_hit(
+                            gameweek=gameweek,
+                            predictions=predictions,
+                            verbose=True
+                        )
+
+                        # Replace team with optimized squad
+                        new_team = optimized.players
+                        transfers = []  # FH replaces normal transfers
+                        logger.info(f"Ron: Free Hit squad ready - {optimized.total_xp:.1f}xP, "
+                                   f"£{optimized.total_cost:.1f}m")
+
+                    elif chip_used == 'wildcard':
+                        # Wildcard: Use selling prices + bank, multi-GW optimization
+                        logger.info("Ron: Activating WILDCARD - rebuilding for multi-GW horizon")
+
+                        # Get multi-GW predictions
+                        multi_gw_predictions = {}
+                        horizon = 4
+
+                        if self.synthesis_engine:
+                            for gw in range(gameweek, gameweek + horizon):
+                                recs = self.synthesis_engine.synthesize_recommendations(gw)
+                                for p in recs.get('top_players', []):
+                                    player_id = p['player_id']
+                                    if player_id not in multi_gw_predictions:
+                                        multi_gw_predictions[player_id] = {}
+                                    multi_gw_predictions[player_id][gw] = p.get('xp', 0)
+
+                        optimized = squad_optimizer.optimize_wildcard(
+                            gameweek=gameweek,
+                            current_squad=current_team,
+                            bank=bank,
+                            multi_gw_predictions=multi_gw_predictions,
+                            horizon=horizon,
+                            verbose=True
+                        )
+
+                        # Replace team with optimized squad
+                        new_team = optimized.players
+                        transfers = []  # WC replaces normal transfers
+                        logger.info(f"Ron: Wildcard squad ready - {optimized.total_xp:.1f}xP over "
+                                   f"{horizon}GWs, £{optimized.total_cost:.1f}m")
+
+                    # Re-assign positions and captain for optimized squad
+                    new_team = self._assign_squad_positions(new_team)
+                    new_team = self._select_captain(new_team, gameweek=gameweek)
+
+                except Exception as e:
+                    logger.error(f"Ron: Squad optimization failed: {e}. Using normal team.")
+                    import traceback
+                    traceback.print_exc()
+                    # Fall back to normal team + transfers
+
             self.chips_used.append(chip_used)
         else:
             logger.info("Ron: No chip used this week")
