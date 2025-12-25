@@ -186,13 +186,39 @@ class ChipStrategyService:
         # Filter to chips worth using
         worthwhile = [d for d in decisions.values() if d.use_chip]
 
+        # "Use it or lose it" logic: if more chips expiring than GWs remaining,
+        # we MUST use one now or lose it forever
+        must_use_one = (
+            expiring_chips['count'] >= 1 and
+            expiring_chips['gws_remaining'] <= expiring_chips['count']
+        )
+
         if not worthwhile:
-            # If no chips recommended but multiple expiring, log warning
-            if expiring_chips['count'] >= 2 and expiring_chips['gws_remaining'] <= expiring_chips['count']:
+            if must_use_one:
+                # Force pick the best expiring chip even if not ideally recommended
                 logger.warning(
                     f"ChipStrategy: {expiring_chips['count']} chips expiring in "
-                    f"{expiring_chips['gws_remaining']} GWs - consider using one!"
+                    f"{expiring_chips['gws_remaining']} GWs - MUST use one now!"
                 )
+                # Get all expiring chip decisions and pick the one with highest EV
+                expiring_decisions = [
+                    d for d in decisions.values()
+                    if d.chip_name in {self.WILDCARD, self.FREE_HIT}  # Only transfer chips expire in windows
+                ]
+                if expiring_decisions:
+                    # Pick by expected value (higher is better, even if negative)
+                    expiring_decisions.sort(key=lambda d: d.expected_value, reverse=True)
+                    forced = expiring_decisions[0]
+                    # Override to use_chip=True with updated reason
+                    return ChipDecision(
+                        use_chip=True,
+                        chip_name=forced.chip_name,
+                        chip_display_name=forced.chip_display_name,
+                        reason=f"FORCED: {expiring_chips['count']} chips expire in {expiring_chips['gws_remaining']} GWs - use or lose!",
+                        urgency='HIGH',
+                        replaces_transfers=forced.replaces_transfers,
+                        expected_value=forced.expected_value,
+                    )
             return None
 
         # Prioritize by urgency then expected value
@@ -296,17 +322,16 @@ class ChipStrategyService:
             )
 
         if chip.expires_soon:
-            # NOTE: Free Hit requires building optimal squad from scratch
-            # This functionality is not yet implemented (TODO in manager_agent_v2.py:1157)
-            # Don't recommend FH until squad builder is ready
+            # Free Hit squad optimizer is implemented in manager_agent_v2.py
+            # Use it before it expires - builds optimal £100m squad for single GW
             return ChipDecision(
-                use_chip=False,
+                use_chip=True,
                 chip_name=self.FREE_HIT,
                 chip_display_name=chip.definition.display_name,
-                reason=f"Free Hit expires in {chip.gws_until_expiry} GWs - but squad rebuild not implemented yet",
-                urgency='LOW',
+                reason=f"Free Hit expires in {chip.gws_until_expiry} GWs - use now to build optimal squad",
+                urgency='HIGH',
                 replaces_transfers=True,
-                expected_value=0.0,
+                expected_value=15.0,  # Estimated gain from optimal vs current squad
             )
 
         return ChipDecision(
