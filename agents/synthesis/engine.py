@@ -132,8 +132,14 @@ class DecisionSynthesisEngine:
                 )
 
                 if features:
-                    # Get ML prediction
-                    xp = self.performance_predictor.predict(features)
+                    # Get form sequence for transformer (last 6 GWs of raw stats)
+                    form_sequence_dicts = self._get_form_sequence_dicts(player['id'], gameweek)
+
+                    # Get ML prediction (includes transformer if available)
+                    xp = self.performance_predictor.predict(
+                        features,
+                        form_sequence_dicts=form_sequence_dicts
+                    )
                     predictions[player['id']] = float(xp)
                 else:
                     # Fallback to simple form-based prediction
@@ -194,6 +200,69 @@ class DecisionSynthesisEngine:
             return (form * 1.5 + ppg * 0.5) / 2.0
 
         return 2.0
+
+    def _get_form_sequence_dicts(self, player_id: int, gameweek: int, seq_len: int = 6) -> List[Dict]:
+        """
+        Get recent gameweek stats for transformer model.
+
+        Args:
+            player_id: Player ID
+            gameweek: Target gameweek (get history before this)
+            seq_len: Number of gameweeks of history
+
+        Returns:
+            List of dicts with GW stats (most recent last)
+        """
+        try:
+            # First get player_code for cross-season lookup
+            player = self.db.execute_query("""
+                SELECT code FROM players WHERE id = ?
+            """, (player_id,))
+
+            if not player:
+                return []
+
+            player_code = player[0]['code']
+
+            # Get recent GW history from player_gameweek_history (current season)
+            # and historical_gameweek_data (past seasons)
+            rows = self.db.execute_query("""
+                SELECT minutes, goals_scored, assists, clean_sheets,
+                       goals_conceded, saves, bonus, bps,
+                       influence, creativity, threat, ict_index,
+                       expected_goals, expected_assists,
+                       expected_goal_involvements, expected_goals_conceded,
+                       yellow_cards, red_cards, own_goals, penalties_missed
+                FROM player_gameweek_history
+                WHERE player_id = ? AND gameweek < ?
+                ORDER BY gameweek DESC
+                LIMIT ?
+            """, (player_id, gameweek, seq_len))
+
+            if not rows:
+                # Try historical data
+                rows = self.db.execute_query("""
+                    SELECT minutes, goals_scored, assists, clean_sheets,
+                           goals_conceded, saves, bonus, bps,
+                           influence, creativity, threat, ict_index,
+                           expected_goals, expected_assists,
+                           expected_goal_involvements, expected_goals_conceded,
+                           yellow_cards, red_cards, own_goals, penalties_missed
+                    FROM historical_gameweek_data
+                    WHERE player_code = ?
+                    ORDER BY season_id DESC, gameweek DESC
+                    LIMIT ?
+                """, (player_code, seq_len))
+
+            if not rows:
+                return []
+
+            # Reverse to get chronological order (oldest first)
+            return list(reversed([dict(row) for row in rows]))
+
+        except Exception as e:
+            logger.warning(f"Failed to get form sequence for player {player_id}: {e}")
+            return []
 
     def _store_predictions(self, predictions: Dict[int, float], gameweek: int):
         """Store ML predictions to database."""

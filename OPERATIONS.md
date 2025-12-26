@@ -31,13 +31,16 @@ python scripts/health_check.py
 # 1. Sync latest FPL data
 python scripts/collect_fpl_data.py
 
-# 2. Run pre-deadline selection (generates team, transfers, captain)
+# 2. Gather intelligence (injuries, press conferences, expert picks)
+# Use Claude Code subagent pattern - see "Intelligence Gathering" section below
+
+# 3. Run pre-deadline selection (generates team, transfers, captain)
 python scripts/pre_deadline_selection.py
 
 # Or specify gameweek and override free transfers (e.g., AFCON GW16 = 5 FTs)
 python scripts/pre_deadline_selection.py --gameweek 16 --free-transfers 5
 
-# 3. View the selection
+# 4. View the selection
 python scripts/show_latest_team.py
 ```
 
@@ -103,6 +106,7 @@ python scripts/update_ml_models.py
 |--------|---------|-------------|
 | `train_prediction_models.py` | Train sklearn ensemble (RF+XGB+Ridge) | Weekly or after data changes |
 | `train_neural_models.py` | Train PyTorch neural models (GPU) | Weekly |
+| `train_transformer.py` | Train transformer with player embeddings (GPU) | Weekly (post-GW) |
 | `train_price_model.py` | Train price change predictor | Weekly |
 | `tune_hyperparameters.py` | Optuna hyperparameter tuning | Occasionally |
 | `update_ml_models.py` | Incremental model update | Post-GW |
@@ -160,15 +164,32 @@ python scripts/train_prediction_models.py --seasons 2022-23 2023-24 2024-25
 # 2. Train neural models (requires GPU)
 python scripts/train_neural_models.py --epochs 100 --batch-size 512
 
-# 3. Train price model
+# 3. Train transformer model (requires GPU) - learns player embeddings
+python scripts/train_transformer.py --epochs 50
+
+# 4. Train price model
 python scripts/train_price_model.py
 ```
 
-### Quick Update (post-gameweek)
+### Weekly Update (post-gameweek)
+
+Run after each gameweek completes to incorporate new data:
 
 ```bash
+# Quick incremental update
 python scripts/update_ml_models.py
+
+# Retrain transformer (recommended weekly - uses latest form data)
+# ~5-10 mins on GPU, free to run locally
+python scripts/train_transformer.py --epochs 30
 ```
+
+The transformer model learns 32-dimensional player embeddings that capture:
+- Form momentum and patterns
+- Consistency vs boom/bust tendencies
+- Underlying quality beyond raw stats
+
+These embeddings improve predictions by 5-10% and are blended with the existing ensemble.
 
 ---
 
@@ -195,6 +216,55 @@ ft_topups:
     effective_from_gw: 16   # Available from this GW
     topup_to: 5
 ```
+
+---
+
+## Intelligence Gathering (Claude Code Subagents)
+
+Pre-deadline intelligence gathering uses Claude Code's Task tool with subagents.
+This keeps raw web content out of the main conversation context.
+
+### Why Subagents?
+
+- Raw HTML/content stays in subagent context (not main conversation)
+- Only structured summaries return
+- Preserves context for decision-making
+- Can visit multiple sources without context bloat
+
+### Available Prompts
+
+Prompts are defined in `intelligence/subagent_prompts.py`:
+
+| Type | Purpose |
+|------|---------|
+| `injury` | Current injury/availability news |
+| `press` | Manager press conference summaries |
+| `expert` | Captain picks and transfer recommendations |
+| `fixture` | Fixture difficulty analysis |
+| `youtube` | FPL YouTube creator content |
+| `full` | Comprehensive pre-deadline sweep |
+
+### Usage (in Claude Code conversation)
+
+```
+# Injury news
+Task(subagent_type="Explore", prompt=get_prompt('injury', gameweek=18))
+
+# Full pre-deadline intelligence sweep
+Task(subagent_type="general-purpose", prompt=get_prompt('full', gameweek=18))
+
+# Fixture analysis for planning
+Task(subagent_type="Explore", prompt=get_prompt('fixture', gameweek=18, end_gameweek=23))
+```
+
+### Critical: Training Data Warning
+
+All prompts include explicit instructions for subagents to:
+- **TRUST** freshly fetched web sources
+- **DISTRUST** their training knowledge (outdated for current season)
+- Report exactly what sources say, not "correct" based on memory
+
+This prevents errors like assuming a player is still at their old club after a transfer.
 
 ---
 
@@ -279,6 +349,38 @@ See `bd list --status open` for current tasks.
 - Added `config/special_events.yaml` for FT top-ups (AFCON etc.) - auto-applied
 - Fixed bank parameter not being passed to transfer optimizer
 - Fixed transfer dict missing `element_type` causing formation errors
+
+### ML & Strategy Improvements (December 2025)
+
+- **xG/xA Feature Engineering** (`ml/prediction/features.py`):
+  - Added expected goals/assists features from historical data
+  - New features: `avg_xg`, `avg_xa`, `avg_xgi`, `xg_overperformance`, `xa_overperformance`
+  - Maps current player IDs to historical player codes for cross-season data
+
+- **Template vs Differential Strategy** (`agents/transfer_optimizer.py`):
+  - Transfer scoring now adjusts based on league position
+  - **Leading (LOW risk)**: Boosts high-ownership template players (+15%)
+  - **Chasing (BOLD risk)**: Boosts low-ownership differentials (+20%)
+  - Strategy flows from synthesis engine → manager agent → optimizer
+
+- **Adaptive Threshold Learning** (`learning/performance_tracker.py`):
+  - Analyzes historical transfer performance (expected vs actual gains)
+  - Adjusts position-specific transfer thresholds automatically
+  - Added to post-GW workflow as Step 5
+  - Thresholds stored in `learned_thresholds` table
+
+- **Transformer Model with Player Embeddings** (`ml/prediction/transformer_model.py`):
+  - Self-attention architecture for form sequence modeling
+  - Learns 32-dim player embeddings automatically
+  - 75,805 training sequences from 1,346 players across 3 seasons
+  - Integrated into prediction ensemble (70% traditional, 30% neural/transformer)
+  - **Weekly training recommended** post-GW (~5-10 mins on GPU)
+  - Run: `python scripts/train_transformer.py --epochs 30`
+
+- **Price Tracking Fix** (`scripts/track_ron_team.py`):
+  - Now fetches actual purchase prices from transfer history API
+  - Calculates selling prices using FPL's 50% profit rule
+  - TransferOptimizer uses real selling prices for budget calculations
 
 ---
 

@@ -185,13 +185,14 @@ CREATE TABLE IF NOT EXISTS player_predictions (
 CREATE TABLE IF NOT EXISTS price_predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id INTEGER NOT NULL,
-    prediction_date DATE NOT NULL,
-    current_price INTEGER NOT NULL,
-    predicted_change INTEGER NOT NULL,  -- -1, 0, or 1
-    confidence REAL,
-    actual_change INTEGER,
-    was_correct BOOLEAN,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    predicted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    prediction_for_date DATE NOT NULL,  -- When we expect the change
+    predicted_change INTEGER NOT NULL,  -- -1 (fall), 0 (hold), +1 (rise)
+    confidence REAL NOT NULL,  -- 0.0 to 1.0
+    model_version TEXT,
+    features TEXT,  -- JSON of features used
+    actual_change INTEGER,  -- -1, 0, +1 (NULL if not happened yet)
+    prediction_correct BOOLEAN,
     FOREIGN KEY (player_id) REFERENCES players(id)
 );
 

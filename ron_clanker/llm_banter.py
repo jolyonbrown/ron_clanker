@@ -270,15 +270,33 @@ Making changes. Can't afford another week like that. The algorithms say we need 
         captain = next((p for p in squad if p.get('is_captain')), starting_xi[0] if starting_xi else squad[0])
         vice = next((p for p in squad if p.get('is_vice_captain')), None)
 
-        # Format squad details
-        starting_xi_sorted = sorted(starting_xi, key=lambda x: x.get('position', 99))
-        starting_text = "\n".join([
-            f"- {p['web_name']}" + (" (C)" if p.get('is_captain') else " (VC)" if p.get('is_vice_captain') else "")
-            for p in starting_xi_sorted
-        ])
+        # Format squad details BY POSITION to prevent LLM confusion
+        # Group starting XI by position type
+        starting_by_pos = {'GKP': [], 'DEF': [], 'MID': [], 'FWD': []}
+        for player in starting_xi:
+            pos_name = ['', 'GKP', 'DEF', 'MID', 'FWD'][player.get('element_type', 1)]
+            suffix = " (C)" if player.get('is_captain') else " (VC)" if player.get('is_vice_captain') else ""
+            starting_by_pos[pos_name].append(f"{player['web_name']}{suffix}")
 
+        # Build starting text with explicit position groups
+        starting_lines = []
+        if starting_by_pos['GKP']:
+            starting_lines.append(f"GK: {', '.join(starting_by_pos['GKP'])}")
+        if starting_by_pos['DEF']:
+            starting_lines.append(f"DEF: {', '.join(starting_by_pos['DEF'])}")
+        if starting_by_pos['MID']:
+            starting_lines.append(f"MID: {', '.join(starting_by_pos['MID'])}")
+        if starting_by_pos['FWD']:
+            starting_lines.append(f"FWD: {', '.join(starting_by_pos['FWD'])}")
+        starting_text = "\n".join(starting_lines)
+
+        # Format bench with positions to avoid confusion
         bench_sorted = sorted(bench, key=lambda x: x.get('position', 99))
-        bench_text = "\n".join([f"- {p['web_name']}" for p in bench_sorted])
+        bench_items = []
+        for p in bench_sorted:
+            pos_name = ['', 'GK', 'DEF', 'MID', 'FWD'][p.get('element_type', 1)]
+            bench_items.append(f"{p['web_name']} ({pos_name})")
+        bench_text = ", ".join(bench_items)
 
         # Format transfers
         transfers_text = ""
@@ -314,10 +332,10 @@ CHARACTER TRAITS:
 
 GAMEWEEK {gameweek} SELECTION:
 
-STARTING XI:
+STARTING XI ({len(starting_xi)} players):
 {starting_text}
 
-BENCH:
+BENCH ({len(bench)} players):
 {bench_text}
 
 {transfers_text}
@@ -356,6 +374,7 @@ FWD: [names]
 - Ron
 
 RULES:
+- CRITICAL: Use the EXACT positions given above (GK/DEF/MID/FWD). Do NOT move players between positions based on your knowledge - FPL positions may differ from real-life positions.
 - MAX 500 characters total (not words - characters!)
 - Just the facts: team, captain reasoning (1 sentence), transfers (if any)
 - ONE data point max (e.g., "8.9 xP", "City home", "easy fixture")
@@ -372,6 +391,7 @@ Do NOT:
 - Write essays or long paragraphs
 - Explain every decision
 - Use emojis
+- Move players to different positions than shown above (e.g., if a player is listed as DEF, keep them as DEF)
 - Be overly detailed
 
 Keep it SHORT."""

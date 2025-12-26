@@ -107,7 +107,76 @@ class FeatureEngineer:
             'avg_threat': np.mean([h['threat'] or 0 for h in history]),
             'avg_ict_index': np.mean([h['ict_index'] or 0 for h in history]),
             'form_trend': form_trend,
-            'games_played': games_played
+            'games_played': games_played,
+            # xG/xA defaults (not available in current season data)
+            'avg_xg': 0.0,
+            'avg_xa': 0.0,
+            'avg_xgi': 0.0,
+            'xg_overperformance': 0.0,
+            'xa_overperformance': 0.0
+        }
+
+    def get_historical_xg_features(self, player_id: int, window: int = 5) -> Dict:
+        """
+        Get xG/xA features from historical gameweek data.
+
+        These features are only available in historical data (previous seasons),
+        not in current season player_gameweek_history.
+
+        Args:
+            player_id: Player ID (current season)
+            window: Number of recent games to average
+
+        Returns:
+            Dict with xG/xA averages
+        """
+        # First get the stable player code from current player ID
+        player = self.db.execute_query(
+            "SELECT code FROM players WHERE id = ?", (player_id,)
+        )
+        if not player or not player[0]['code']:
+            return {
+                'avg_xg': 0.0,
+                'avg_xa': 0.0,
+                'avg_xgi': 0.0,
+                'xg_overperformance': 0.0,
+                'xa_overperformance': 0.0
+            }
+
+        player_code = player[0]['code']
+
+        # Query historical data using stable player_code
+        history = self.db.execute_query("""
+            SELECT
+                expected_goals, expected_assists, expected_goal_involvements,
+                goals_scored, assists
+            FROM historical_gameweek_data
+            WHERE player_code = ?
+            ORDER BY season_id DESC, gameweek DESC
+            LIMIT ?
+        """, (player_code, window))
+
+        if not history or len(history) == 0:
+            return {
+                'avg_xg': 0.0,
+                'avg_xa': 0.0,
+                'avg_xgi': 0.0,
+                'xg_overperformance': 0.0,
+                'xa_overperformance': 0.0
+            }
+
+        avg_xg = np.mean([h['expected_goals'] or 0 for h in history])
+        avg_xa = np.mean([h['expected_assists'] or 0 for h in history])
+        avg_xgi = np.mean([h['expected_goal_involvements'] or 0 for h in history])
+        avg_goals = np.mean([h['goals_scored'] or 0 for h in history])
+        avg_assists = np.mean([h['assists'] or 0 for h in history])
+
+        return {
+            'avg_xg': avg_xg,
+            'avg_xa': avg_xa,
+            'avg_xgi': avg_xgi,
+            'xg_overperformance': avg_goals - avg_xg,  # Over/under performing xG
+            'xa_overperformance': avg_assists - avg_xa
         }
 
     def get_fixture_difficulty(self, team_id: int, gameweek: int) -> Dict:
@@ -244,6 +313,11 @@ class FeatureEngineer:
         # Get recent form
         recent_form = self.get_player_recent_form(player_id, gameweek, window=5)
 
+        # Get xG/xA features from historical data (if available)
+        xg_features = self.get_historical_xg_features(player_id, window=5)
+        # Merge xG/xA into recent_form (overwrite defaults with actual data if available)
+        recent_form.update(xg_features)
+
         # Get fixture difficulty
         fixture = self.get_fixture_difficulty(p['team_id'], gameweek)
 
@@ -283,6 +357,13 @@ class FeatureEngineer:
             'form_avg_ict_index': recent_form['avg_ict_index'],
             'form_trend': recent_form['form_trend'],
             'form_games_played': recent_form['games_played'],
+
+            # Expected goals/assists (if available from historical data)
+            'avg_xg': recent_form.get('avg_xg', 0.0),
+            'avg_xa': recent_form.get('avg_xa', 0.0),
+            'avg_xgi': recent_form.get('avg_xgi', 0.0),  # Expected goal involvements
+            'xg_overperformance': recent_form.get('xg_overperformance', 0.0),  # goals - xG
+            'xa_overperformance': recent_form.get('xa_overperformance', 0.0),  # assists - xA
 
             # Season stats
             'season_games': season['games_played'],

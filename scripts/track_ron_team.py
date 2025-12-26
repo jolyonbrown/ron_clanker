@@ -291,6 +291,65 @@ def display_detailed_player_performance(picks_data, bootstrap, gameweek, verbose
     print(f"Total Points: {total_points}")
 
 
+def build_purchase_price_map(team_id: int, players_lookup: dict, verbose: bool = False) -> dict:
+    """
+    Build a map of player_id -> purchase_price from transfer history.
+
+    For players brought in via transfer, we know exact purchase price.
+    For original squad players, we use their current price as best estimate.
+
+    Args:
+        team_id: FPL team ID
+        players_lookup: Dict of player_id -> player data
+        verbose: Print details
+
+    Returns:
+        Dict mapping player_id -> purchase_price (in tenths, e.g., 100 = £10.0m)
+    """
+    purchase_prices = {}
+
+    try:
+        transfers = fetch_team_transfers(team_id)
+
+        # Process transfers chronologically to get final purchase price for each player
+        for transfer in transfers:
+            player_in = transfer['element_in']
+            price_in = transfer['element_in_cost']  # Already in tenths
+            purchase_prices[player_in] = price_in
+
+        if verbose and transfers:
+            print(f"   Built purchase prices from {len(transfers)} transfers")
+
+    except Exception as e:
+        if verbose:
+            print(f"   ⚠️ Could not fetch transfers: {e}")
+
+    return purchase_prices
+
+
+def calculate_selling_price(purchase_price: int, current_price: int) -> int:
+    """
+    Calculate selling price using FPL's 50% profit rule.
+
+    You keep 50% of any profit when selling.
+    If price dropped, you sell at current price (no loss protection).
+
+    Args:
+        purchase_price: Price paid (in tenths)
+        current_price: Current market price (in tenths)
+
+    Returns:
+        Selling price (in tenths)
+    """
+    if current_price >= purchase_price:
+        # Profit: keep 50%
+        profit = current_price - purchase_price
+        return purchase_price + (profit // 2)
+    else:
+        # Loss: sell at current price
+        return current_price
+
+
 def sync_current_team_from_fpl(team_id: int, gameweek: int = None, verbose: bool = False) -> bool:
     """
     Sync current_team table with actual FPL team data.
@@ -324,11 +383,21 @@ def sync_current_team_from_fpl(team_id: int, gameweek: int = None, verbose: bool
             print(f"❌ No picks data for GW{gw}")
             return False
 
+        # Build purchase price map from transfer history
+        purchase_prices = build_purchase_price_map(team_id, players_lookup, verbose)
+
         # Build team data for database
         team_data = []
         for pick in picks['picks']:
             player_id = pick['element']
             player = players_lookup.get(player_id, {})
+            current_price = player.get('now_cost', 0)
+
+            # Get purchase price: from transfers if available, else current price
+            purchase_price = purchase_prices.get(player_id, current_price)
+
+            # Calculate selling price using 50% rule
+            selling_price = calculate_selling_price(purchase_price, current_price)
 
             team_data.append({
                 'player_id': player_id,
@@ -336,8 +405,8 @@ def sync_current_team_from_fpl(team_id: int, gameweek: int = None, verbose: bool
                 'is_captain': pick['is_captain'],
                 'is_vice_captain': pick['is_vice_captain'],
                 'multiplier': pick['multiplier'],
-                'purchase_price': player.get('now_cost', 0),  # Best estimate
-                'selling_price': player.get('now_cost', 0),   # Best estimate
+                'purchase_price': purchase_price,
+                'selling_price': selling_price,
             })
 
         # Update database

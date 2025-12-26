@@ -68,7 +68,177 @@ class TransferOptimizer:
         """
         self.db = database
         self.verbose = True  # Always show data for transparency
-        logger.info("TransferOptimizer initialized")
+
+        # Load learned thresholds (or use defaults)
+        self.thresholds = self._load_learned_thresholds()
+        logger.info(f"TransferOptimizer initialized with thresholds: {self.thresholds}")
+
+    def _load_learned_thresholds(self) -> Dict[int, float]:
+        """
+        Load position-specific transfer thresholds from database.
+
+        Returns:
+            Dict mapping position_id -> min_gain_per_gw threshold
+            Defaults to 2.0 if no learned thresholds
+        """
+        defaults = {0: 2.0, 1: 2.0, 2: 2.0, 3: 2.0, 4: 2.0}
+
+        try:
+            thresholds = self.db.execute_query("""
+                SELECT position, threshold_value
+                FROM learned_thresholds
+                WHERE threshold_type = 'min_gain_per_gw'
+            """)
+
+            if thresholds:
+                for row in thresholds:
+                    defaults[row['position']] = row['threshold_value']
+                logger.info(f"Loaded learned thresholds: {defaults}")
+            else:
+                logger.debug("No learned thresholds found, using defaults")
+
+        except Exception as e:
+            logger.debug(f"Could not load learned thresholds: {e}")
+
+        return defaults
+
+    def get_threshold_for_position(self, position: int) -> float:
+        """Get the minimum gain per GW threshold for a specific position."""
+        return self.thresholds.get(position, self.thresholds.get(0, 2.0))
+
+    def identify_unavailable_players(self, current_team: List[Dict]) -> List[Dict]:
+        """
+        Identify players in squad who are unavailable and MUST be transferred out.
+
+        A player is considered unavailable if:
+        - status is 'n' (not available) or 'u' (unknown/left club)
+        - chance_of_playing_next_round is 0
+
+        These are "forced transfers" - any available replacement is better than 0 points.
+
+        Returns:
+            List of unavailable player dicts with their details
+        """
+        unavailable = []
+
+        for player in current_team:
+            player_id = player.get('player_id')
+
+            # Get current status from database
+            player_info = self.db.execute_query("""
+                SELECT id, web_name, element_type, now_cost, status,
+                       chance_of_playing_next_round, news
+                FROM players
+                WHERE id = ?
+            """, (player_id,))
+
+            if not player_info:
+                continue
+
+            p = player_info[0]
+            status = p.get('status', 'a')
+            cop = p.get('chance_of_playing_next_round')
+
+            # Check if unavailable
+            is_unavailable = False
+            reason = None
+
+            if status in ('n', 'u'):
+                is_unavailable = True
+                reason = f"Status: {status}"
+                if p.get('news'):
+                    reason += f" - {p['news'][:50]}..."
+            elif cop is not None and cop == 0:
+                is_unavailable = True
+                reason = f"0% chance of playing"
+                if p.get('news'):
+                    reason += f" - {p['news'][:50]}..."
+
+            if is_unavailable:
+                unavailable.append({
+                    'player_id': player_id,
+                    'web_name': p['web_name'],
+                    'element_type': p['element_type'],
+                    'now_cost': p['now_cost'],
+                    'status': status,
+                    'chance_of_playing': cop,
+                    'reason': reason,
+                    'position_in_team': player.get('position', 0)
+                })
+
+        return unavailable
+
+    def get_forced_transfer_replacements(
+        self,
+        unavailable_player: Dict,
+        current_team_ids: set,
+        multi_gw_predictions: Dict[int, Dict[int, float]],
+        current_gw: int,
+        horizon: int,
+        bank: float
+    ) -> List[TransferOption]:
+        """
+        Find replacement options for an unavailable player.
+
+        Unlike normal transfers, we don't apply strict xP thresholds here -
+        ANY available player is better than someone who won't play.
+
+        Returns:
+            List of TransferOption objects, sorted by predicted points
+        """
+        position = unavailable_player['element_type']
+        # Use actual selling_price if available (from current_team sync), else now_cost
+        selling_price = unavailable_player.get('selling_price', unavailable_player['now_cost']) / 10.0
+        max_price = selling_price + bank
+
+        # Find available replacements
+        replacements = self._find_replacements(
+            position=position,
+            current_team_ids=current_team_ids,
+            max_price=max_price,
+            multi_gw_predictions=multi_gw_predictions,
+            current_gw=current_gw,
+            horizon=horizon
+        )
+
+        if not replacements:
+            return []
+
+        # Create TransferOption objects
+        transfer_options = []
+        for replacement in replacements[:10]:  # Top 10 options
+            gw_gains = []
+            for gw in range(current_gw, current_gw + horizon):
+                xp_out = 0.0  # Unavailable player = 0 points guaranteed
+                xp_in = multi_gw_predictions.get(replacement['player_id'], {}).get(gw, 0.0)
+                gw_gains.append((gw, xp_out, xp_in))
+
+            total_gain = sum(xp_in for _, _, xp_in in gw_gains)  # All gain since out = 0
+            avg_gain = total_gain / len(gw_gains) if gw_gains else 0
+
+            option = TransferOption(
+                position=position,
+                position_name=POSITIONS[position],
+                player_out_id=unavailable_player['player_id'],
+                player_out_name=unavailable_player['web_name'],
+                player_out_price=selling_price,
+                player_in_id=replacement['player_id'],
+                player_in_name=replacement['name'],
+                player_in_price=replacement['price'],
+                gw_predictions=gw_gains,
+                total_gain=total_gain,
+                avg_gain_per_gw=avg_gain,
+                fixtures_out=[],
+                fixtures_in=[],
+                price_change_urgency='HIGH',  # Forced transfers are urgent
+                alternatives_count=len(replacements)
+            )
+            transfer_options.append(option)
+
+        # Sort by total expected points (not gain, since out player = 0)
+        transfer_options.sort(key=lambda x: x.total_gain, reverse=True)
+
+        return transfer_options
 
     def optimize_transfers(
         self,
@@ -79,7 +249,8 @@ class TransferOptimizer:
         bank: float = 0.0,
         horizon: int = 4,  # Look ahead N gameweeks
         ron_entry_id: Optional[int] = None,
-        league_id: Optional[int] = None
+        league_id: Optional[int] = None,
+        strategy_context: Optional[Dict] = None  # Strategy from synthesis engine
     ) -> Dict:
         """
         Main optimization method.
@@ -91,6 +262,10 @@ class TransferOptimizer:
         - Full reasoning with visible data
         """
 
+        # Store strategy context for ownership-based scoring
+        self.strategy_context = strategy_context or {}
+        risk_level = self.strategy_context.get('risk_level', 'MODERATE')
+
         if self.verbose:
             print("\n" + "="*80)
             print("TRANSFER OPTIMIZER - COMPREHENSIVE ANALYSIS")
@@ -99,6 +274,12 @@ class TransferOptimizer:
             print(f"Analyzing GW {current_gw} through GW {current_gw + horizon - 1}")
             print(f"Free transfers: {free_transfers}")
             print(f"Bank: £{bank:.1f}m")
+            if strategy_context:
+                print(f"Strategy: {risk_level} ({strategy_context.get('approach', 'balanced')})")
+                if risk_level == 'LOW':
+                    print("  → Prioritizing template players (high ownership)")
+                elif risk_level == 'BOLD':
+                    print("  → Prioritizing differentials (low ownership)")
 
         # Step 1: Get multi-gameweek predictions for all players
         multi_gw_predictions = self._get_multi_gw_predictions(
@@ -106,7 +287,55 @@ class TransferOptimizer:
             horizon
         )
 
-        # Step 2: Evaluate transfer options for each position
+        # Step 1b: Check for unavailable players (FORCED transfers)
+        unavailable_players = self.identify_unavailable_players(current_team)
+        forced_transfers = []
+        remaining_fts = free_transfers
+
+        if unavailable_players and free_transfers > 0:
+            if self.verbose:
+                print(f"\n⚠️  FORCED TRANSFERS NEEDED: {len(unavailable_players)} unavailable player(s)")
+                for up in unavailable_players:
+                    print(f"   🚫 {up['web_name']} - {up['reason']}")
+
+            current_team_ids = {p['player_id'] for p in current_team}
+
+            for unavailable in unavailable_players:
+                if remaining_fts <= 0:
+                    if self.verbose:
+                        print(f"\n   ⚠️  No FTs left for {unavailable['web_name']} - will remain in squad")
+                    break
+
+                # Find best replacement
+                replacement_options = self.get_forced_transfer_replacements(
+                    unavailable_player=unavailable,
+                    current_team_ids=current_team_ids,
+                    multi_gw_predictions=multi_gw_predictions,
+                    current_gw=current_gw,
+                    horizon=horizon,
+                    bank=bank
+                )
+
+                if replacement_options:
+                    best = replacement_options[0]
+                    forced_transfers.append(best)
+                    remaining_fts -= 1
+
+                    # Update tracking for next iteration
+                    current_team_ids.discard(unavailable['player_id'])
+                    current_team_ids.add(best.player_in_id)
+                    bank -= (best.player_in_price - best.player_out_price)
+
+                    if self.verbose:
+                        print(f"\n   ✓ FORCED: {best.player_out_name} → {best.player_in_name}")
+                        print(f"     Reason: {unavailable['reason']}")
+                        print(f"     Expected gain: +{best.total_gain:.1f}pts over {horizon} GWs")
+                        print(f"     Remaining FTs: {remaining_fts}")
+                else:
+                    if self.verbose:
+                        print(f"\n   ❌ No affordable replacement found for {unavailable['web_name']}")
+
+        # Step 2: Evaluate transfer options for each position (with remaining FTs)
         position_options = {}
 
         for pos_id in [1, 2, 3, 4]:
@@ -133,66 +362,91 @@ class TransferOptimizer:
         # TransferOptimizer focuses purely on transfer recommendations
         chip_recommendation = None
 
-        # Step 5: Multi-transfer optimization when FT > 1
-        if free_transfers > 1 and all_options:
+        # Step 5: Multi-transfer optimization with REMAINING FTs (after forced transfers)
+        optional_transfers = []
+        if remaining_fts > 1 and all_options:
             if self.verbose:
-                print(f"\n📋 Multi-Transfer Optimization ({free_transfers} FTs available)...")
+                print(f"\n📋 Optional Transfer Optimization ({remaining_fts} FTs remaining)...")
 
-            recommended_transfers = self.optimize_multi_transfers(
+            optional_transfers = self.optimize_multi_transfers(
                 all_options=all_options,
-                free_transfers=free_transfers,
+                free_transfers=remaining_fts,
                 current_team=current_team,
                 bank=bank,
                 min_gain_threshold=1.5,  # Lower threshold when multiple FTs
                 horizon=horizon
             )
 
-            if self.verbose and recommended_transfers:
-                total_gain = sum(t.total_gain for t in recommended_transfers)
-                print(f"\n  📊 Multi-transfer summary: {len(recommended_transfers)} transfers "
+            if self.verbose and optional_transfers:
+                total_gain = sum(t.total_gain for t in optional_transfers)
+                print(f"\n  📊 Optional transfer summary: {len(optional_transfers)} transfers "
                       f"for +{total_gain:.1f}pts total over {horizon} GWs")
-        else:
-            # Single transfer (or none)
-            recommended_transfers = [all_options[0]] if all_options and all_options[0].avg_gain_per_gw >= 2.0 else []
+        elif remaining_fts == 1 and all_options:
+            # Single optional transfer - use position-specific threshold
+            pos = all_options[0].position
+            threshold = self.get_threshold_for_position(pos)
+            if all_options[0].avg_gain_per_gw >= threshold:
+                optional_transfers = [all_options[0]]
 
-        # Step 6: Make roll vs make decision (chip decisions handled by manager separately)
-        if len(recommended_transfers) > 1:
-            total_gain = sum(t.total_gain for t in recommended_transfers)
+        # Combine forced + optional transfers
+        recommended_transfers = forced_transfers + optional_transfers
+
+        # Step 6: Make roll vs make decision
+        if forced_transfers:
+            # Forced transfers always happen
+            if optional_transfers:
+                total_gain = sum(t.total_gain for t in recommended_transfers)
+                decision = {
+                    'action': 'MAKE_MULTI',
+                    'reasoning': (f'{len(forced_transfers)} forced + {len(optional_transfers)} optional transfers. '
+                                 f'Total gain: +{total_gain:.1f}pts over {horizon} GWs.')
+                }
+            else:
+                total_gain = sum(t.total_gain for t in forced_transfers)
+                decision = {
+                    'action': 'MAKE_MULTI' if len(forced_transfers) > 1 else 'MAKE',
+                    'reasoning': (f'{len(forced_transfers)} forced transfer(s) for unavailable players. '
+                                 f'Expected gain: +{total_gain:.1f}pts over {horizon} GWs.')
+                }
+        elif len(optional_transfers) > 1:
+            total_gain = sum(t.total_gain for t in optional_transfers)
             decision = {
                 'action': 'MAKE_MULTI',
-                'reasoning': (f'{len(recommended_transfers)} transfers recommended using '
-                             f'{free_transfers} FTs. Total gain: +{total_gain:.1f}pts over '
+                'reasoning': (f'{len(optional_transfers)} transfers recommended using '
+                             f'{remaining_fts} FTs. Total gain: +{total_gain:.1f}pts over '
                              f'{horizon} GWs.')
             }
-        elif recommended_transfers:
+        elif optional_transfers:
             decision = {
                 'action': 'MAKE',
-                'reasoning': f'Transfer gains +{recommended_transfers[0].total_gain:.1f}pts over {horizon} GWs.'
+                'reasoning': f'Transfer gains +{optional_transfers[0].total_gain:.1f}pts over {horizon} GWs.'
             }
-        elif free_transfers < 2:
-            # Roll to accumulate FTs if no good transfers
+        elif remaining_fts < 2:
             decision = {
                 'action': 'ROLL',
                 'reasoning': 'No transfers meet minimum threshold. Rolling FT.'
             }
         else:
-            # Have multiple FTs but no good transfers - still roll
             decision = {
                 'action': 'ROLL',
-                'reasoning': f'Have {free_transfers} FTs but no transfers meet threshold.'
+                'reasoning': f'Have {remaining_fts} FTs but no transfers meet threshold.'
             }
 
         # Step 7: Format output
         result = {
             'recommendation': decision['action'],  # 'MAKE', 'MAKE_MULTI', 'ROLL', or 'CHIP'
             'best_transfer': all_options[0] if all_options else None,
-            'recommended_transfers': recommended_transfers,  # NEW: list of transfers to make
+            'recommended_transfers': recommended_transfers,  # Forced + optional transfers
+            'forced_transfers': forced_transfers,  # Just the forced ones
+            'optional_transfers': optional_transfers,  # Just the optional ones
             'top_3_transfers': all_options[:3],
             'by_position': position_options,
             'reasoning': decision['reasoning'],
             'chip_recommendation': chip_recommendation,
             'free_transfers': free_transfers,
+            'remaining_fts_after_forced': remaining_fts,
             'transfers_to_make': len(recommended_transfers),
+            'unavailable_players': unavailable_players,
             'data_visible': True
         }
 
@@ -307,8 +561,9 @@ class TransferOptimizer:
         transfer_options = []
 
         for weak_player in weak_candidates[:2]:
-            # Find replacements
-            max_price = weak_player['now_cost'] / 10.0 + bank + 1.0  # Can upgrade by bank + £1m
+            # Find replacements - use selling_price for budget calculation
+            weak_selling_price = weak_player.get('selling_price', weak_player['now_cost']) / 10.0
+            max_price = weak_selling_price + bank + 1.0  # Can upgrade by bank + £1m
 
             replacements = self._find_replacements(
                 position=position,
@@ -343,7 +598,7 @@ class TransferOptimizer:
                     position_name=pos_name,
                     player_out_id=weak_player['player_id'],
                     player_out_name=weak_player['web_name'],
-                    player_out_price=weak_player['now_cost'] / 10.0,
+                    player_out_price=weak_selling_price,
                     player_in_id=replacement['player_id'],
                     player_in_name=replacement['name'],
                     player_in_price=replacement['price'],
@@ -391,6 +646,9 @@ class TransferOptimizer:
         )
 
         # Calculate average xP for each over horizon
+        # Apply ownership-based strategy multiplier
+        risk_level = getattr(self, 'strategy_context', {}).get('risk_level', 'MODERATE')
+
         replacements = []
         for player in all_players:
             avg_xp = sum(
@@ -403,17 +661,40 @@ class TransferOptimizer:
                 for gw in range(current_gw, current_gw + horizon)
             )
 
+            ownership = float(player['selected_by_percent'] or 0)
+
+            # Apply ownership-based strategy multiplier to scoring
+            # This affects ranking, not the actual xP predictions
+            strategy_multiplier = 1.0
+            if risk_level == 'LOW':
+                # Leading: boost template players (>50% ownership)
+                if ownership >= 50:
+                    strategy_multiplier = 1.15  # 15% boost for safe template picks
+                elif ownership < 20:
+                    strategy_multiplier = 0.9   # 10% penalty for risky differentials
+            elif risk_level == 'BOLD':
+                # Chasing: boost differentials (<20% ownership)
+                if ownership < 20:
+                    strategy_multiplier = 1.20  # 20% boost for differentials
+                elif ownership >= 50:
+                    strategy_multiplier = 0.95  # 5% penalty for boring template
+            # MODERATE/MODERATE-HIGH: no ownership adjustment (balanced)
+
+            adjusted_xp = total_xp * strategy_multiplier
+
             replacements.append({
                 'player_id': player['id'],
                 'name': player['web_name'],
                 'price': player['now_cost'] / 10.0,
                 'avg_xp': avg_xp,
                 'total_xp': total_xp,
-                'ownership': float(player['selected_by_percent'] or 0)
+                'adjusted_xp': adjusted_xp,  # Strategy-adjusted score
+                'ownership': ownership,
+                'strategy_multiplier': strategy_multiplier
             })
 
-        # Sort by total xP over horizon
-        replacements.sort(key=lambda x: x['total_xp'], reverse=True)
+        # Sort by strategy-adjusted xP (considers ownership based on strategy)
+        replacements.sort(key=lambda x: x['adjusted_xp'], reverse=True)
 
         return replacements
 
@@ -441,17 +722,18 @@ class TransferOptimizer:
             }
 
         avg_gain = best_option.avg_gain_per_gw
+        threshold = self.get_threshold_for_position(best_option.position)
 
         # Not worth a free transfer
-        if avg_gain < 2.0:
+        if avg_gain < threshold:
             return {
                 'action': 'ROLL',
                 'reasoning': (f'Best option only gains {avg_gain:.1f}pts/GW '
-                             f'(threshold: 2.0pts/GW). Roll to build 2FT.')
+                             f'(threshold: {threshold:.1f}pts/GW). Roll to build 2FT.')
             }
 
         # Worth a free transfer
-        if free_transfers >= 1 and avg_gain >= 2.0:
+        if free_transfers >= 1 and avg_gain >= threshold:
             return {
                 'action': 'MAKE',
                 'reasoning': (f'Best option gains {avg_gain:.1f}pts/GW '
@@ -565,6 +847,18 @@ class TransferOptimizer:
 
     def _print_analysis(self, result: Dict, current_gw: int, horizon: int):
         """Print comprehensive transfer analysis."""
+
+        # Print forced transfers first if any
+        forced = result.get('forced_transfers', [])
+        if forced:
+            print("\n" + "="*80)
+            print("⚠️  FORCED TRANSFERS (Unavailable Players)")
+            print("="*80)
+            for i, ft in enumerate(forced, 1):
+                print(f"\n{i}. {ft.position_name}: {ft.player_out_name} → {ft.player_in_name}")
+                print(f"   Reason: Player unavailable (0 points guaranteed)")
+                print(f"   Price: £{ft.player_out_price:.1f}m → £{ft.player_in_price:.1f}m")
+                print(f"   Expected points from replacement: +{ft.total_gain:.1f} over {horizon} GWs")
 
         print("\n" + "="*80)
         print(f"TRANSFER OPTIONS BY POSITION (GW{current_gw}-{current_gw+horizon-1})")

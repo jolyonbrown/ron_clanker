@@ -1090,6 +1090,13 @@ Captain: {captain['web_name']}
 
                 logger.info(f"Ron: Enriched {len(current_team)} players with xP and value_score")
 
+                # Store strategy context for transfer optimizer
+                strategy_context = recommendations.get('strategy', {})
+                if strategy_context:
+                    self._current_strategy = strategy_context
+                    logger.info(f"Ron: Strategy context: {strategy_context.get('risk_level', 'MODERATE')} "
+                               f"({strategy_context.get('approach', 'balanced')})")
+
             except Exception as e:
                 logger.warning(f"Ron: Could not enrich with ML predictions: {e}")
                 # Fallback: use position-based defaults
@@ -1119,6 +1126,20 @@ Captain: {captain['web_name']}
         # 3. Execute transfers
         new_team = self._execute_transfers(current_team, transfers)
 
+        # 3b. Enrich any new players with ML predictions (transfers may have added players without xP)
+        if transfers and self.synthesis_engine:
+            try:
+                recs = self.synthesis_engine.synthesize_recommendations(gameweek)
+                pred_dict = {p['player_id']: p for p in recs.get('top_players', [])}
+                for player in new_team:
+                    if 'xP' not in player or player.get('xP', 0) == 0:
+                        player_id = player.get('player_id', player.get('id'))
+                        if player_id in pred_dict:
+                            player['xP'] = pred_dict[player_id].get('xp', 0)
+                            logger.debug(f"Ron: Enriched {player.get('web_name', player_id)} with xP={player['xP']:.1f}")
+            except Exception as e:
+                logger.warning(f"Ron: Could not enrich new players with xP: {e}")
+
         # 4. Assign positions (formation optimizer)
         logger.info("Ron: Optimizing formation...")
         new_team = self._assign_squad_positions(new_team)
@@ -1136,6 +1157,9 @@ Captain: {captain['web_name']}
 
         bench = [p for p in new_team if p.get('position', 0) > 11]
         bench_xp = sum(p.get('xP', 0.0) for p in bench)
+
+        # Log bench details for chip decision
+        logger.info(f"Ron: Bench xP calculation: {bench_xp:.1f} total")
 
         chip_decision = await self.decide_chip_usage(
             gameweek=gameweek,
@@ -1445,7 +1469,8 @@ Captain: {captain['web_name']}
                     bank=bank,
                     horizon=4,
                     ron_entry_id=self.config.get('team_id'),
-                    league_id=self.config.get('league_id')
+                    league_id=self.config.get('league_id'),
+                    strategy_context=getattr(self, '_current_strategy', None)
                 )
 
                 # Handle both single and multi-transfer recommendations

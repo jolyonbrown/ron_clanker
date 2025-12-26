@@ -364,34 +364,23 @@ async def main(args):
     print("NOTIFICATIONS")
     print("-" * 80)
 
-    webhook_url = None  # TODO: Load from config/environment
+    try:
+        from notifications.slack import SlackNotifier
+        notifier = SlackNotifier()
 
-    if webhook_url:
-        try:
-            import requests
-            message = {
-                "text": f"🤖 Ron Clanker has selected team for GW{gameweek}",
-                "blocks": [
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"*Team Selection Complete*\nGameweek {gameweek}\nDeadline: {deadline}"
-                        }
-                    }
-                ]
-            }
-            response = requests.post(webhook_url, json=message, timeout=10)
-            if response.status_code == 200:
-                print("✓ Notification sent successfully")
+        if notifier.enabled and announcement:
+            success = notifier.send_team_announcement(announcement, gameweek)
+            if success:
+                print("✓ Slack notification sent successfully")
             else:
-                print(f"⚠️  Notification failed: HTTP {response.status_code}")
-        except Exception as e:
-            logger.warning(f"PreDeadline: Notification error: {e}")
-            print(f"⚠️  Notification error: {e}")
-    else:
-        print("⚠️  No webhook configured - set WEBHOOK_URL environment variable")
-        print("   to receive notifications (Discord/Slack/etc)")
+                print("⚠️  Slack notification failed")
+        elif not notifier.enabled:
+            print("⚠️  No Slack webhook configured - set SLACK_WEBHOOK_URL environment variable")
+        else:
+            print("⚠️  No announcement to send")
+    except Exception as e:
+        logger.warning(f"PreDeadline: Notification error: {e}")
+        print(f"⚠️  Notification error: {e}")
 
     # Cleanup event-driven components
     try:

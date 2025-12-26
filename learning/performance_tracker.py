@@ -497,3 +497,193 @@ class PerformanceTracker:
             return json.loads(result[0]['value'])
 
         return {'position_corrections': {}, 'price_bracket_corrections': {}}
+
+    # ==========================================
+    # TRANSFER THRESHOLD LEARNING
+    # ==========================================
+
+    def analyze_transfer_performance(self, min_sample_size: int = 5) -> Dict:
+        """
+        Analyze historical transfer decisions to determine if thresholds need adjustment.
+
+        Returns:
+            Dict with analysis per position and recommended threshold adjustments
+        """
+        logger.info("Analyzing transfer performance for threshold learning")
+
+        # Get all transfers with recorded expected and actual gains
+        transfers = self.db.execute_query("""
+            SELECT
+                t.gameweek,
+                t.player_in_id,
+                t.expected_gain,
+                t.actual_gain,
+                p.element_type as position
+            FROM transfers t
+            JOIN players p ON t.player_in_id = p.id
+            WHERE t.expected_gain IS NOT NULL
+            AND t.actual_gain IS NOT NULL
+        """)
+
+        if not transfers:
+            return {'error': 'No transfer data with expected/actual gains'}
+
+        import numpy as np
+
+        # Analyze overall and by position
+        pos_names = {0: 'ALL', 1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        analysis = {
+            'total_transfers': len(transfers),
+            'by_position': {},
+            'recommendations': []
+        }
+
+        # Overall analysis
+        all_errors = [t['actual_gain'] - t['expected_gain'] for t in transfers]
+        analysis['overall'] = {
+            'sample_size': len(transfers),
+            'mean_error': np.mean(all_errors),
+            'actual_avg': np.mean([t['actual_gain'] for t in transfers]),
+            'expected_avg': np.mean([t['expected_gain'] for t in transfers])
+        }
+
+        # By position
+        for pos in [1, 2, 3, 4]:
+            pos_transfers = [t for t in transfers if t['position'] == pos]
+
+            if len(pos_transfers) >= min_sample_size:
+                errors = [t['actual_gain'] - t['expected_gain'] for t in pos_transfers]
+                actual_gains = [t['actual_gain'] for t in pos_transfers]
+                expected_gains = [t['expected_gain'] for t in pos_transfers]
+
+                analysis['by_position'][pos_names[pos]] = {
+                    'sample_size': len(pos_transfers),
+                    'mean_error': np.mean(errors),
+                    'actual_avg': np.mean(actual_gains),
+                    'expected_avg': np.mean(expected_gains),
+                    'position_id': pos
+                }
+
+                # Generate recommendations
+                mean_error = np.mean(errors)
+                if mean_error > 1.5:
+                    # Consistently beating threshold - can lower it
+                    analysis['recommendations'].append({
+                        'position': pos_names[pos],
+                        'position_id': pos,
+                        'action': 'lower_threshold',
+                        'adjustment': -0.25,
+                        'reason': f'Transfers consistently outperform by {mean_error:.2f} pts'
+                    })
+                elif mean_error < -1.0:
+                    # Consistently missing threshold - raise it
+                    analysis['recommendations'].append({
+                        'position': pos_names[pos],
+                        'position_id': pos,
+                        'action': 'raise_threshold',
+                        'adjustment': 0.25,
+                        'reason': f'Transfers consistently underperform by {abs(mean_error):.2f} pts'
+                    })
+
+        return analysis
+
+    def update_learned_thresholds(self, analysis: Dict, current_thresholds: Dict = None):
+        """
+        Update learned_thresholds table based on transfer performance analysis.
+
+        Args:
+            analysis: Output from analyze_transfer_performance()
+            current_thresholds: Current thresholds (defaults to 2.0 for all)
+        """
+        if current_thresholds is None:
+            current_thresholds = {0: 2.0, 1: 2.0, 2: 2.0, 3: 2.0, 4: 2.0}
+
+        pos_names = {0: 'ALL', 1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+
+        for rec in analysis.get('recommendations', []):
+            pos_id = rec['position_id']
+            adjustment = rec['adjustment']
+
+            current = current_thresholds.get(pos_id, 2.0)
+            new_threshold = max(1.0, min(4.0, current + adjustment))  # Clamp between 1.0 and 4.0
+
+            # Get position analysis for sample size and mean error
+            pos_name = pos_names[pos_id]
+            pos_data = analysis.get('by_position', {}).get(pos_name, {})
+            sample_size = pos_data.get('sample_size', 0)
+            mean_error = pos_data.get('mean_error', 0)
+
+            try:
+                self.db.execute_update("""
+                    INSERT OR REPLACE INTO learned_thresholds
+                    (position, threshold_type, threshold_value, sample_size, mean_error, updated_at)
+                    VALUES (?, 'min_gain_per_gw', ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (pos_id, new_threshold, sample_size, mean_error))
+
+                logger.info(f"Updated {pos_name} threshold: {current:.2f} -> {new_threshold:.2f} "
+                           f"(adjustment: {adjustment:+.2f})")
+
+            except Exception as e:
+                logger.error(f"Failed to update threshold for {pos_name}: {e}")
+
+    def get_learned_thresholds(self) -> Dict[int, float]:
+        """
+        Get current learned thresholds for each position.
+
+        Returns:
+            Dict mapping position_id -> threshold value
+            Defaults to 2.0 if no learned threshold exists
+        """
+        thresholds = self.db.execute_query("""
+            SELECT position, threshold_value
+            FROM learned_thresholds
+            WHERE threshold_type = 'min_gain_per_gw'
+        """)
+
+        result = {0: 2.0, 1: 2.0, 2: 2.0, 3: 2.0, 4: 2.0}  # Defaults
+
+        for row in thresholds or []:
+            result[row['position']] = row['threshold_value']
+
+        return result
+
+    def run_threshold_learning(self, min_sample_size: int = 5) -> Dict:
+        """
+        Complete threshold learning cycle.
+
+        1. Analyze transfer performance
+        2. Generate recommendations
+        3. Update learned thresholds
+        4. Return summary
+
+        Returns:
+            Dict with learning results
+        """
+        logger.info("Running threshold learning cycle")
+
+        # Get current thresholds
+        current = self.get_learned_thresholds()
+
+        # Analyze performance
+        analysis = self.analyze_transfer_performance(min_sample_size)
+
+        if 'error' in analysis:
+            logger.warning(f"Threshold learning skipped: {analysis['error']}")
+            return analysis
+
+        # Update thresholds
+        if analysis.get('recommendations'):
+            self.update_learned_thresholds(analysis, current)
+            logger.info(f"Applied {len(analysis['recommendations'])} threshold adjustments")
+        else:
+            logger.info("No threshold adjustments needed")
+
+        # Get new thresholds
+        new = self.get_learned_thresholds()
+
+        return {
+            'previous_thresholds': current,
+            'new_thresholds': new,
+            'analysis': analysis,
+            'adjustments_made': len(analysis.get('recommendations', []))
+        }

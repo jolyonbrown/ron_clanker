@@ -32,6 +32,14 @@ except ImportError:
     NEURAL_AVAILABLE = False
     logging.info("Neural models not available (PyTorch not installed)")
 
+# Transformer support (optional - requires trained model)
+try:
+    from .transformer_model import TransformerPredictor
+    TRANSFORMER_AVAILABLE = True
+except ImportError:
+    TRANSFORMER_AVAILABLE = False
+    logging.info("Transformer model not available")
+
 logger = logging.getLogger('ron_clanker.ml.prediction')
 
 
@@ -82,9 +90,16 @@ class PlayerPerformancePredictor:
         if self.use_neural:
             self._load_neural_models()
 
+        # Transformer model (optional - learned player embeddings)
+        self.use_transformer = TRANSFORMER_AVAILABLE
+        self.transformer_predictor = None
+
+        if self.use_transformer:
+            self._load_transformer()
+
         logger.info(
             f"PlayerPerformancePredictor: Initialized with stacking ensemble "
-            f"(XGBoost: {XGBOOST_AVAILABLE}, Neural: {self.use_neural})"
+            f"(XGBoost: {XGBOOST_AVAILABLE}, Neural: {self.use_neural}, Transformer: {self.use_transformer})"
         )
 
     def _load_neural_models(self):
@@ -119,6 +134,29 @@ class PlayerPerformancePredictor:
         except Exception as e:
             logger.warning(f"Failed to load neural models: {e}")
             self.use_neural = False
+
+    def _load_transformer(self):
+        """Load pre-trained transformer model if available."""
+        try:
+            transformer_dir = Path('models/transformer')
+            if not transformer_dir.exists():
+                logger.info("No transformer model directory found, skipping transformer integration")
+                self.use_transformer = False
+                return
+
+            model_file = transformer_dir / 'transformer_model.pt'
+            if not model_file.exists():
+                logger.info("No trained transformer model found, skipping transformer integration")
+                self.use_transformer = False
+                return
+
+            self.transformer_predictor = TransformerPredictor(model_dir=str(transformer_dir))
+            self.transformer_predictor.load()
+            logger.info(f"Loaded transformer model with {len(self.transformer_predictor.player_id_map)} player embeddings")
+
+        except Exception as e:
+            logger.warning(f"Failed to load transformer model: {e}")
+            self.use_transformer = False
 
     def prepare_training_data(self, features_list: List[Dict], targets: List[float]) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -576,17 +614,19 @@ class PlayerPerformancePredictor:
         logger.info(f"All models trained: {len(all_metrics)} positions")
         return all_metrics
 
-    def predict(self, features: Dict, form_sequence: np.ndarray = None) -> float:
+    def predict(self, features: Dict, form_sequence: np.ndarray = None, form_sequence_dicts: List[Dict] = None) -> float:
         """
         Predict expected points for a single player using stacked ensemble.
 
         The prediction combines:
         1. Traditional ML models (RF, GB, XGBoost)
         2. Neural models (MLP, LSTM) if available and loaded
+        3. Transformer model if available and loaded
 
         Args:
             features: Feature dict from FeatureEngineer
             form_sequence: Optional form sequence for LSTM (shape: seq_len, seq_features)
+            form_sequence_dicts: Optional list of GW dicts for transformer (raw stats)
 
         Returns:
             Predicted points for next gameweek
@@ -615,6 +655,13 @@ class PlayerPerformancePredictor:
             if lstm_pred is not None:
                 base_predictions.append(lstm_pred)
 
+        # Add transformer prediction if available
+        transformer_pred = None
+        if self.use_transformer and self.transformer_predictor is not None:
+            transformer_pred = self._get_transformer_prediction(features, form_sequence_dicts)
+            if transformer_pred is not None:
+                base_predictions.append(transformer_pred)
+
         # Stack predictions and use meta-learner
         # Note: If we have more predictions than the meta-learner was trained for,
         # we need to average the extra neural predictions separately
@@ -628,7 +675,7 @@ class PlayerPerformancePredictor:
             neural_preds = base_predictions[n_base:]
             neural_avg = np.mean(neural_preds)
 
-            # Weighted combination: 70% traditional, 30% neural
+            # Weighted combination: 70% traditional, 30% neural/transformer
             prediction = 0.7 * traditional_pred + 0.3 * neural_avg
         else:
             meta_features = np.array([base_predictions])
@@ -686,6 +733,37 @@ class PlayerPerformancePredictor:
             logger.warning(f"Neural prediction failed for position {position}: {e}")
 
         return mlp_pred, lstm_pred
+
+    def _get_transformer_prediction(
+        self,
+        features: Dict,
+        form_sequence_dicts: List[Dict] = None
+    ) -> Optional[float]:
+        """
+        Get prediction from transformer model.
+
+        Args:
+            features: Feature dict (must contain 'player_code')
+            form_sequence_dicts: List of recent GW dicts with raw stats
+
+        Returns:
+            Transformer prediction or None if unavailable
+        """
+        try:
+            player_code = features.get('player_code')
+            if player_code is None:
+                return None
+
+            # If no form sequence provided, can't predict
+            if form_sequence_dicts is None or len(form_sequence_dicts) == 0:
+                return None
+
+            pred = self.transformer_predictor.predict(player_code, form_sequence_dicts)
+            return float(pred)
+
+        except Exception as e:
+            logger.warning(f"Transformer prediction failed: {e}")
+            return None
 
     def predict_batch(self, features_list: List[Dict]) -> List[float]:
         """

@@ -191,6 +191,7 @@ Examples:
         'post_gw_collection': None,
         'ron_team_sync': None,
         'performance_review': None,
+        'threshold_learning': None,
         'ml_update': None
     }
 
@@ -321,11 +322,46 @@ Examples:
         print("\n⏭️  Skipping performance review (--skip-review)")
 
     # =========================================================================
-    # STEP 5: Update ML Models (Optional)
+    # STEP 5: Update Transfer Thresholds (Learning)
+    # =========================================================================
+    print("\n" + "-" * 80)
+    print("STEP 5: UPDATE TRANSFER THRESHOLDS (LEARNING)")
+    print("-" * 80)
+
+    try:
+        from learning.performance_tracker import PerformanceTracker
+        tracker = PerformanceTracker(db)
+
+        learning_result = tracker.run_threshold_learning(min_sample_size=3)
+
+        if 'error' in learning_result:
+            print(f"⏭️  Threshold learning skipped: {learning_result['error']}")
+            results['threshold_learning'] = None
+        elif learning_result.get('adjustments_made', 0) > 0:
+            print("✅ Transfer thresholds updated")
+            print(f"   Adjustments made: {learning_result['adjustments_made']}")
+            for pos_id, threshold in learning_result['new_thresholds'].items():
+                pos_name = {0: 'ALL', 1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}.get(pos_id, str(pos_id))
+                old_val = learning_result['previous_thresholds'].get(pos_id, 2.0)
+                if old_val != threshold:
+                    print(f"     {pos_name}: {old_val:.2f} → {threshold:.2f}")
+            results['threshold_learning'] = True
+        else:
+            print("✅ Thresholds analyzed - no adjustments needed")
+            results['threshold_learning'] = True
+    except Exception as e:
+        print(f"⚠️  Threshold learning failed: {e}")
+        results['threshold_learning'] = False
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+
+    # =========================================================================
+    # STEP 6: Update ML Models (Optional)
     # =========================================================================
     if not args.skip_ml:
         print("\n" + "-" * 80)
-        print("STEP 5: UPDATE ML MODELS")
+        print("STEP 6: UPDATE ML MODELS")
         print("-" * 80)
 
         # Check if update script exists
@@ -348,6 +384,34 @@ Examples:
             results['ml_update'] = None
     else:
         print("\n⏭️  Skipping ML update (--skip-ml)")
+
+    # =========================================================================
+    # STEP 7: TRANSFORMER TRAINING (Optional - GPU required)
+    # =========================================================================
+    results['transformer_training'] = None
+
+    if not args.skip_ml:
+        print("\n" + "=" * 80)
+        print("STEP 7: TRANSFORMER TRAINING")
+        print("=" * 80)
+
+        transformer_script = scripts_dir / 'train_transformer.py'
+        if transformer_script.exists():
+            print("🤖 Training transformer model with latest data...")
+            print("   (This improves predictions with learned player embeddings)")
+
+            success, output = run_script(transformer_script, ['--epochs', '30'])
+            results['transformer_training'] = success
+
+            if success:
+                print("✅ Transformer trained successfully")
+            else:
+                print("⚠️  Transformer training had issues (predictions still work without it)")
+                if args.verbose:
+                    print(output[-500:] if len(output) > 500 else output)
+        else:
+            print("⏭️  Transformer training script not found - skipping")
+            results['transformer_training'] = None
 
     # =========================================================================
     # SUMMARY
@@ -373,7 +437,9 @@ Examples:
     print(f"  Post-GW Collection:   {status_map[results['post_gw_collection']]}")
     print(f"  Ron's Team Sync:      {status_map[results['ron_team_sync']]}")
     print(f"  Performance Review:   {status_map[results['performance_review']]}")
+    print(f"  Threshold Learning:   {status_map[results['threshold_learning']]}")
     print(f"  ML Model Update:      {status_map[results['ml_update']]}")
+    print(f"  Transformer Training: {status_map[results['transformer_training']]}")
     print()
     print(f"Summary: {success_count} succeeded, {fail_count} failed, {skip_count} skipped")
 
