@@ -230,7 +230,8 @@ Making changes. Can't afford another week like that. The algorithms say we need 
         chip_used: str = None,
         free_transfers: int = 1,
         bank: float = 0.0,
-        reasoning: Dict[str, Any] = None
+        reasoning: Dict[str, Any] = None,
+        fixtures: Dict[int, Dict[str, Any]] = None
     ) -> str:
         """
         Generate Ron's pre-deadline team announcement.
@@ -243,6 +244,8 @@ Making changes. Can't afford another week like that. The algorithms say we need 
             free_transfers: Number of free transfers available
             bank: Money in the bank
             reasoning: Optional dict with strategy notes
+            fixtures: Dict mapping team_id to fixture info:
+                      {team_id: {'opponent': 'ARS', 'home': True, 'fdr': 3}}
 
         Returns:
             Natural, authentic Ron team announcement
@@ -271,12 +274,22 @@ Making changes. Can't afford another week like that. The algorithms say we need 
         vice = next((p for p in squad if p.get('is_vice_captain')), None)
 
         # Format squad details BY POSITION to prevent LLM confusion
-        # Group starting XI by position type
+        # Group starting XI by position type, including fixture info
         starting_by_pos = {'GKP': [], 'DEF': [], 'MID': [], 'FWD': []}
         for player in starting_xi:
             pos_name = ['', 'GKP', 'DEF', 'MID', 'FWD'][player.get('element_type', 1)]
             suffix = " (C)" if player.get('is_captain') else " (VC)" if player.get('is_vice_captain') else ""
-            starting_by_pos[pos_name].append(f"{player['web_name']}{suffix}")
+
+            # Add fixture info if available
+            fixture_str = ""
+            if fixtures:
+                team_id = player.get('team_id') or player.get('team')
+                if team_id and team_id in fixtures:
+                    fix = fixtures[team_id]
+                    h_a = "(H)" if fix.get('home') else "(A)"
+                    fixture_str = f" vs {fix['opponent']} {h_a}"
+
+            starting_by_pos[pos_name].append(f"{player['web_name']}{suffix}{fixture_str}")
 
         # Build starting text with explicit position groups
         starting_lines = []
@@ -487,10 +500,15 @@ def generate_team_announcement(
     chip_used: str = None,
     free_transfers: int = 1,
     bank: float = 0.0,
-    reasoning: Dict[str, Any] = None
+    reasoning: Dict[str, Any] = None,
+    fixtures: Dict[int, Dict[str, Any]] = None
 ) -> str:
     """
     Convenience function to generate Ron's team announcement.
+
+    Args:
+        fixtures: Dict mapping team_id to fixture info:
+                  {team_id: {'opponent': 'ARS', 'home': True, 'fdr': 3}}
 
     Returns:
         Natural team announcement from Ron
@@ -503,5 +521,6 @@ def generate_team_announcement(
         chip_used=chip_used,
         free_transfers=free_transfers,
         bank=bank,
-        reasoning=reasoning
+        reasoning=reasoning,
+        fixtures=fixtures
     )

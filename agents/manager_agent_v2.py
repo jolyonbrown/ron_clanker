@@ -896,6 +896,35 @@ class RonManager(BaseAgent):
             Natural language announcement in Ron's voice
         """
 
+        # Fetch fixture data for the gameweek
+        fixtures = {}
+        try:
+            fixture_rows = self.db.execute_query("""
+                SELECT f.team_h, f.team_a, f.team_h_difficulty, f.team_a_difficulty,
+                       h.short_name as home_team, a.short_name as away_team
+                FROM fixtures f
+                JOIN teams h ON f.team_h = h.id
+                JOIN teams a ON f.team_a = a.id
+                WHERE f.event = ?
+            """, (gameweek,))
+
+            for row in fixture_rows:
+                # Home team fixture
+                fixtures[row['team_h']] = {
+                    'opponent': row['away_team'],
+                    'home': True,
+                    'fdr': row['team_h_difficulty']
+                }
+                # Away team fixture
+                fixtures[row['team_a']] = {
+                    'opponent': row['home_team'],
+                    'home': False,
+                    'fdr': row['team_a_difficulty']
+                }
+            logger.debug(f"Ron: Loaded {len(fixtures)} team fixtures for GW{gameweek}")
+        except Exception as e:
+            logger.warning(f"Ron: Could not load fixtures: {e}")
+
         # Use LLM-powered announcement generator
         try:
             announcement = generate_team_announcement(
@@ -905,7 +934,8 @@ class RonManager(BaseAgent):
                 chip_used=chip_used,
                 free_transfers=free_transfers,
                 bank=bank,
-                reasoning=None  # Could pass ML synthesis reasoning here
+                reasoning=None,  # Could pass ML synthesis reasoning here
+                fixtures=fixtures
             )
             logger.info(f"Ron: Generated LLM-powered announcement ({len(announcement)} chars)")
             return announcement
