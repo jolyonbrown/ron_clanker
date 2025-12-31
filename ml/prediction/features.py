@@ -296,7 +296,7 @@ class FeatureEngineer:
         # Get player info
         player = self.db.execute_query("""
             SELECT
-                id, web_name, element_type, team_id, now_cost,
+                id, code, web_name, element_type, team_id, now_cost,
                 selected_by_percent, form, points_per_game,
                 minutes, goals_scored, assists, clean_sheets,
                 influence, creativity, threat, ict_index
@@ -328,6 +328,7 @@ class FeatureEngineer:
         features = {
             # Player attributes
             'player_id': player_id,
+            'player_code': p['code'],  # FPL unique player code (for model compatibility)
             'position': p['element_type'],  # 1=GK, 2=DEF, 3=MID, 4=FWD
             'price': p['now_cost'] / 10.0,
             'ownership': float(p['selected_by_percent'] or 0),
