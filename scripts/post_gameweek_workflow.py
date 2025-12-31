@@ -87,7 +87,7 @@ def run_script(script_name: str, args: list = None, description: str = None) -> 
         return success, output
 
     except subprocess.TimeoutExpired:
-        return False, f"Script timed out after 600 seconds"
+        return False, f"Script timed out after 900 seconds"
     except Exception as e:
         return False, f"Error running script: {e}"
 
@@ -395,7 +395,7 @@ Examples:
         print("STEP 7: TRANSFORMER TRAINING")
         print("=" * 80)
 
-        transformer_script = scripts_dir / 'train_transformer.py'
+        transformer_script = SCRIPTS_DIR / 'train_transformer.py'
         if transformer_script.exists():
             print("🤖 Training transformer model with latest data...")
             print("   (This improves predictions with learned player embeddings)")

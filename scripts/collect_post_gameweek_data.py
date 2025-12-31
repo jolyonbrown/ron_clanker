@@ -195,9 +195,13 @@ class PostGameweekCollector:
                         own_goals, penalties_saved, penalties_missed, yellow_cards,
                         red_cards, saves, bonus, bps, influence, creativity,
                         threat, ict_index, value, selected, transfers_in,
-                        transfers_out
+                        transfers_out, tackles, interceptions, clearances_blocks_interceptions,
+                        recoveries, defensive_contribution_points,
+                        expected_goals, expected_assists, expected_goal_involvements,
+                        expected_goals_conceded
                     ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?
                     )
                 """, (
                     player_id,
@@ -224,7 +228,16 @@ class PostGameweekCollector:
                     gw.get('value'),
                     gw.get('selected'),
                     gw.get('transfers_in'),
-                    gw.get('transfers_out')
+                    gw.get('transfers_out'),
+                    gw.get('tackles', 0),
+                    gw.get('interceptions', 0),
+                    gw.get('clearances_blocks_interceptions', 0),
+                    gw.get('recoveries', 0),
+                    gw.get('defensive_contribution', 0),
+                    gw.get('expected_goals', 0),
+                    gw.get('expected_assists', 0),
+                    gw.get('expected_goal_involvements', 0),
+                    gw.get('expected_goals_conceded', 0)
                 ))
                 stored += 1
 
@@ -269,7 +282,7 @@ class PostGameweekCollector:
                 try:
                     self.db.execute_update("""
                         INSERT OR REPLACE INTO league_standings_history (
-                            league_id, entry_id, gameweek, rank, total_points, gameweek_points
+                            league_id, entry_id, gameweek, rank, total_points, event_points
                         ) VALUES (?, ?, ?, ?, ?, ?)
                     """, (
                         self.league_id,
