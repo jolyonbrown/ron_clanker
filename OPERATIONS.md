@@ -70,12 +70,20 @@ python scripts/collect_post_gameweek_data.py
 # 2. Track Ron's performance
 python scripts/track_ron_team.py --sync
 
-# 3. Performance review
+# 3. Performance review (calculates RMSE/MAE, stores learning adjustments)
 python scripts/post_gameweek_review.py --gw 15
 
 # 4. Update ML models with new data
 python scripts/update_ml_models.py
 ```
+
+**What the workflow learns:**
+The post-GW workflow calculates prediction errors and stores bias corrections:
+- **Position corrections**: If we over-predict DEF by 0.3 pts, future DEF predictions reduced by 0.3
+- **Price bracket corrections**: If we over-predict mid-price players by 0.8 pts, those are reduced
+
+These adjustments are automatically applied in the next `pre_deadline_selection.py` run.
+Check current adjustments: `python -c "from learning.performance_tracker import PerformanceTracker; from data.database import Database; print(PerformanceTracker(Database()).get_active_adjustments())"`
 
 ---
 
@@ -268,6 +276,76 @@ This prevents errors like assuming a player is still at their old club after a t
 
 ---
 
+## Team Submission via Chrome Plugin
+
+### Overview
+
+Ron's team selections can be submitted to FPL using the **Claude Chrome Plugin**. This provides:
+- Human-in-the-loop confirmation before submission
+- No need for FPL API authentication tokens
+- Visual verification of changes
+- No risk of account issues from unofficial API access
+
+### Credentials
+
+Stored in `.env` (never committed to git):
+```
+FPL_WEB_URL=https://fantasy.premierleague.com
+FPL_USER_NAME=<email>
+FPL_PASSWORD=<password>
+```
+
+### Workflow
+
+1. **Generate team selection** using Ron's pipeline:
+   ```bash
+   python scripts/pre_deadline_selection.py
+   python scripts/show_latest_team.py
+   ```
+
+2. **Open Chrome** with Claude plugin active
+
+3. **In Claude Code conversation**, use browser automation:
+   - Navigate to FPL website
+   - Login using credentials from `.env`
+   - View current team, points, transfers
+   - Make changes as needed (transfers, captain, bench order)
+   - Confirm submission
+
+### What the Plugin Can Do
+
+| Action | Status | Notes |
+|--------|--------|-------|
+| Login to FPL | ✅ Tested | Uses email/password from .env |
+| View Points/Team | ✅ Tested | See GW results, player scores |
+| View Pick Team | ✅ Tested | See current squad, fixtures |
+| Make Transfers | ✅ Ready | Click through transfer UI |
+| Set Captain/VC | ✅ Ready | Click on player → set captain |
+| Reorder Bench | ✅ Ready | Drag or click bench positions |
+| Activate Chips | ✅ Ready | Click chip buttons |
+| Confirm Deadline | ✅ Ready | Final submission confirmation |
+
+### Example Session
+
+```
+User: "Submit Ron's team for GW19"
+Claude: [Reads .env for credentials]
+        [Navigates to fantasy.premierleague.com]
+        [Logs in]
+        [Goes to Pick Team]
+        [Makes transfers per Ron's recommendation]
+        [Sets captain]
+        [Asks user to confirm before final submit]
+```
+
+### Safety
+
+- Claude will **always ask for confirmation** before irreversible actions
+- Transfers, chip activation, and team submission require explicit approval
+- User can review all changes visually before confirming
+
+---
+
 ## Automated Jobs (Cron)
 
 These run automatically if cron is configured:
@@ -368,6 +446,14 @@ See `bd list --status open` for current tasks.
   - Adjusts position-specific transfer thresholds automatically
   - Added to post-GW workflow as Step 5
   - Thresholds stored in `learned_thresholds` table
+
+- **Learning Feedback Loop** (`ml/prediction/learning_adjustment.py`):
+  - Predictions are compared to actuals after each gameweek
+  - Position-specific and price-bracket bias corrections are calculated
+  - Corrections are **automatically applied** to all future predictions
+  - Example: If we over-predict MID by 0.57 pts on average, future MID predictions are reduced by 0.57
+  - Stored in `learning_metrics` table as `learning_adjustments`
+  - No manual intervention needed - runs as part of post-GW workflow
 
 - **Transformer Model with Player Embeddings** (`ml/prediction/transformer_model.py`):
   - Self-attention architecture for form sequence modeling
