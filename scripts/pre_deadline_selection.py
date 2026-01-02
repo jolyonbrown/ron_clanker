@@ -359,28 +359,32 @@ async def main(args):
         logger.warning(f"PreDeadline: Could not verify decision storage: {e}")
         print(f"⚠️  Could not verify decision storage: {e}")
 
-    # Send notification (if configured)
+    # Send notification (if configured and not skipped)
     print("\n" + "-" * 80)
     print("NOTIFICATIONS")
     print("-" * 80)
 
-    try:
-        from notifications.slack import SlackNotifier
-        notifier = SlackNotifier()
+    if args.no_notify:
+        print("⏭️  Slack notification skipped (--no-notify flag)")
+        print("   Run 'python scripts/send_team_announcement.py' after Chrome submission")
+    else:
+        try:
+            from notifications.slack import SlackNotifier
+            notifier = SlackNotifier()
 
-        if notifier.enabled and announcement:
-            success = notifier.send_team_announcement(announcement, gameweek)
-            if success:
-                print("✓ Slack notification sent successfully")
+            if notifier.enabled and announcement:
+                success = notifier.send_team_announcement(announcement, gameweek)
+                if success:
+                    print("✓ Slack notification sent successfully")
+                else:
+                    print("⚠️  Slack notification failed")
+            elif not notifier.enabled:
+                print("⚠️  No Slack webhook configured - set SLACK_WEBHOOK_URL environment variable")
             else:
-                print("⚠️  Slack notification failed")
-        elif not notifier.enabled:
-            print("⚠️  No Slack webhook configured - set SLACK_WEBHOOK_URL environment variable")
-        else:
-            print("⚠️  No announcement to send")
-    except Exception as e:
-        logger.warning(f"PreDeadline: Notification error: {e}")
-        print(f"⚠️  Notification error: {e}")
+                print("⚠️  No announcement to send")
+        except Exception as e:
+            logger.warning(f"PreDeadline: Notification error: {e}")
+            print(f"⚠️  Notification error: {e}")
 
     # Cleanup event-driven components
     try:
@@ -425,6 +429,11 @@ Examples:
         '-f', '--free-transfers',
         type=int,
         help='Override free transfer count (e.g., 5 for AFCON special event)'
+    )
+    parser.add_argument(
+        '--no-notify',
+        action='store_true',
+        help='Skip Slack notification (use when submitting via Chrome separately)'
     )
     return parser.parse_args()
 

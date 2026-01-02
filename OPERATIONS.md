@@ -108,6 +108,7 @@ Check current adjustments: `python -c "from learning.performance_tracker import 
 | `pre_deadline_selection.py` | Full team selection with ML predictions | Pre-deadline |
 | `pre_deadline_optimizer.py` | Transfer optimization only | Debug/analysis |
 | `show_latest_team.py` | Display current draft team | Any time |
+| `send_team_announcement.py` | Send Slack announcement after Chrome submission | Post-submission |
 
 ### ML Training
 | Script | Purpose | When to Use |
@@ -299,7 +300,8 @@ FPL_PASSWORD=<password>
 
 1. **Generate team selection** using Ron's pipeline:
    ```bash
-   python scripts/pre_deadline_selection.py
+   # Use --no-notify to skip Slack (we'll send after Chrome confirms)
+   python scripts/pre_deadline_selection.py --no-notify
    python scripts/show_latest_team.py
    ```
 
@@ -311,6 +313,18 @@ FPL_PASSWORD=<password>
    - View current team, points, transfers
    - Make changes as needed (transfers, captain, bench order)
    - Confirm submission
+
+4. **Send Slack announcement** (after Chrome confirms):
+   ```bash
+   # After deadline passes - syncs from FPL API (authoritative)
+   python scripts/send_team_announcement.py
+
+   # Or before deadline - reads from database (may have stale data)
+   python scripts/send_team_announcement.py --from-database --gameweek 20
+
+   # Preview without sending
+   python scripts/send_team_announcement.py --dry-run
+   ```
 
 ### What the Plugin Can Do
 
@@ -408,6 +422,14 @@ python scripts/train_neural_models.py --check-gpu
 See `bd list --status open` for current tasks.
 
 ---
+
+## Recent Changes (January 2026)
+
+- **Slack Announcement Workflow Fix** (January 2026):
+  - Added `--no-notify` flag to `pre_deadline_selection.py` to skip Slack notification
+  - Created `send_team_announcement.py` script for post-submission announcements
+  - Workflow: Run selection with `--no-notify` → Submit via Chrome → Send announcement
+  - Prevents announcements going out before team is actually confirmed on FPL website
 
 ## Recent Changes (December 2025)
 
