@@ -321,7 +321,7 @@ class PostGameweekCollector:
 
         # Get list of rivals from league_rivals table, EXCLUDING Ron
         rivals = self.db.execute_query("""
-            SELECT entry_id, entry_name
+            SELECT entry_id, player_name as entry_name
             FROM league_rivals
             WHERE league_id = ? AND entry_id != ?
         """, (self.league_id, self.team_id))
