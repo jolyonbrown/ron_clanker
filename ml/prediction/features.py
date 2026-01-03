@@ -57,7 +57,8 @@ class FeatureEngineer:
                 gameweek, total_points, minutes, goals_scored, assists,
                 bonus, bps, clean_sheets, saves,
                 influence, creativity, threat, ict_index,
-                expected_goals, expected_assists, expected_goal_involvements
+                expected_goals, expected_assists, expected_goal_involvements,
+                tackles, clearances_blocks_interceptions, recoveries
             FROM player_gameweek_history
             WHERE player_id = ?
             AND gameweek < ?
@@ -80,7 +81,18 @@ class FeatureEngineer:
                 'avg_threat': 0.0,
                 'avg_ict_index': 0.0,
                 'form_trend': 0.0,
-                'games_played': 0
+                'games_played': 0,
+                # xG/xA defaults
+                'avg_xg': 0.0,
+                'avg_xa': 0.0,
+                'avg_xgi': 0.0,
+                'xg_overperformance': 0.0,
+                'xa_overperformance': 0.0,
+                # Defensive Contribution defaults (NEW 2025/26 scoring!)
+                'avg_tackles': 0.0,
+                'avg_cbi': 0.0,  # Clearances, Blocks, Interceptions
+                'avg_recoveries': 0.0,
+                'dc_score': 0.0  # Combined defensive contribution
             }
 
         games_played = len(history)
@@ -100,6 +112,15 @@ class FeatureEngineer:
         avg_xgi = np.mean([h['expected_goal_involvements'] or 0 for h in history])
         avg_goals = np.mean([h['goals_scored'] for h in history])
         avg_assists = np.mean([h['assists'] for h in history])
+
+        # Calculate Defensive Contribution metrics (NEW 2025/26 FPL scoring!)
+        # DEF: 1pt per 2 CBI+Tackles (10+ needed)
+        # MID: 1pt per 3 CBI+Tackles+Recoveries (12+ needed)
+        avg_tackles = np.mean([h['tackles'] or 0 for h in history])
+        avg_cbi = np.mean([h['clearances_blocks_interceptions'] or 0 for h in history])
+        avg_recoveries = np.mean([h['recoveries'] or 0 for h in history])
+        # Combined DC score (raw defensive actions per game)
+        dc_score = avg_tackles + avg_cbi + avg_recoveries
 
         return {
             'avg_points': np.mean([h['total_points'] for h in history]),
@@ -121,7 +142,12 @@ class FeatureEngineer:
             'avg_xa': avg_xa,
             'avg_xgi': avg_xgi,
             'xg_overperformance': avg_goals - avg_xg,  # Over/under performing xG
-            'xa_overperformance': avg_assists - avg_xa  # Over/under performing xA
+            'xa_overperformance': avg_assists - avg_xa,  # Over/under performing xA
+            # Defensive Contribution features (2025/26 scoring)
+            'avg_tackles': avg_tackles,
+            'avg_cbi': avg_cbi,
+            'avg_recoveries': avg_recoveries,
+            'dc_score': dc_score
         }
 
     def get_historical_xg_features(self, player_id: int, window: int = 5) -> Dict:
@@ -391,13 +417,50 @@ class FeatureEngineer:
             'opponent_defensive_strength': fixture['opponent_defensive_strength'],
             'opponent_attacking_strength': fixture['opponent_attacking_strength'],
 
+            # Defensive Contribution features (2025/26 scoring)
+            'avg_tackles': recent_form.get('avg_tackles', 0.0),
+            'avg_cbi': recent_form.get('avg_cbi', 0.0),  # Clearances, Blocks, Interceptions
+            'avg_recoveries': recent_form.get('avg_recoveries', 0.0),
+            'dc_score': recent_form.get('dc_score', 0.0),  # Combined DC actions
+
             # Derived features
             'minutes_reliability': min(1.0, recent_form['avg_minutes'] / 90.0),  # 0-1 scale
             'attacking_threat': (recent_form['avg_goals'] * 4) + (recent_form['avg_assists'] * 3),
             'defensive_reliability': recent_form['avg_clean_sheets'],
+            # DC potential points (based on 2025/26 rules)
+            # DEF: 1pt per 2 (CBI+Tackles) if total >= 10
+            # MID: 1pt per 3 (CBI+Tackles+Recoveries) if total >= 12
+            'dc_potential': self._calculate_dc_potential(
+                p['element_type'],
+                recent_form.get('avg_tackles', 0),
+                recent_form.get('avg_cbi', 0),
+                recent_form.get('avg_recoveries', 0)
+            ),
         }
 
         return features
+
+    def _calculate_dc_potential(self, position: int, tackles: float,
+                                 cbi: float, recoveries: float) -> float:
+        """
+        Calculate expected DC points based on 2025/26 FPL rules.
+
+        DEF (position 2): 1pt per 2 (CBI + Tackles), threshold 10
+        MID (position 3): 1pt per 3 (CBI + Tackles + Recoveries), threshold 12
+
+        Returns expected DC points per game.
+        """
+        if position == 2:  # DEF
+            dc_total = cbi + tackles
+            if dc_total >= 10:
+                return (dc_total - 10) / 2 + 1  # 1 pt for reaching 10, then 1pt per 2
+            return 0.0
+        elif position == 3:  # MID
+            dc_total = cbi + tackles + recoveries
+            if dc_total >= 12:
+                return (dc_total - 12) / 3 + 1  # 1 pt for reaching 12, then 1pt per 3
+            return 0.0
+        return 0.0
 
     def engineer_batch_features(self, player_ids: List[int], gameweek: int) -> List[Dict]:
         """
