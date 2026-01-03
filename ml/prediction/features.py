@@ -56,7 +56,8 @@ class FeatureEngineer:
             SELECT
                 gameweek, total_points, minutes, goals_scored, assists,
                 bonus, bps, clean_sheets, saves,
-                influence, creativity, threat, ict_index
+                influence, creativity, threat, ict_index,
+                expected_goals, expected_assists, expected_goal_involvements
             FROM player_gameweek_history
             WHERE player_id = ?
             AND gameweek < ?
@@ -93,11 +94,18 @@ class FeatureEngineer:
         else:
             form_trend = 0.0
 
+        # Calculate xG/xA metrics from current season data
+        avg_xg = np.mean([h['expected_goals'] or 0 for h in history])
+        avg_xa = np.mean([h['expected_assists'] or 0 for h in history])
+        avg_xgi = np.mean([h['expected_goal_involvements'] or 0 for h in history])
+        avg_goals = np.mean([h['goals_scored'] for h in history])
+        avg_assists = np.mean([h['assists'] for h in history])
+
         return {
             'avg_points': np.mean([h['total_points'] for h in history]),
             'avg_minutes': np.mean([h['minutes'] for h in history]),
-            'avg_goals': np.mean([h['goals_scored'] for h in history]),
-            'avg_assists': np.mean([h['assists'] for h in history]),
+            'avg_goals': avg_goals,
+            'avg_assists': avg_assists,
             'avg_bonus': np.mean([h['bonus'] for h in history]),
             'avg_bps': np.mean([h['bps'] for h in history]),
             'avg_clean_sheets': np.mean([h['clean_sheets'] for h in history]),
@@ -108,12 +116,12 @@ class FeatureEngineer:
             'avg_ict_index': np.mean([h['ict_index'] or 0 for h in history]),
             'form_trend': form_trend,
             'games_played': games_played,
-            # xG/xA defaults (not available in current season data)
-            'avg_xg': 0.0,
-            'avg_xa': 0.0,
-            'avg_xgi': 0.0,
-            'xg_overperformance': 0.0,
-            'xa_overperformance': 0.0
+            # xG/xA features from current season FPL API data
+            'avg_xg': avg_xg,
+            'avg_xa': avg_xa,
+            'avg_xgi': avg_xgi,
+            'xg_overperformance': avg_goals - avg_xg,  # Over/under performing xG
+            'xa_overperformance': avg_assists - avg_xa  # Over/under performing xA
         }
 
     def get_historical_xg_features(self, player_id: int, window: int = 5) -> Dict:
@@ -310,13 +318,15 @@ class FeatureEngineer:
 
         p = player[0]
 
-        # Get recent form
+        # Get recent form (includes current season xG/xA from FPL API)
         recent_form = self.get_player_recent_form(player_id, gameweek, window=5)
 
-        # Get xG/xA features from historical data (if available)
-        xg_features = self.get_historical_xg_features(player_id, window=5)
-        # Merge xG/xA into recent_form (overwrite defaults with actual data if available)
-        recent_form.update(xg_features)
+        # Only fall back to historical xG/xA if current season data is missing
+        if recent_form.get('avg_xg', 0) == 0 and recent_form.get('avg_xa', 0) == 0:
+            xg_features = self.get_historical_xg_features(player_id, window=5)
+            # Only update if historical has data
+            if xg_features.get('avg_xg', 0) > 0 or xg_features.get('avg_xa', 0) > 0:
+                recent_form.update(xg_features)
 
         # Get fixture difficulty
         fixture = self.get_fixture_difficulty(p['team_id'], gameweek)
