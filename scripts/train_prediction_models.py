@@ -117,6 +117,7 @@ def main():
     parser.add_argument('--full', action='store_true', help='Use all available data for training (no holdout)')
     parser.add_argument('--save', action='store_true', default=True, help='Save trained models (default: True)')
     parser.add_argument('--version', type=str, default='latest', help='Model version name (default: latest)')
+    parser.add_argument('--force', action='store_true', help='Force retraining even if predictions exist (use after feature changes)')
 
     args = parser.parse_args()
 
@@ -148,11 +149,15 @@ def main():
         WHERE gameweek = ? + 1
     """, (args.train_end,))
 
-    if existing_predictions and existing_predictions[0]['count'] > 0:
+    if existing_predictions and existing_predictions[0]['count'] > 0 and not args.force:
         print(f"\n✅ Models already trained on GW{args.train_start}-{args.train_end}")
         print(f"   Found {existing_predictions[0]['count']} predictions for GW{args.train_end + 1}")
         print("   No retraining needed (data hasn't changed)")
+        print("   Use --force to retrain anyway (e.g., after feature engineering changes)")
         return 0
+    elif args.force:
+        print(f"\n🔄 Force retraining requested - clearing old predictions for GW{args.train_end + 1}")
+        db.execute_update("DELETE FROM player_predictions WHERE gameweek = ?", (args.train_end + 1,))
 
     print("\n" + "=" * 80)
     print("PLAYER PERFORMANCE PREDICTION MODEL TRAINING")

@@ -164,11 +164,11 @@ Check current adjustments: `python -c "from learning.performance_tracker import 
 
 ## Training Models
 
-### Full Retrain (after major data changes)
+### Full Retrain (after major data changes or feature engineering updates)
 
 ```bash
-# 1. Train sklearn ensemble
-python scripts/train_prediction_models.py --seasons 2022-23 2023-24 2024-25
+# 1. Train sklearn ensemble (uses xG/xA and DC features)
+python scripts/train_prediction_models.py --force
 
 # 2. Train neural models (requires GPU)
 python scripts/train_neural_models.py --epochs 100 --batch-size 512
@@ -180,18 +180,45 @@ python scripts/train_transformer.py --epochs 50
 python scripts/train_price_model.py
 ```
 
-### Weekly Update (post-gameweek)
+**Note:** Use `--force` flag to retrain even if predictions exist for the next gameweek.
+This is necessary after feature engineering changes (e.g., adding xG/xA or DC features).
 
-Run after each gameweek completes to incorporate new data:
+### Weekly Retraining Schedule (Post-Gameweek)
+
+**Recommended: Full retrain every gameweek** to incorporate:
+- New match results and performance data
+- Updated form calculations
+- Fresh xG/xA overperformance metrics
+- Latest DC (Defensive Contribution) patterns
 
 ```bash
-# Quick incremental update
-python scripts/update_ml_models.py
+# 1. Train sklearn ensemble with latest GW data (~90 seconds)
+python scripts/train_prediction_models.py --force --version xg_dc_v1
 
-# Retrain transformer (recommended weekly - uses latest form data)
-# ~5-10 mins on GPU, free to run locally
+# 2. Train neural models (~40 seconds on GPU)
+python scripts/train_neural_models.py --epochs 50
+
+# 3. Train transformer (recommended weekly - uses latest form data)
+# ~5-10 mins on GPU
 python scripts/train_transformer.py --epochs 30
+
+# Or use incremental update for faster processing
+python scripts/update_ml_models.py
 ```
+
+### Key Features Used by Models
+
+**xG/xA Features** (from FPL API data):
+- `avg_xg`, `avg_xa`, `avg_xgi` - Expected goals/assists metrics
+- `xg_overperformance` - Goals vs xG (identifies clinical finishers)
+- `xa_overperformance` - Assists vs xA (identifies creative overperformers)
+
+**Defensive Contribution (DC) Features** (2025/26 rules):
+- `avg_tackles`, `avg_cbi`, `avg_recoveries` - Raw defensive stats
+- `dc_score` - Combined defensive actions total
+- `dc_potential` - Expected DC bonus points per FPL rules:
+  - DEF: 2 pts for CBI+Tackles ≥10, +1 pt per additional 2 actions
+  - MID: 2 pts for CBI+Tackles+Recoveries ≥12, +1 pt per additional 3 actions
 
 The transformer model learns 32-dimensional player embeddings that capture:
 - Form momentum and patterns
@@ -424,6 +451,21 @@ See `bd list --status open` for current tasks.
 ---
 
 ## Recent Changes (January 2026)
+
+- **ML Model Feature Enhancement** (January 2026):
+  - Added xG/xA features to prediction models (from FPL API data, not Understat)
+  - Added Defensive Contribution (DC) features for 2025/26 rules exploitation
+  - New features in `ml/prediction/features.py`:
+    - `avg_xg`, `avg_xa`, `avg_xgi` - Expected goals/assists metrics
+    - `xg_overperformance`, `xa_overperformance` - Identifies clinical finishers
+    - `avg_tackles`, `avg_cbi`, `avg_recoveries`, `dc_score`, `dc_potential`
+  - Added `--force` flag to `train_prediction_models.py` for retraining after feature changes
+  - **Model Performance Improvements** (GW1-19 training data):
+    - Goalkeepers: R² improved from -0.05 → 0.464 (+51%)
+    - Defenders: R² improved from 0.01 → 0.302 (+29%)
+    - Midfielders: R² improved from 0.09 → 0.326 (+24%)
+    - Forwards: R² improved from 0.06 → 0.304 (+24%)
+  - Top features by importance: `season_ppg`, `current_ict_index`, `form_trend`, `avg_xgi`
 
 - **Slack Announcement Workflow Fix** (January 2026):
   - Added `--no-notify` flag to `pre_deadline_selection.py` to skip Slack notification
