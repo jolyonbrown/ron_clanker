@@ -216,6 +216,19 @@ def build_aggregate_features(all_history: List[Dict], recent: List[Dict], curren
         'form_trend': form_trend,
         'form_games_played': len(recent),  # Added to match
 
+        # xG features - matches FeatureEngineer
+        'avg_xg': safe_mean([float(g.get('expected_goals', 0) or 0) for g in recent]),
+        'avg_xa': safe_mean([float(g.get('expected_assists', 0) or 0) for g in recent]),
+        'avg_xgi': safe_mean([float(g.get('expected_goal_involvements', 0) or 0) for g in recent]),
+        'xg_overperformance': (
+            safe_mean([g['goals_scored'] for g in recent]) -
+            safe_mean([float(g.get('expected_goals', 0) or 0) for g in recent])
+        ),
+        'xa_overperformance': (
+            safe_mean([g['assists'] for g in recent]) -
+            safe_mean([float(g.get('expected_assists', 0) or 0) for g in recent])
+        ),
+
         # Season stats - matches FeatureEngineer
         'season_games': len(all_history),
         'season_ppg': safe_mean([g['total_points'] for g in all_history]),
@@ -231,6 +244,25 @@ def build_aggregate_features(all_history: List[Dict], recent: List[Dict], curren
         'opponent_defensive_strength': 1.0,
         'opponent_attacking_strength': 1.0,
 
+        # Defensive Contribution (DC) features - matches FeatureEngineer
+        'avg_tackles': safe_mean([g.get('tackles', 0) or 0 for g in recent]),
+        'avg_cbi': safe_mean([
+            (g.get('clearances', 0) or 0) +
+            (g.get('blocks', 0) or 0) +
+            (g.get('interceptions', 0) or 0)
+            for g in recent
+        ]),
+        'avg_recoveries': safe_mean([g.get('recoveries', 0) or 0 for g in recent]),
+        'dc_score': (
+            safe_mean([g.get('tackles', 0) or 0 for g in recent]) +
+            safe_mean([
+                (g.get('clearances', 0) or 0) +
+                (g.get('blocks', 0) or 0) +
+                (g.get('interceptions', 0) or 0)
+                for g in recent
+            ])
+        ),
+
         # Derived features - matches FeatureEngineer
         'minutes_reliability': min(1.0, safe_mean([g['minutes'] for g in recent]) / 90.0),
         'attacking_threat': (
@@ -238,6 +270,16 @@ def build_aggregate_features(all_history: List[Dict], recent: List[Dict], curren
             safe_mean([g['assists'] for g in recent]) * 3
         ),
         'defensive_reliability': safe_mean([g['clean_sheets'] for g in recent]),
+        'dc_potential': (
+            safe_mean([g.get('tackles', 0) or 0 for g in recent]) +
+            safe_mean([
+                (g.get('clearances', 0) or 0) +
+                (g.get('blocks', 0) or 0) +
+                (g.get('interceptions', 0) or 0)
+                for g in recent
+            ]) +
+            safe_mean([g.get('recoveries', 0) or 0 for g in recent])
+        ),
     }
 
     return features
