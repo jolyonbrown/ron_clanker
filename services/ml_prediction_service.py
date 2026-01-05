@@ -155,12 +155,15 @@ class MLPredictionService:
         self._news_adjuster = None  # Lazy load
         self._price_predictor = None  # Lazy load
         self._learning_adjustments = None  # Lazy load
+        self._transformer_predictor = None  # Lazy load
 
         # State tracking
         self.models_loaded = False
         self.model_version = None
         self.available_positions = []
         self.apply_learning_adjustments = True  # Enable feedback-based corrections
+        self.transformer_loaded = False
+        self.transformer_weight = 0.3  # Blend weight for transformer predictions
 
         if auto_load:
             self.load_models()
@@ -197,6 +200,10 @@ class MLPredictionService:
                     ]
                     self.models_loaded = len(self.available_positions) > 0
                     logger.info(f"Models loaded from registry: version={self.model_version}")
+
+                    # Also load transformer for ensemble blending
+                    self.load_transformer()
+
                     return self.models_loaded
 
             # Fall back to direct loading
@@ -208,6 +215,10 @@ class MLPredictionService:
             ]
             self.models_loaded = len(self.available_positions) > 0
             logger.info(f"Models loaded: version={self.model_version}, positions={self.available_positions}")
+
+            # Also load transformer for ensemble blending
+            self.load_transformer()
+
             return self.models_loaded
         except Exception as e:
             logger.error(f"Failed to load models: {e}")
@@ -240,6 +251,113 @@ class MLPredictionService:
 
         except Exception as e:
             logger.debug(f"Registry loading failed, falling back: {e}")
+            return None
+
+    def load_transformer(self) -> bool:
+        """
+        Load transformer model for ensemble blending.
+
+        The transformer provides an independent prediction based on player embeddings
+        and sequence modeling, which is blended with the sklearn ensemble predictions.
+
+        Returns:
+            True if transformer loaded successfully, False otherwise.
+        """
+        try:
+            from ml.prediction.transformer_model import TransformerPredictor
+            from pathlib import Path
+
+            transformer_dir = Path('models/transformer')
+            model_path = transformer_dir / 'transformer_model.pt'
+
+            if not model_path.exists():
+                logger.info("Transformer model not found, skipping (ensemble-only mode)")
+                return False
+
+            self._transformer_predictor = TransformerPredictor(model_dir=str(transformer_dir))
+            self._transformer_predictor.load()
+            self.transformer_loaded = True
+            logger.info(f"Transformer model loaded ({len(self._transformer_predictor.player_id_map)} player embeddings)")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to load transformer model: {e}")
+            self.transformer_loaded = False
+            return False
+
+    def _get_transformer_prediction(self, player_id: int, gameweek: int) -> Optional[float]:
+        """
+        Get transformer prediction for a player.
+
+        Args:
+            player_id: FPL player ID
+            gameweek: Target gameweek
+
+        Returns:
+            Predicted points or None if unavailable
+        """
+        if not self.transformer_loaded or self._transformer_predictor is None:
+            return None
+
+        try:
+            # Get player_code from database (transformer uses codes, not ids)
+            player = self._db.execute_query(
+                "SELECT code FROM players WHERE id = ?",
+                (player_id,)
+            )
+            if not player:
+                return None
+
+            player_code = player[0]['code']
+
+            # Get recent form data for this player
+            form_data = self._db.execute_query("""
+                SELECT minutes, total_points, goals_scored, assists,
+                       clean_sheets, goals_conceded, bonus, bps,
+                       influence, creativity, threat, ict_index,
+                       expected_goals, expected_assists, expected_goal_involvements,
+                       expected_goals_conceded, yellow_cards, red_cards,
+                       own_goals, penalties_missed, saves
+                FROM player_gameweek_history
+                WHERE player_id = ? AND gameweek < ?
+                ORDER BY gameweek DESC
+                LIMIT 6
+            """, (player_id, gameweek))
+
+            if len(form_data) < 3:  # Need minimum history
+                return None
+
+            # Convert to sequence format (oldest first)
+            recent_gws = []
+            for row in reversed(form_data):
+                recent_gws.append({
+                    'minutes': row['minutes'] or 0,
+                    'goals_scored': row['goals_scored'] or 0,
+                    'assists': row['assists'] or 0,
+                    'clean_sheets': row['clean_sheets'] or 0,
+                    'goals_conceded': row['goals_conceded'] or 0,
+                    'saves': row['saves'] or 0,
+                    'bonus': row['bonus'] or 0,
+                    'bps': row['bps'] or 0,
+                    'influence': float(row['influence'] or 0),
+                    'creativity': float(row['creativity'] or 0),
+                    'threat': float(row['threat'] or 0),
+                    'ict_index': float(row['ict_index'] or 0),
+                    'expected_goals': float(row['expected_goals'] or 0),
+                    'expected_assists': float(row['expected_assists'] or 0),
+                    'expected_goal_involvements': float(row['expected_goal_involvements'] or 0),
+                    'expected_goals_conceded': float(row['expected_goals_conceded'] or 0),
+                    'yellow_cards': row['yellow_cards'] or 0,
+                    'red_cards': row['red_cards'] or 0,
+                    'own_goals': row['own_goals'] or 0,
+                    'penalties_missed': row['penalties_missed'] or 0,
+                })
+
+            prediction = self._transformer_predictor.predict(player_code, recent_gws)
+            return max(0.0, float(prediction))
+
+        except Exception as e:
+            logger.debug(f"Transformer prediction failed for player {player_id}: {e}")
             return None
 
     def predict_player_points(
@@ -540,19 +658,34 @@ class MLPredictionService:
     # =========================================================================
 
     def _predict_single_player(self, player_id: int, gameweek: int) -> float:
-        """Generate prediction for a single player."""
-        # Get player features
+        """Generate prediction for a single player using ensemble + transformer blend."""
+        # Get player features for sklearn ensemble
         features = self._feature_engineer.engineer_features(player_id, gameweek)
 
         if not features:
             logger.debug(f"No features for player {player_id}, using fallback")
-            raw_prediction = self._fallback_prediction(player_id)
+            ensemble_prediction = self._fallback_prediction(player_id)
         elif self.models_loaded:
-            # Use ML model
-            raw_prediction = float(max(0.0, self._performance_predictor.predict(features)))
+            # Use sklearn ensemble (RF + GB + XGB + Ridge meta-learner)
+            ensemble_prediction = float(max(0.0, self._performance_predictor.predict(features)))
         else:
             # Fallback to form-based prediction
-            raw_prediction = self._fallback_prediction(player_id)
+            ensemble_prediction = self._fallback_prediction(player_id)
+
+        # Blend with transformer prediction if available
+        raw_prediction = ensemble_prediction
+        if self.transformer_loaded:
+            transformer_pred = self._get_transformer_prediction(player_id, gameweek)
+            if transformer_pred is not None:
+                # Weighted blend: (1-w)*ensemble + w*transformer
+                raw_prediction = (
+                    (1 - self.transformer_weight) * ensemble_prediction +
+                    self.transformer_weight * transformer_pred
+                )
+                logger.debug(
+                    f"Player {player_id}: ensemble={ensemble_prediction:.2f}, "
+                    f"transformer={transformer_pred:.2f}, blended={raw_prediction:.2f}"
+                )
 
         # Apply learning adjustments (bias corrections from previous gameweeks)
         adjusted_prediction = self._apply_learning_adjustments_to_prediction(player_id, raw_prediction)
