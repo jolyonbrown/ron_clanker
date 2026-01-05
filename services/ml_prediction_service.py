@@ -156,6 +156,7 @@ class MLPredictionService:
         self._price_predictor = None  # Lazy load
         self._learning_adjustments = None  # Lazy load
         self._transformer_predictor = None  # Lazy load
+        self._betting_odds_service = None  # Lazy load
 
         # State tracking
         self.models_loaded = False
@@ -164,6 +165,8 @@ class MLPredictionService:
         self.apply_learning_adjustments = True  # Enable feedback-based corrections
         self.transformer_loaded = False
         self.transformer_weight = 0.3  # Blend weight for transformer predictions
+        self.odds_loaded = False
+        self.apply_odds_adjustment = True  # Enable betting odds adjustments
 
         if auto_load:
             self.load_models()
@@ -204,6 +207,9 @@ class MLPredictionService:
                     # Also load transformer for ensemble blending
                     self.load_transformer()
 
+                    # Load betting odds for fixture-based adjustments
+                    self.load_betting_odds()
+
                     return self.models_loaded
 
             # Fall back to direct loading
@@ -218,6 +224,9 @@ class MLPredictionService:
 
             # Also load transformer for ensemble blending
             self.load_transformer()
+
+            # Load betting odds for fixture-based adjustments
+            self.load_betting_odds()
 
             return self.models_loaded
         except Exception as e:
@@ -360,6 +369,132 @@ class MLPredictionService:
             logger.debug(f"Transformer prediction failed for player {player_id}: {e}")
             return None
 
+    def load_betting_odds(self) -> bool:
+        """
+        Load betting odds service for fixture-based adjustments.
+
+        Betting odds provide market-implied probabilities for match outcomes,
+        which can be used to adjust clean sheet expectations for defenders
+        and goal expectations for attackers.
+
+        Returns:
+            True if odds service loaded successfully, False otherwise.
+        """
+        try:
+            from services.betting_odds_service import BettingOddsService
+
+            self._betting_odds_service = BettingOddsService(self._db)
+            odds_count = len(self._betting_odds_service.get_all_gw_odds())
+
+            if odds_count > 0:
+                self.odds_loaded = True
+                logger.info(f"Betting odds service loaded ({odds_count} fixtures)")
+                return True
+            else:
+                logger.info("Betting odds service loaded but no fixtures available")
+                return False
+
+        except Exception as e:
+            logger.warning(f"Failed to load betting odds service: {e}")
+            self.odds_loaded = False
+            return False
+
+    def get_odds_adjusted_predictions(
+        self,
+        predictions: Dict[int, float],
+        gameweek: int
+    ) -> Dict[int, float]:
+        """
+        Apply betting odds-based adjustments to predictions.
+
+        For defenders/goalkeepers: Adjust based on clean sheet probability
+        For attackers/midfielders: Adjust based on team win probability
+
+        Args:
+            predictions: Dict mapping player_id -> base expected points
+            gameweek: Target gameweek
+
+        Returns:
+            Adjusted predictions dict
+        """
+        if not self.apply_odds_adjustment or not self.odds_loaded:
+            return predictions
+
+        adjusted = predictions.copy()
+
+        # Get player fixture data
+        for player_id, base_xp in predictions.items():
+            try:
+                player = self._db.execute_query("""
+                    SELECT p.id, p.web_name, p.element_type, p.team_id,
+                           t.name as team_name, t.short_name
+                    FROM players p
+                    JOIN teams t ON p.team_id = t.id
+                    WHERE p.id = ?
+                """, (player_id,))
+
+                if not player:
+                    continue
+
+                player_data = player[0]
+                team_name = player_data['team_name']
+                position = player_data['element_type']
+
+                # Get fixture for this gameweek
+                fixture = self._db.execute_query("""
+                    SELECT f.id, f.team_h, f.team_a,
+                           th.name as home_team, ta.name as away_team
+                    FROM fixtures f
+                    JOIN teams th ON f.team_h = th.id
+                    JOIN teams ta ON f.team_a = ta.id
+                    WHERE f.event = ? AND (f.team_h = ? OR f.team_a = ?)
+                """, (gameweek, player_data['team_id'], player_data['team_id']))
+
+                if not fixture:
+                    continue
+
+                fix = fixture[0]
+                is_home = fix['team_h'] == player_data['team_id']
+                opponent = fix['away_team'] if is_home else fix['home_team']
+
+                # Get odds data
+                if is_home:
+                    odds = self._betting_odds_service.get_match_odds(team_name, opponent)
+                else:
+                    odds = self._betting_odds_service.get_match_odds(opponent, team_name)
+
+                if not odds:
+                    continue
+
+                # Calculate adjustment based on position
+                if position in [1, 2]:  # GK, DEF - clean sheet matters
+                    cs_prob = self._betting_odds_service.get_clean_sheet_probability(
+                        team_name, opponent, is_home
+                    )
+                    # Baseline CS assumption: 30%, adjust based on actual
+                    cs_adjustment = (cs_prob - 0.30) * 3.0  # ~1 point swing for 10% diff
+                    adjusted[player_id] = base_xp + cs_adjustment
+                    logger.debug(
+                        f"Odds adjust {player_data['web_name']}: CS={cs_prob:.1%}, "
+                        f"adj={cs_adjustment:+.2f}, xp={base_xp:.2f}->{adjusted[player_id]:.2f}"
+                    )
+
+                elif position in [3, 4]:  # MID, FWD - goal probability matters
+                    win_prob = odds['home_prob'] if is_home else odds['away_prob']
+                    # Higher win prob = more goals expected
+                    goal_adjustment = (win_prob - 0.33) * 1.5  # ~0.5 points for strong favorite
+                    adjusted[player_id] = base_xp + goal_adjustment
+                    logger.debug(
+                        f"Odds adjust {player_data['web_name']}: win={win_prob:.1%}, "
+                        f"adj={goal_adjustment:+.2f}, xp={base_xp:.2f}->{adjusted[player_id]:.2f}"
+                    )
+
+            except Exception as e:
+                logger.debug(f"Odds adjustment failed for player {player_id}: {e}")
+                continue
+
+        return adjusted
+
     def predict_player_points(
         self,
         player_ids: List[int],
@@ -404,6 +539,10 @@ class MLPredictionService:
         # Apply news adjustments if requested
         if apply_news_adjustments and predictions:
             predictions = self._apply_news_adjustments(predictions, gameweek)
+
+        # Apply betting odds adjustments if available
+        if self.apply_odds_adjustment and self.odds_loaded and predictions:
+            predictions = self.get_odds_adjusted_predictions(predictions, gameweek)
 
         return predictions
 
