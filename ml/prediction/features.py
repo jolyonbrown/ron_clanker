@@ -22,12 +22,31 @@ logger = logging.getLogger('ron_clanker.ml.features')
 class FeatureEngineer:
     """
     Engineers features for player performance prediction.
+
+    Optionally integrates Elo rating system for dynamic fixture difficulty.
     """
 
-    def __init__(self, database):
-        """Initialize with database connection."""
+    def __init__(self, database, use_elo: bool = True):
+        """
+        Initialize with database connection.
+
+        Args:
+            database: Database instance
+            use_elo: Whether to use Elo-based fixture difficulty (default: True)
+        """
         self.db = database
-        logger.info("FeatureEngineer: Initialized")
+        self.elo_system = None
+
+        if use_elo:
+            try:
+                from ml.elo_ratings import EloRatingSystem
+                self.elo_system = EloRatingSystem(db_path=str(self.db.db_path))
+                logger.info("FeatureEngineer: Initialized with Elo rating system")
+            except Exception as e:
+                logger.warning(f"FeatureEngineer: Could not load Elo system: {e}")
+                logger.info("FeatureEngineer: Initialized without Elo (using FPL ratings)")
+        else:
+            logger.info("FeatureEngineer: Initialized without Elo")
 
     def get_player_recent_form(self, player_id: int, gameweek: int, window: int = 5) -> Dict:
         """
@@ -213,17 +232,34 @@ class FeatureEngineer:
             'xa_overperformance': avg_assists - avg_xa
         }
 
-    def get_fixture_difficulty(self, team_id: int, gameweek: int) -> Dict:
+    def get_fixture_difficulty(
+        self,
+        team_id: int,
+        gameweek: int,
+        position: Optional[int] = None
+    ) -> Dict:
         """
         Get fixture difficulty for team's next match.
 
+        Uses Elo rating system when available for more accurate difficulty.
+        Position-specific difficulty accounts for:
+        - Attackers (MID/FWD): opponent's defensive strength
+        - Defenders/GK: opponent's attacking strength
+
+        Args:
+            team_id: Player's team ID
+            gameweek: Target gameweek
+            position: Player position (1=GK, 2=DEF, 3=MID, 4=FWD) for position-specific difficulty
+
         Returns:
             Dict with:
-                - difficulty: FPL difficulty rating (1-5)
+                - difficulty: Fixture difficulty (1-5, uses Elo if available)
                 - is_home: Boolean
                 - opponent_strength: Opposition team strength
                 - opponent_defensive_strength: How good opposition is defensively
                 - opponent_attacking_strength: How good opposition is going forward
+                - elo_attacking_difficulty: Difficulty for attackers (vs opp defense)
+                - elo_defensive_difficulty: Difficulty for defenders (vs opp attack)
         """
         fixture = self.db.execute_query("""
             SELECT
@@ -249,29 +285,64 @@ class FeatureEngineer:
                 'is_home': True,
                 'opponent_strength': 3,
                 'opponent_defensive_strength': 3,
-                'opponent_attacking_strength': 3
+                'opponent_attacking_strength': 3,
+                'elo_attacking_difficulty': 3,
+                'elo_defensive_difficulty': 3
             }
 
         fix = fixture[0]
         is_home = fix['team_h'] == team_id
+        opponent_id = fix['team_a'] if is_home else fix['team_h']
 
         if is_home:
-            difficulty = fix['team_h_difficulty'] or 3
+            fpl_difficulty = fix['team_h_difficulty'] or 3
             opp_strength = fix['a_strength'] or 1000
             opp_def_strength = fix['a_def'] or 1000
             opp_att_strength = fix['a_att'] or 1000
         else:
-            difficulty = fix['team_a_difficulty'] or 3
+            fpl_difficulty = fix['team_a_difficulty'] or 3
             opp_strength = fix['h_strength'] or 1000
             opp_def_strength = fix['h_def'] or 1000
             opp_att_strength = fix['h_att'] or 1000
 
+        # Use Elo system if available
+        elo_attacking_diff = fpl_difficulty
+        elo_defensive_diff = fpl_difficulty
+
+        if self.elo_system:
+            try:
+                # Get Elo-based difficulty
+                # For attackers: difficulty is based on opponent's defensive strength
+                elo_attacking_diff = self.elo_system.get_fixture_difficulty(
+                    team_id, opponent_id, is_home, for_attackers=True
+                )
+                # For defenders: difficulty is based on opponent's attacking strength
+                elo_defensive_diff = self.elo_system.get_fixture_difficulty(
+                    team_id, opponent_id, is_home, for_attackers=False
+                )
+            except Exception as e:
+                logger.debug(f"Elo lookup failed for team {team_id}: {e}")
+
+        # Select appropriate difficulty based on position
+        if position is not None:
+            if position in [3, 4]:  # MID, FWD - care about scoring
+                difficulty = elo_attacking_diff
+            elif position in [1, 2]:  # GK, DEF - care about clean sheets
+                difficulty = elo_defensive_diff
+            else:
+                difficulty = (elo_attacking_diff + elo_defensive_diff) / 2
+        else:
+            # If no position specified, use Elo attacking (default to offense)
+            difficulty = elo_attacking_diff if self.elo_system else fpl_difficulty
+
         return {
             'difficulty': difficulty,
             'is_home': is_home,
-            'opponent_strength': opp_strength / 1000.0,  # Normalize to 0-5 range
+            'opponent_strength': opp_strength / 1000.0,
             'opponent_defensive_strength': opp_def_strength / 1000.0,
-            'opponent_attacking_strength': opp_att_strength / 1000.0
+            'opponent_attacking_strength': opp_att_strength / 1000.0,
+            'elo_attacking_difficulty': elo_attacking_diff,
+            'elo_defensive_difficulty': elo_defensive_diff
         }
 
     def get_player_season_stats(self, player_id: int) -> Dict:
@@ -354,8 +425,8 @@ class FeatureEngineer:
             if xg_features.get('avg_xg', 0) > 0 or xg_features.get('avg_xa', 0) > 0:
                 recent_form.update(xg_features)
 
-        # Get fixture difficulty
-        fixture = self.get_fixture_difficulty(p['team_id'], gameweek)
+        # Get fixture difficulty (position-specific with Elo)
+        fixture = self.get_fixture_difficulty(p['team_id'], gameweek, position=p['element_type'])
 
         # Get season stats
         season = self.get_player_season_stats(player_id)
@@ -410,12 +481,14 @@ class FeatureEngineer:
             'season_apg': season['assists_per_game'],
             'season_cs_pg': season['cs_per_game'],
 
-            # Fixture
+            # Fixture (with Elo-based difficulty when available)
             'fixture_difficulty': fixture['difficulty'],
             'is_home': 1 if fixture['is_home'] else 0,
             'opponent_strength': fixture['opponent_strength'],
             'opponent_defensive_strength': fixture['opponent_defensive_strength'],
             'opponent_attacking_strength': fixture['opponent_attacking_strength'],
+            'elo_attacking_difficulty': fixture.get('elo_attacking_difficulty', fixture['difficulty']),
+            'elo_defensive_difficulty': fixture.get('elo_defensive_difficulty', fixture['difficulty']),
 
             # Defensive Contribution features (2025/26 scoring)
             'avg_tackles': recent_form.get('avg_tackles', 0.0),

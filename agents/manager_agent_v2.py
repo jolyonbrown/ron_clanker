@@ -28,6 +28,9 @@ from agents.synthesis.engine import DecisionSynthesisEngine
 from agents.transfer_optimizer import TransferOptimizer
 from services.chip_strategy import ChipStrategyService
 from services.squad_optimizer import SquadOptimizer
+from ml.captain_optimizer import CaptainOptimizer
+from ml.prediction.minutes_predictor import MinutesPredictor
+from planning.transfer_sequencer import TransferSequencer
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -78,6 +81,7 @@ class RonManager(BaseAgent):
 
         # ML-powered Decision Making
         self.use_ml = use_ml
+        self.captain_optimizer = None  # Initialize to None
         if use_ml:
             try:
                 self.synthesis_engine = DecisionSynthesisEngine(database=self.db)
@@ -97,6 +101,38 @@ class RonManager(BaseAgent):
             self.synthesis_engine = None
             self.chip_strategy = None
             self.transfer_optimizer = None
+
+        # Captain Optimizer (ML-based captain selection)
+        try:
+            self.captain_optimizer = CaptainOptimizer(db_path=str(self.db.db_path))
+            self.captain_optimizer.load()
+            logger.info("Ron: CaptainOptimizer ML model loaded")
+        except FileNotFoundError:
+            logger.warning("Ron: CaptainOptimizer model not found, using simple xP selection")
+            self.captain_optimizer = None
+        except Exception as e:
+            logger.warning(f"Ron: Could not load CaptainOptimizer: {e}")
+            self.captain_optimizer = None
+
+        # Minutes Predictor (for bench optimization)
+        try:
+            self.minutes_predictor = MinutesPredictor(db_path=str(self.db.db_path))
+            self.minutes_predictor.load()
+            logger.info("Ron: MinutesPredictor ML model loaded")
+        except FileNotFoundError:
+            logger.warning("Ron: MinutesPredictor model not found, using simple xP for bench")
+            self.minutes_predictor = None
+        except Exception as e:
+            logger.warning(f"Ron: Could not load MinutesPredictor: {e}")
+            self.minutes_predictor = None
+
+        # Transfer Sequencer (for multi-GW transfer planning)
+        try:
+            self.transfer_sequencer = TransferSequencer(database=self.db)
+            logger.info("Ron: TransferSequencer initialized for multi-GW planning")
+        except Exception as e:
+            logger.warning(f"Ron: Could not initialize TransferSequencer: {e}")
+            self.transfer_sequencer = None
 
         # Cache latest analyses
         self._value_rankings: Optional[Dict] = None
@@ -223,11 +259,11 @@ class RonManager(BaseAgent):
             budget
         )
 
-        # Assign positions (starting XI + bench)
-        squad = self._assign_squad_positions(squad)
+        # Assign positions (starting XI + bench with optimized bench order)
+        squad = self._assign_squad_positions(squad, gameweek=gameweek)
 
         # Select captain (must happen before validation)
-        squad = self._select_captain(squad)
+        squad = self._select_captain(squad, gameweek=gameweek)
 
         # Validate squad (must happen AFTER position and captain assignment)
         is_valid, message = self.rules_engine.validate_team(squad)
@@ -518,15 +554,21 @@ class RonManager(BaseAgent):
 
         return intelligence
 
-    def _assign_squad_positions(self, squad: List[Dict]) -> List[Dict]:
+    def _assign_squad_positions(
+        self,
+        squad: List[Dict],
+        gameweek: Optional[int] = None
+    ) -> List[Dict]:
         """
         Assign positions 1-15 (1-11 starting, 12-15 bench).
 
         Uses formation optimizer to test all valid formations and select
-        the one that maximizes total expected points.
+        the one that maximizes total expected points. Bench order is optimized
+        using minutes prediction for auto-sub value.
 
         Args:
             squad: 15 players
+            gameweek: Target gameweek (for minutes prediction)
 
         Returns:
             Squad with positions assigned
@@ -675,21 +717,24 @@ class RonManager(BaseAgent):
             by_position['FWD'][i]['position'] = position_number
             position_number += 1
 
-        # Bench (positions 12-15)
+        # Bench (positions 12-15) - collect and optimize
+        # Collect all bench players
+        bench_players = []
         for i in range(gk_count, len(by_position['GKP'])):
-            by_position['GKP'][i]['position'] = position_number
-            position_number += 1
-
+            bench_players.append(by_position['GKP'][i])
         for i in range(def_count, len(by_position['DEF'])):
-            by_position['DEF'][i]['position'] = position_number
-            position_number += 1
-
+            bench_players.append(by_position['DEF'][i])
         for i in range(mid_count, len(by_position['MID'])):
-            by_position['MID'][i]['position'] = position_number
-            position_number += 1
-
+            bench_players.append(by_position['MID'][i])
         for i in range(fwd_count, len(by_position['FWD'])):
-            by_position['FWD'][i]['position'] = position_number
+            bench_players.append(by_position['FWD'][i])
+
+        # Optimize bench order using minutes prediction
+        bench_players = self._optimize_bench_order(bench_players, gameweek)
+
+        # Assign bench positions (12-15)
+        for i, player in enumerate(bench_players):
+            player['position'] = position_number
             position_number += 1
 
         # Restore original xP values for unavailable players (for display/logging)
@@ -700,19 +745,94 @@ class RonManager(BaseAgent):
 
         return squad
 
+    def _optimize_bench_order(
+        self,
+        bench_players: List[Dict],
+        gameweek: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Optimize bench order using minutes prediction.
+
+        Auto-sub value = xP × probability of playing
+        Higher value = earlier in bench order (more likely to be subbed on).
+
+        FPL Rules:
+        - Backup GK must be on bench, but position doesn't matter for GKs
+        - Outfield subs can replace any outfield player (formation permitting)
+
+        Args:
+            bench_players: List of bench players
+            gameweek: Target gameweek for predictions
+
+        Returns:
+            Optimized bench order (GK last, outfield sorted by sub value)
+        """
+        if not bench_players:
+            return bench_players
+
+        # Separate GK from outfield players
+        bench_gk = [p for p in bench_players if p.get('element_type') == 1]
+        bench_outfield = [p for p in bench_players if p.get('element_type') != 1]
+
+        if gameweek and self.minutes_predictor:
+            # Calculate sub value for each outfield player
+            for player in bench_outfield:
+                player_id = player.get('player_id', player.get('id'))
+                if player_id:
+                    try:
+                        mins_pred = self.minutes_predictor.predict_minutes(player_id, gameweek)
+                        expected_mins = mins_pred['expected_minutes']
+                        start_prob = mins_pred['start_probability']
+
+                        # Sub value = xP weighted by playing probability
+                        xp = player.get('xP', 0)
+                        player['_sub_value'] = xp * start_prob
+                        player['_expected_mins'] = expected_mins
+                        player['_start_prob'] = start_prob
+                    except Exception as e:
+                        logger.debug(f"Ron: Minutes prediction failed for {player.get('web_name')}: {e}")
+                        player['_sub_value'] = player.get('xP', 0)
+                else:
+                    player['_sub_value'] = player.get('xP', 0)
+
+            # Sort outfield by sub value (highest first = position 12)
+            bench_outfield.sort(key=lambda x: x.get('_sub_value', 0), reverse=True)
+
+            # Log bench optimization
+            if bench_outfield:
+                logger.info("Ron: Bench order optimized by sub value:")
+                for i, p in enumerate(bench_outfield, 1):
+                    xp = p.get('xP', 0)
+                    sub_val = p.get('_sub_value', xp)
+                    start_prob = p.get('_start_prob', 1.0)
+                    logger.info(f"  Sub {i}: {p['web_name']} (xP: {xp:.2f}, sub_value: {sub_val:.2f}, start%: {start_prob:.0%})")
+        else:
+            # Fallback: sort by xP
+            bench_outfield.sort(key=lambda x: x.get('xP', 0), reverse=True)
+
+        # Clean up temp fields
+        for player in bench_outfield:
+            for key in ['_sub_value', '_expected_mins', '_start_prob']:
+                player.pop(key, None)
+
+        # Return: outfield players first (positions 12-14), then GK (position 15)
+        return bench_outfield + bench_gk
+
     def _select_captain(
         self,
         squad: List[Dict],
         gameweek: Optional[int] = None
     ) -> List[Dict]:
         """
-        Select captain and vice-captain.
+        Select captain and vice-captain using ML model when available.
 
-        Simple and effective: Pick the 2 players in starting XI with highest xP.
+        Uses CaptainOptimizer (14-feature ML model) for intelligent selection
+        considering form variance, ceiling potential, fixture difficulty, and ownership.
+        Falls back to simple xP ranking if ML model unavailable.
 
         Args:
             squad: Squad with positions assigned
-            gameweek: Gameweek number (for logging)
+            gameweek: Gameweek number (required for ML selection)
 
         Returns:
             Squad with captaincy assigned
@@ -735,13 +855,77 @@ class RonManager(BaseAgent):
             player['is_vice_captain'] = False
             player['multiplier'] = 1
 
-        # Sort starting XI by xP (highest first), but deprioritize doubtful players
+        # Try ML-based captain selection first
+        if self.captain_optimizer is not None and gameweek is not None:
+            try:
+                # Get player IDs from starting XI
+                player_ids = [
+                    p.get('player_id', p.get('id'))
+                    for p in starting_xi
+                    if p.get('player_id', p.get('id')) is not None
+                ]
+
+                if player_ids:
+                    # Get ML recommendation (ownership_penalty=0.1 for slight differential bias)
+                    recommendation = self.captain_optimizer.recommend_captain(
+                        player_ids=player_ids,
+                        gameweek=gameweek,
+                        ownership_penalty=0.1
+                    )
+
+                    captain_id = recommendation.get('captain_id')
+                    vice_id = recommendation.get('vice_captain_id')
+                    confidence = recommendation.get('confidence', 0)
+                    margin = recommendation.get('margin', 0)
+
+                    if captain_id and confidence > 0:
+                        # Find and assign captain
+                        for player in starting_xi:
+                            pid = player.get('player_id', player.get('id'))
+                            if pid == captain_id:
+                                player['is_captain'] = True
+                                player['multiplier'] = 2
+                                logger.info(
+                                    f"Ron: Captain (ML): {player['web_name']} "
+                                    f"(score: {confidence:.2f}, margin: {margin:.2f})"
+                                )
+                            elif pid == vice_id:
+                                player['is_vice_captain'] = True
+                                logger.info(
+                                    f"Ron: Vice Captain (ML): {player['web_name']}"
+                                )
+
+                        # Verify captain was assigned
+                        if any(p.get('is_captain') for p in squad):
+                            # If no vice captain yet, assign second best by ML score
+                            if not any(p.get('is_vice_captain') for p in squad):
+                                all_scores = recommendation.get('all_scores', {})
+                                sorted_scores = sorted(
+                                    all_scores.items(),
+                                    key=lambda x: x[1],
+                                    reverse=True
+                                )
+                                if len(sorted_scores) >= 2:
+                                    vice_id = sorted_scores[1][0]
+                                    for player in starting_xi:
+                                        pid = player.get('player_id', player.get('id'))
+                                        if pid == vice_id and not player.get('is_captain'):
+                                            player['is_vice_captain'] = True
+                                            logger.info(
+                                                f"Ron: Vice Captain (ML fallback): {player['web_name']}"
+                                            )
+                                            break
+                            return squad
+
+            except Exception as e:
+                logger.warning(f"Ron: CaptainOptimizer failed ({e}), using xP fallback")
+
+        # Fallback: Sort starting XI by xP (highest first), deprioritize doubtful players
         def captain_score(player):
             xp = player.get('xP', 0)
             chance = player.get('chance_of_playing_next_round')
-            # Penalize doubtful players for captain selection
             if chance is not None and chance < 75:
-                xp *= (chance / 100)  # Scale down by availability chance
+                xp *= (chance / 100)
                 logger.debug(f"Ron: {player['web_name']} captain score reduced due to {chance}% availability")
             return xp
 
@@ -752,13 +936,13 @@ class RonManager(BaseAgent):
             captain = starting_xi[0]
             captain['is_captain'] = True
             captain['multiplier'] = 2
-            logger.info(f"Ron: Captain: {captain['web_name']} ({captain.get('xP', 0):.2f} xP)")
+            logger.info(f"Ron: Captain (xP): {captain['web_name']} ({captain.get('xP', 0):.2f} xP)")
 
         # Vice = second highest xP
         if len(starting_xi) >= 2:
             vice = starting_xi[1]
             vice['is_vice_captain'] = True
-            logger.info(f"Ron: Vice Captain: {vice['web_name']} ({vice.get('xP', 0):.2f} xP)")
+            logger.info(f"Ron: Vice Captain (xP): {vice['web_name']} ({vice.get('xP', 0):.2f} xP)")
 
         return squad
 
@@ -1170,9 +1354,9 @@ Captain: {captain['web_name']}
             except Exception as e:
                 logger.warning(f"Ron: Could not enrich new players with xP: {e}")
 
-        # 4. Assign positions (formation optimizer)
-        logger.info("Ron: Optimizing formation...")
-        new_team = self._assign_squad_positions(new_team)
+        # 4. Assign positions (formation optimizer with bench optimization)
+        logger.info("Ron: Optimizing formation and bench order...")
+        new_team = self._assign_squad_positions(new_team, gameweek=gameweek)
 
         # 5. Select captain
         logger.info("Ron: Selecting captain...")
@@ -1242,7 +1426,7 @@ Captain: {captain['web_name']}
 
                         # Get multi-GW predictions
                         multi_gw_predictions = {}
-                        horizon = 4
+                        horizon = 6  # Extended planning horizon
 
                         if self.synthesis_engine:
                             for gw in range(gameweek, gameweek + horizon):
@@ -1269,7 +1453,7 @@ Captain: {captain['web_name']}
                                    f"{horizon}GWs, £{optimized.total_cost:.1f}m")
 
                     # Re-assign positions and captain for optimized squad
-                    new_team = self._assign_squad_positions(new_team)
+                    new_team = self._assign_squad_positions(new_team, gameweek=gameweek)
                     new_team = self._select_captain(new_team, gameweek=gameweek)
 
                 except Exception as e:
@@ -1497,7 +1681,7 @@ Captain: {captain['web_name']}
                     current_gw=gameweek,
                     free_transfers=free_transfers,
                     bank=bank,
-                    horizon=4,
+                    horizon=6,  # Extended planning horizon
                     ron_entry_id=self.config.get('team_id'),
                     league_id=self.config.get('league_id'),
                     strategy_context=getattr(self, '_current_strategy', None)
@@ -1607,6 +1791,72 @@ Captain: {captain['web_name']}
     # ========================================================================
     # GETTERS
     # ========================================================================
+
+    def plan_multi_gw_transfers(
+        self,
+        gameweek: int,
+        transfer_targets: List[Dict],
+        planning_horizon: int = 6
+    ) -> Optional[Dict]:
+        """
+        Plan optimal transfer sequence over multiple gameweeks.
+
+        Uses TransferSequencer to determine the best timing for transfers
+        when we have multiple targets or want to plan ahead.
+
+        Args:
+            gameweek: Starting gameweek
+            transfer_targets: List of desired transfers with:
+                - player_out_id: Player to remove
+                - player_in_id: Player to bring in
+                - priority: 1-5 (1=highest)
+                - expected_gain: Expected points gain over period
+                - latest_gw: Latest GW to complete by (optional)
+            planning_horizon: Number of gameweeks to plan
+
+        Returns:
+            Dict with planned transfer sequence or None if unavailable
+        """
+        if not self.transfer_sequencer:
+            logger.warning("Ron: TransferSequencer not available for multi-GW planning")
+            return None
+
+        if not transfer_targets:
+            return {
+                'sequence': [],
+                'reasoning': 'No transfers to plan',
+                'planning_gameweeks': f'GW{gameweek}-{gameweek + planning_horizon - 1}'
+            }
+
+        try:
+            # Get current team status for FT tracking
+            team_status = self.transfer_sequencer.get_current_team_status(gameweek)
+
+            # Plan the sequence
+            sequence_plan = self.transfer_sequencer.plan_transfer_sequence(
+                start_gw=gameweek,
+                targets=transfer_targets,
+                planning_horizon=planning_horizon
+            )
+
+            if sequence_plan:
+                logger.info(
+                    f"Ron: Multi-GW transfer plan: "
+                    f"{len(sequence_plan.get('sequence', []))} transfers, "
+                    f"Net gain: {sequence_plan.get('net_gain', 0):.1f}pts"
+                )
+
+                # Log the sequence
+                for gw_plan in sequence_plan.get('sequence', []):
+                    transfers = gw_plan.get('transfers', [])
+                    hits = gw_plan.get('hits', 0)
+                    logger.info(f"  GW{gw_plan.get('gameweek')}: {len(transfers)} transfer(s), {hits}pts hits")
+
+            return sequence_plan
+
+        except Exception as e:
+            logger.error(f"Ron: Multi-GW planning failed: {e}")
+            return None
 
     def get_current_team(self) -> Optional[List[Dict]]:
         """Get the current team."""

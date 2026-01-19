@@ -93,7 +93,7 @@ class TransferStrategyAgent(BaseAgent):
     # Constants
     MAX_BANKED_TRANSFERS = 5
     HIT_COST = 4
-    PLANNING_HORIZON = 3  # Look 3 GWs ahead for planning
+    PLANNING_HORIZON = 6  # Look 6 GWs ahead for planning (extended from 3)
 
     def __init__(
         self,

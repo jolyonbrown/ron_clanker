@@ -247,7 +247,7 @@ class TransferOptimizer:
         current_gw: int,
         free_transfers: int = 1,
         bank: float = 0.0,
-        horizon: int = 4,  # Look ahead N gameweeks
+        horizon: int = 6,  # Look ahead N gameweeks (extended for better planning)
         ron_entry_id: Optional[int] = None,
         league_id: Optional[int] = None,
         strategy_context: Optional[Dict] = None  # Strategy from synthesis engine
@@ -764,7 +764,7 @@ class TransferOptimizer:
         current_team: List[Dict],
         bank: float,
         min_gain_threshold: float = 1.5,  # Minimum pts/GW to be worth a transfer
-        horizon: int = 4
+        horizon: int = 6
     ) -> List[TransferOption]:
         """
         Greedy multi-transfer optimization when FT > 1.
