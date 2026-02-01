@@ -243,6 +243,10 @@ def build_aggregate_features(all_history: List[Dict], recent: List[Dict], curren
         'opponent_strength': 1.0,  # Normalized default
         'opponent_defensive_strength': 1.0,
         'opponent_attacking_strength': 1.0,
+        # Elo-based difficulty features (added to match FeatureEngineer)
+        # For historical data without Elo, use default fixture difficulty
+        'elo_attacking_difficulty': 3,
+        'elo_defensive_difficulty': 3,
 
         # Defensive Contribution (DC) features - matches FeatureEngineer
         'avg_tackles': safe_mean([g.get('tackles', 0) or 0 for g in recent]),

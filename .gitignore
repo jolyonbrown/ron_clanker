@@ -222,10 +222,14 @@ data/backups/*
 # Generated crontab files (user-specific)
 config/crontab
 
-# Trained ML models (regenerate with train_prediction_models.py)
+# Trained ML models (regenerate with training scripts)
 models/**/*.pkl
 ml/**/*.pkl
 *.pkl
+
+# PyTorch model files (regenerate with training scripts)
+models/**/*.pt
+*.pt
 
 # Archived old files
 archive/
