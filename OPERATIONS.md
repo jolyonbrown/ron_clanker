@@ -35,13 +35,18 @@ python scripts/collect_fpl_data.py
 # Use Claude Code subagent pattern - see "Intelligence Gathering" section below
 
 # 3. Run pre-deadline selection (generates team, transfers, captain)
-python scripts/pre_deadline_selection.py
+python scripts/pre_deadline_selection.py --no-notify
 
 # Or specify gameweek and override free transfers (e.g., AFCON GW16 = 5 FTs)
-python scripts/pre_deadline_selection.py --gameweek 16 --free-transfers 5
+python scripts/pre_deadline_selection.py --gameweek 16 --free-transfers 5 --no-notify
 
-# 4. View the selection
-python scripts/show_latest_team.py
+# 4. Submit team via Chrome Plugin
+# Open Chrome with Claude plugin → Navigate to FPL → Login → Apply transfers,
+# captain, bench order → Confirm submission
+# See "Team Submission via Chrome Plugin" section below
+
+# 5. Send Slack announcement (after submission confirmed)
+python scripts/send_team_announcement.py
 ```
 
 **Special Events (AFCON etc.):**
@@ -447,6 +452,29 @@ python scripts/train_neural_models.py --check-gpu
 ## Known Issues / TODOs
 
 See `bd list --status open` for current tasks.
+
+---
+
+## Recent Changes (February 2026)
+
+- **Post-GW Data Collection Performance Fix** (February 2026):
+  - `collect_post_gameweek_data.py` was timing out at 900s, causing incomplete player history
+  - **Root cause**: Sequential API calls for 500+ players + individual DB writes
+  - **Fix**: Concurrent fetching (ThreadPoolExecutor, 15 workers) + batch DB writes (execute_many)
+  - **Result**: 500 players fetched in ~5s (was 500+s), 6000 records written in ~6s
+  - Skip logic: already-collected players are skipped on re-runs
+  - GW26 data went from 98 → 328 players with minutes (complete coverage)
+
+- **SQLite WAL Mode** (February 2026):
+  - `data/database.py` now uses WAL journal mode and 30s busy timeout
+  - Eliminates "database is locked" errors during concurrent read/write operations
+
+- **Ron's Announcement Personality Restored** (February 2026):
+  - `ron_clanker/llm_banter.py`: Rewrote team announcement prompt to restore Ron's full personality
+  - Was: "MAX 500 characters, BE BRIEF" → Now: 200-400 word position-by-position walkthrough
+  - Includes tactical reasoning, data points, and Ron's authentic old-school voice
+  - `send_team_announcement.py`: Now uses LLM generator (was plain template)
+  - Both pre-deadline and Slack announcements now have Ron's proper character
 
 ---
 

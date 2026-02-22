@@ -28,7 +28,8 @@ import requests
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -39,7 +40,8 @@ from utils.config import load_config
 logger = logging.getLogger('ron_clanker.post_gw_collection')
 
 FPL_API_BASE = "https://fantasy.premierleague.com/api"
-REQUEST_DELAY = 0.1  # Seconds between API requests to avoid rate limits
+REQUEST_DELAY = 0.05  # Seconds between API requests to avoid rate limits
+MAX_CONCURRENT_REQUESTS = 15  # Parallel API requests
 
 
 class PostGameweekCollector:
@@ -58,6 +60,7 @@ class PostGameweekCollector:
             'league_collected': False,
             'errors': []
         }
+        self._pending_history_params = []
 
     def check_gameweek_status(self, force: bool = False) -> Optional[Dict]:
         """
@@ -102,11 +105,35 @@ class PostGameweekCollector:
         logger.info(f"PostGWCollection: Ready to collect GW{gw_id} data (max in DB: GW{max_gw or 0})")
         return {'id': gw_id, 'finished': finished}
 
+    def _get_already_collected_players(self, gameweek: int) -> Set[int]:
+        """Get player IDs that already have history for this gameweek."""
+        rows = self.db.execute_query("""
+            SELECT DISTINCT player_id FROM player_gameweek_history
+            WHERE gameweek = ?
+        """, (gameweek,))
+        return {r['player_id'] for r in rows} if rows else set()
+
+    def _fetch_player_history(self, player_id: int, player_name: str) -> Optional[List[Dict]]:
+        """Fetch a single player's history from the FPL API. Thread-safe."""
+        try:
+            url = f"{FPL_API_BASE}/element-summary/{player_id}/"
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            return data.get('history', [])
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"PostGWCollection: Failed to fetch history for {player_name} (ID {player_id}): {e}")
+            return None
+        except Exception as e:
+            logger.error(f"PostGWCollection: Error fetching {player_name} (ID {player_id}): {e}")
+            return None
+
     def collect_player_gameweek_history(self, gameweek: int) -> int:
         """
-        Collect player gameweek history data (INCREMENTAL).
+        Collect player gameweek history data (INCREMENTAL + CONCURRENT).
 
-        Only fetches players who played in this gameweek.
+        Skips players already collected for this GW.
+        Uses ThreadPoolExecutor for parallel API requests.
         Uses INSERT OR REPLACE for idempotency.
 
         Returns:
@@ -114,8 +141,7 @@ class PostGameweekCollector:
         """
         logger.info(f"PostGWCollection: Collecting player GW history for GW{gameweek}")
 
-        # Get players who played this gameweek (minutes > 0)
-        # Note: players table updated by collect_fpl_data.py which runs at 02:30
+        # Get players who played this season (minutes > 0)
         players = self.db.execute_query("""
             SELECT id, web_name
             FROM players
@@ -125,54 +151,64 @@ class PostGameweekCollector:
 
         if not players:
             logger.warning("PostGWCollection: No players found with minutes > 0")
-            # Fallback: get all players
             players = self.db.execute_query("SELECT id, web_name FROM players ORDER BY id")
 
+        # Skip players we already have data for this GW
+        already_collected = self._get_already_collected_players(gameweek)
+        players_to_fetch = [p for p in players if p['id'] not in already_collected]
+
         total_players = len(players)
-        logger.info(f"PostGWCollection: Fetching history for {total_players} players who played")
+        skipped = len(already_collected)
+        to_fetch = len(players_to_fetch)
 
-        for i, player in enumerate(players, 1):
-            player_id = player['id']
-            player_name = player['web_name']
+        logger.info(f"PostGWCollection: {total_players} players total, {skipped} already collected, {to_fetch} to fetch")
 
-            try:
-                # Fetch player history from FPL API
-                url = f"{FPL_API_BASE}/element-summary/{player_id}/"
-                response = requests.get(url, timeout=10)
-                response.raise_for_status()
-                data = response.json()
+        if to_fetch == 0:
+            logger.info("PostGWCollection: All players already collected for this GW")
+            self.stats['players_collected'] = skipped
+            return skipped
 
-                # Extract history array (contains all GWs this season)
-                history = data.get('history', [])
+        # Fetch player histories concurrently
+        results = {}  # player_id -> history list
+        with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as executor:
+            future_to_player = {
+                executor.submit(self._fetch_player_history, p['id'], p['web_name']): p
+                for p in players_to_fetch
+            }
 
-                if not history:
-                    logger.debug(f"PostGWCollection: No history for {player_name} (ID {player_id})")
-                    continue
+            completed = 0
+            for future in as_completed(future_to_player):
+                player = future_to_player[future]
+                player_id = player['id']
+                completed += 1
 
-                # Store all history records (INSERT OR REPLACE handles deduplication)
-                stored = self._store_player_history(player_id, history)
+                try:
+                    history = future.result()
+                    if history is not None:
+                        results[player_id] = history
+                    else:
+                        self.stats['players_failed'] += 1
+                        self.stats['errors'].append(f"Player {player_id}: fetch returned None")
+                except Exception as e:
+                    logger.error(f"PostGWCollection: Exception for {player['web_name']}: {e}")
+                    self.stats['players_failed'] += 1
+                    self.stats['errors'].append(f"Player {player_id}: {str(e)}")
 
+                if completed % 100 == 0:
+                    logger.info(f"PostGWCollection: Fetched {completed}/{to_fetch} players")
+
+        logger.info(f"PostGWCollection: Fetched {len(results)}/{to_fetch} players, storing to DB...")
+
+        # Prepare all history records for batch insert
+        for player_id, history in results.items():
+            if history:
+                self._store_player_history(player_id, history)
                 self.stats['players_collected'] += 1
 
-                # Progress logging
-                if i % 50 == 0:
-                    logger.info(f"PostGWCollection: Progress: {i}/{total_players} players processed")
+        # Batch-write all records in a single transaction
+        self._flush_history_to_db()
 
-                # Rate limiting
-                time.sleep(REQUEST_DELAY)
-
-            except requests.exceptions.RequestException as e:
-                logger.warning(f"PostGWCollection: Failed to fetch history for {player_name}: {e}")
-                self.stats['players_failed'] += 1
-                self.stats['errors'].append(f"Player {player_id}: {str(e)}")
-                continue
-            except Exception as e:
-                logger.error(f"PostGWCollection: Error processing {player_name}: {e}", exc_info=True)
-                self.stats['players_failed'] += 1
-                self.stats['errors'].append(f"Player {player_id}: {str(e)}")
-                continue
-
-        logger.info(f"PostGWCollection: Player history collection complete: {self.stats['players_collected']} succeeded, {self.stats['players_failed']} failed")
+        logger.info(f"PostGWCollection: Player history collection complete: {self.stats['players_collected']} new + {skipped} existing, {self.stats['players_failed']} failed")
         return self.stats['players_collected']
 
     def _store_player_history(self, player_id: int, history: List[Dict]) -> int:
@@ -188,22 +224,7 @@ class PostGameweekCollector:
 
         for gw in history:
             try:
-                self.db.execute_update("""
-                    INSERT OR REPLACE INTO player_gameweek_history (
-                        player_id, gameweek, fixture_id, total_points,
-                        minutes, goals_scored, assists, clean_sheets, goals_conceded,
-                        own_goals, penalties_saved, penalties_missed, yellow_cards,
-                        red_cards, saves, bonus, bps, influence, creativity,
-                        threat, ict_index, value, selected, transfers_in,
-                        transfers_out, tackles, interceptions, clearances_blocks_interceptions,
-                        recoveries, defensive_contribution_points,
-                        expected_goals, expected_assists, expected_goal_involvements,
-                        expected_goals_conceded
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?
-                    )
-                """, (
+                self._pending_history_params.append((
                     player_id,
                     gw['round'],
                     gw.get('fixture'),
@@ -242,10 +263,39 @@ class PostGameweekCollector:
                 stored += 1
 
             except Exception as e:
-                logger.error(f"PostGWCollection: Failed to store GW{gw.get('round')} for player {player_id}: {e}")
+                logger.error(f"PostGWCollection: Failed to prepare GW{gw.get('round')} for player {player_id}: {e}")
                 continue
 
         return stored
+
+    def _flush_history_to_db(self):
+        """Batch-write all pending history records to DB in a single transaction."""
+        if not self._pending_history_params:
+            return 0
+
+        query = """
+            INSERT OR REPLACE INTO player_gameweek_history (
+                player_id, gameweek, fixture_id, total_points,
+                minutes, goals_scored, assists, clean_sheets, goals_conceded,
+                own_goals, penalties_saved, penalties_missed, yellow_cards,
+                red_cards, saves, bonus, bps, influence, creativity,
+                threat, ict_index, value, selected, transfers_in,
+                transfers_out, tackles, interceptions, clearances_blocks_interceptions,
+                recoveries, defensive_contribution_points,
+                expected_goals, expected_assists, expected_goal_involvements,
+                expected_goals_conceded
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+        """
+
+        count = len(self._pending_history_params)
+        logger.info(f"PostGWCollection: Batch-writing {count} history records to DB...")
+        rows = self.db.execute_many(query, self._pending_history_params)
+        self._pending_history_params = []
+        logger.info(f"PostGWCollection: Batch write complete ({rows} rows affected)")
+        return count
 
     def collect_league_standings(self, gameweek: int) -> bool:
         """

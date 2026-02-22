@@ -40,8 +40,10 @@ class Database:
     @contextmanager
     def get_connection(self):
         """Context manager for database connections."""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         try:
             yield conn
         finally:
@@ -576,6 +578,10 @@ class Database:
              kickoff_time, started, finished)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
+                event = excluded.event,
+                kickoff_time = excluded.kickoff_time,
+                team_h_difficulty = excluded.team_h_difficulty,
+                team_a_difficulty = excluded.team_a_difficulty,
                 started = excluded.started,
                 finished = excluded.finished,
                 team_h_score = excluded.team_h_score,

@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 import argparse
 import logging
+import requests
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -33,6 +34,9 @@ from scripts.track_ron_team import (
     sync_current_team_from_fpl
 )
 from notifications.slack import SlackNotifier
+from ron_clanker.llm_banter import generate_team_announcement as llm_announcement
+
+FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 
 logger = logging.getLogger('ron_clanker.announcement')
 
@@ -117,14 +121,57 @@ def fetch_confirmed_team(team_id: int, gameweek: int) -> dict:
     }
 
 
-def generate_announcement(team_data: dict, gameweek: int, transfers: list = None) -> str:
+def fetch_league_context(team_id: int) -> dict:
+    """
+    Fetch Ron's league position and overall rank from FPL API.
+
+    Returns dict with league_position, league_total, overall_rank, total_points, bank.
+    """
+    context = {}
+    try:
+        entry = fetch_team_entry(team_id)
+        context['overall_rank'] = entry.get('summary_overall_rank')
+        context['total_points'] = entry.get('summary_overall_points')
+        context['bank'] = entry.get('last_deadline_bank', 0) / 10.0
+
+        # Fetch mini-league standings (classic leagues)
+        leagues = entry.get('leagues', {}).get('classic', [])
+        for league in leagues:
+            # Skip overall/country/region leagues - find a private mini-league
+            if league.get('league_type') == 'x':  # 'x' = private league
+                league_id = league['id']
+                try:
+                    resp = requests.get(f"{FPL_BASE_URL}/leagues-classic/{league_id}/standings/")
+                    resp.raise_for_status()
+                    standings = resp.json()
+                    results = standings.get('standings', {}).get('results', [])
+                    context['league_total'] = len(results)
+                    for entry_result in results:
+                        if entry_result.get('entry') == team_id:
+                            context['league_position'] = entry_result['rank']
+                            break
+                except Exception:
+                    pass
+                break  # Use first private league found
+    except Exception as e:
+        logger.warning(f"Failed to fetch league context: {e}")
+
+    return context
+
+
+def generate_announcement(team_data: dict, gameweek: int, transfers: list = None,
+                          team_id: int = None) -> str:
     """
     Generate Ron's team announcement from confirmed team data.
+
+    Uses LLM (Claude Haiku) for authentic Ron personality.
+    Falls back to plain template if API unavailable.
 
     Args:
         team_data: Dict from fetch_confirmed_team
         gameweek: Gameweek number
         transfers: Optional list of transfers made
+        team_id: FPL team ID for fetching league context
 
     Returns:
         Announcement text in Ron's voice
@@ -134,82 +181,109 @@ def generate_announcement(team_data: dict, gameweek: int, transfers: list = None
     teams = team_data['teams']
     active_chip = team_data.get('active_chip')
 
-    # Organize squad by position
+    # Build squad list for LLM generator
+    squad = []
+    for pick in picks:
+        player = players.get(pick['element'], {})
+        squad.append({
+            'web_name': player.get('web_name', f"Player {pick['element']}"),
+            'element_type': player.get('element_type', 1),
+            'team_id': player.get('team', 0),
+            'position': pick['position'],
+            'is_captain': pick.get('is_captain', False),
+            'is_vice_captain': pick.get('is_vice_captain', False),
+            'now_cost': player.get('now_cost', 0),
+        })
+
+    # Format transfers for LLM
+    llm_transfers = []
+    if transfers:
+        for t in transfers:
+            llm_transfers.append({
+                'player_out': {'web_name': t.get('out', 'Unknown')},
+                'player_in': {'web_name': t.get('in', 'Unknown')},
+                'reasoning': t.get('reason', 'Squad improvement'),
+            })
+
+    # Build fixture info
+    db = Database()
+    fixtures = {}
+    try:
+        fixture_rows = db.execute_query("""
+            SELECT f.team_h, f.team_a, f.team_h_difficulty, f.team_a_difficulty,
+                   th.short_name as home_team, ta.short_name as away_team
+            FROM fixtures f
+            JOIN teams th ON f.team_h = th.id
+            JOIN teams ta ON f.team_a = ta.id
+            WHERE f.event = ?
+        """, (gameweek,))
+        for fix in fixture_rows:
+            fixtures[fix['team_h']] = {'opponent': fix['away_team'], 'home': True, 'fdr': fix['team_h_difficulty']}
+            fixtures[fix['team_a']] = {'opponent': fix['home_team'], 'home': False, 'fdr': fix['team_a_difficulty']}
+    except Exception:
+        pass  # Fixtures are optional enrichment
+
+    # Fetch league context for factual accuracy
+    league_ctx = {}
+    if team_id:
+        league_ctx = fetch_league_context(team_id)
+        if league_ctx:
+            logger.info(f"League context: rank={league_ctx.get('overall_rank')}, "
+                        f"points={league_ctx.get('total_points')}, bank=£{league_ctx.get('bank', 0)}m")
+
+    bank = league_ctx.get('bank', 0.0)
+
+    # Try LLM-powered announcement
+    try:
+        announcement = llm_announcement(
+            gameweek=gameweek,
+            squad=squad,
+            transfers=llm_transfers,
+            chip_used=active_chip,
+            bank=bank,
+            fixtures=fixtures,
+            league_position=league_ctx.get('league_position'),
+            league_total=league_ctx.get('league_total'),
+            overall_rank=league_ctx.get('overall_rank'),
+            total_points=league_ctx.get('total_points'),
+        )
+        if announcement and len(announcement) > 50:
+            return announcement
+    except Exception as e:
+        logger.warning(f"LLM announcement failed: {e}")
+
+    # Fallback: plain template
     starting_xi = [p for p in picks if p['multiplier'] > 0]
     bench = [p for p in picks if p['multiplier'] == 0]
-
-    # Find captain and vice-captain
     captain = next((p for p in picks if p['is_captain']), None)
     vice_captain = next((p for p in picks if p['is_vice_captain']), None)
 
-    # Build position groups for starting XI
     positions = {'GKP': [], 'DEF': [], 'MID': [], 'FWD': []}
     for pick in starting_xi:
         player = players.get(pick['element'], {})
         pos = POSITION_MAP.get(player.get('element_type', 0), 'UNK')
-        team = teams.get(player.get('team', 0), 'UNK')
         name = player.get('web_name', f"Player {pick['element']}")
-
-        marker = ''
-        if pick['is_captain']:
-            marker = ' (C)'
-        elif pick['is_vice_captain']:
-            marker = ' (VC)'
-
+        marker = ' (C)' if pick['is_captain'] else ' (VC)' if pick['is_vice_captain'] else ''
         positions[pos].append(f"{name}{marker}")
 
-    # Build bench list
-    bench_players = []
     bench_sorted = sorted(bench, key=lambda x: x['position'])
-    for pick in bench_sorted:
-        player = players.get(pick['element'], {})
-        name = player.get('web_name', f"Player {pick['element']}")
-        bench_players.append(name)
+    bench_players = [players.get(p['element'], {}).get('web_name', '?') for p in bench_sorted]
 
-    # Determine formation
     formation = f"{len(positions['DEF'])}-{len(positions['MID'])}-{len(positions['FWD'])}"
 
-    # Build announcement
-    lines = []
-    lines.append(f"GAMEWEEK {gameweek} - RON'S CONFIRMED TEAM")
-    lines.append("")
-
+    lines = [f"GAMEWEEK {gameweek} - RON'S CONFIRMED TEAM", ""]
     if active_chip:
-        lines.append(f"CHIP ACTIVE: {active_chip.upper()}")
-        lines.append("")
-
-    if transfers:
-        lines.append("TRANSFERS:")
-        for t in transfers:
-            lines.append(f"  OUT: {t['out']} -> IN: {t['in']}")
-        lines.append("")
-
-    lines.append(f"FORMATION: {formation}")
-    lines.append("")
-    lines.append(f"GK: {', '.join(positions['GKP'])}")
-    lines.append(f"DEF: {', '.join(positions['DEF'])}")
-    lines.append(f"MID: {', '.join(positions['MID'])}")
-    lines.append(f"FWD: {', '.join(positions['FWD'])}")
-    lines.append("")
-    lines.append(f"BENCH: {', '.join(bench_players)}")
-    lines.append("")
-
-    # Captain info
+        lines += [f"CHIP ACTIVE: {active_chip.upper()}", ""]
+    lines += [f"FORMATION: {formation}", "",
+              f"GK: {', '.join(positions['GKP'])}",
+              f"DEF: {', '.join(positions['DEF'])}",
+              f"MID: {', '.join(positions['MID'])}",
+              f"FWD: {', '.join(positions['FWD'])}", "",
+              f"BENCH: {', '.join(bench_players)}", ""]
     if captain:
-        cap_player = players.get(captain['element'], {})
-        cap_name = cap_player.get('web_name', 'Unknown')
-        cap_team = teams.get(cap_player.get('team', 0), 'UNK')
-        lines.append(f"CAPTAIN: {cap_name} ({cap_team})")
-
-    if vice_captain:
-        vc_player = players.get(vice_captain['element'], {})
-        vc_name = vc_player.get('web_name', 'Unknown')
-        lines.append(f"VICE: {vc_name}")
-
-    lines.append("")
-    lines.append("Team confirmed on FPL website.")
-    lines.append("")
-    lines.append("- Ron Clanker")
+        cap_name = players.get(captain['element'], {}).get('web_name', 'Unknown')
+        lines.append(f"CAPTAIN: {cap_name}")
+    lines += ["", "- Ron Clanker"]
 
     return '\n'.join(lines)
 
@@ -316,9 +390,26 @@ Workflow:
 
     print(f" Found {len(team_data['picks'])} players")
 
+    # Fetch transfers for this gameweek
+    db = Database()
+    transfer_rows = db.execute_query("""
+        SELECT po.web_name as out_name, pi.web_name as in_name, t.reasoning
+        FROM transfers t
+        JOIN players po ON t.player_out_id = po.id
+        JOIN players pi ON t.player_in_id = pi.id
+        WHERE t.gameweek = ?
+        ORDER BY t.id DESC LIMIT 1
+    """, (gameweek,))
+    transfers = [{'out': r['out_name'], 'in': r['in_name'], 'reason': r.get('reasoning', '')}
+                 for r in transfer_rows] if transfer_rows else None
+
+    if transfers:
+        transfer_strs = [f"{t['out']} → {t['in']}" for t in transfers]
+        print(f" Transfers: {', '.join(transfer_strs)}")
+
     # Generate announcement
     print("\n Generating announcement...")
-    announcement = generate_announcement(team_data, gameweek)
+    announcement = generate_announcement(team_data, gameweek, transfers=transfers, team_id=team_id)
 
     print("\n" + "-" * 80)
     print("ANNOUNCEMENT PREVIEW")

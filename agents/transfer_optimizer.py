@@ -382,11 +382,14 @@ class TransferOptimizer:
                 print(f"\n  📊 Optional transfer summary: {len(optional_transfers)} transfers "
                       f"for +{total_gain:.1f}pts total over {horizon} GWs")
         elif remaining_fts == 1 and all_options:
-            # Single optional transfer - use position-specific threshold
-            pos = all_options[0].position
-            threshold = self.get_threshold_for_position(pos)
-            if all_options[0].avg_gain_per_gw >= threshold:
-                optional_transfers = [all_options[0]]
+            # Single optional transfer - use position-specific threshold + budget check
+            for opt in all_options:
+                pos = opt.position
+                threshold = self.get_threshold_for_position(pos)
+                net_cost = opt.player_in_price - opt.player_out_price
+                if opt.avg_gain_per_gw >= threshold and net_cost <= bank:
+                    optional_transfers = [opt]
+                    break
 
         # Combine forced + optional transfers
         recommended_transfers = forced_transfers + optional_transfers
@@ -563,7 +566,7 @@ class TransferOptimizer:
         for weak_player in weak_candidates[:2]:
             # Find replacements - use selling_price for budget calculation
             weak_selling_price = weak_player.get('selling_price', weak_player['now_cost']) / 10.0
-            max_price = weak_selling_price + bank + 1.0  # Can upgrade by bank + £1m
+            max_price = weak_selling_price + bank  # Budget = selling price + bank
 
             replacements = self._find_replacements(
                 position=position,

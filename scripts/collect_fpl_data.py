@@ -108,6 +108,17 @@ async def collect_data():
         logger.info(f"DataCollection: Successfully synced {gameweek_count} gameweeks")
         print("✅ Gameweeks synced")
 
+        # Sync fixtures
+        fixture_count = len(fpl_data.get('fixtures', []))
+        print(f"\n💾 Syncing {fixture_count} fixtures...")
+        logger.info(f"DataCollection: Upserting {fixture_count} fixtures to database")
+
+        for fixture in fpl_data.get('fixtures', []):
+            db.upsert_fixture(fixture)
+
+        logger.info(f"DataCollection: Successfully synced {fixture_count} fixtures")
+        print("✅ Fixtures synced")
+
         # Show stats
         print("\n" + "-" * 80)
         print("DATABASE STATISTICS")

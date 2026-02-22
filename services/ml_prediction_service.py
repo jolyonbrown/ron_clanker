@@ -536,6 +536,9 @@ class MLPredictionService:
                 logger.warning(f"Prediction failed for player {player_id}: {e}")
                 predictions[player_id] = 0.0
 
+        # Apply DGW multiplier for players with multiple fixtures
+        predictions = self._apply_dgw_multiplier(predictions, gameweek)
+
         # Apply news adjustments if requested
         if apply_news_adjustments and predictions:
             predictions = self._apply_news_adjustments(predictions, gameweek)
@@ -795,6 +798,76 @@ class MLPredictionService:
     # =========================================================================
     # PRIVATE METHODS
     # =========================================================================
+
+    def _get_team_fixture_counts(self, gameweek: int) -> Dict[int, int]:
+        """Get number of fixtures per team for a gameweek (detects DGWs)."""
+        rows = self._db.execute_query("""
+            SELECT team_id, COUNT(*) as num_fixtures
+            FROM (
+                SELECT team_h as team_id FROM fixtures WHERE event = ?
+                UNION ALL
+                SELECT team_a as team_id FROM fixtures WHERE event = ?
+            )
+            GROUP BY team_id
+        """, (gameweek, gameweek))
+        return {r['team_id']: r['num_fixtures'] for r in rows} if rows else {}
+
+    def _apply_dgw_multiplier(
+        self,
+        predictions: Dict[int, float],
+        gameweek: int
+    ) -> Dict[int, float]:
+        """
+        Multiply predictions for players whose team has multiple fixtures in a GW.
+
+        Uses a 1.85x multiplier per extra fixture (not 2x, accounting for
+        rotation risk and fatigue in the second game).
+        """
+        fixture_counts = self._get_team_fixture_counts(gameweek)
+
+        # Check if any team has >1 fixture (DGW exists)
+        dgw_teams = {tid: count for tid, count in fixture_counts.items() if count > 1}
+        if not dgw_teams:
+            return predictions
+
+        # Get team_id for each player in predictions
+        player_ids = list(predictions.keys())
+        if not player_ids:
+            return predictions
+
+        placeholders = ','.join('?' * len(player_ids))
+        players = self._db.execute_query(f"""
+            SELECT id, team_id, web_name FROM players WHERE id IN ({placeholders})
+        """, player_ids)
+        player_team_map = {p['id']: p['team_id'] for p in players}
+        player_name_map = {p['id']: p['web_name'] for p in players}
+
+        dgw_team_names = self._db.execute_query(
+            f"SELECT id, name FROM teams WHERE id IN ({','.join('?' * len(dgw_teams))})",
+            list(dgw_teams.keys())
+        )
+        team_names = {t['id']: t['name'] for t in dgw_team_names} if dgw_team_names else {}
+
+        adjusted = dict(predictions)
+        dgw_count = 0
+        for pid, xp in predictions.items():
+            team_id = player_team_map.get(pid)
+            if team_id and team_id in dgw_teams:
+                num_fixtures = dgw_teams[team_id]
+                # 1.85x per extra fixture (conservative: rotation/fatigue risk)
+                multiplier = 1.0 + 0.85 * (num_fixtures - 1)
+                adjusted[pid] = xp * multiplier
+                dgw_count += 1
+
+        if dgw_count > 0:
+            team_list = ', '.join(f"{team_names.get(tid, tid)} ({count} fixtures)"
+                                  for tid, count in dgw_teams.items())
+            logger.info(
+                f"DGW multiplier applied: {dgw_count} players boosted for GW{gameweek} "
+                f"(DGW teams: {team_list})"
+            )
+
+        return adjusted
 
     def _predict_single_player(self, player_id: int, gameweek: int) -> float:
         """Generate prediction for a single player using ensemble + transformer blend."""
