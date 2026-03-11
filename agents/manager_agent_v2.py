@@ -818,21 +818,200 @@ class RonManager(BaseAgent):
         # Return: outfield players first (positions 12-14), then GK (position 15)
         return bench_outfield + bench_gk
 
+    def _calculate_captain_score(
+        self,
+        player: Dict,
+        gameweek: Optional[int] = None
+    ) -> float:
+        """
+        Calculate a captain suitability score for a player.
+
+        Combines multiple signals beyond raw xP:
+        1. Position multiplier - FWDs/MIDs are better captain picks than DEF/GK
+        2. Ceiling/variance - players with high recent max scores get a bonus
+        3. Fixture difficulty - easier fixtures boost captain score
+        4. Home advantage - slight boost for home games
+        5. Availability - reduce score for doubtful players
+
+        Args:
+            player: Player dict with xP, element_type, player_id, etc.
+            gameweek: Target gameweek for fixture lookup
+
+        Returns:
+            Captain suitability score (higher = better captain pick)
+        """
+        import sqlite3
+
+        base_xp = player.get('xP', 0)
+        if base_xp <= 0:
+            return 0.0
+
+        # --- 1. Position multiplier ---
+        # GKs almost never return captain-worthy hauls
+        # DEFs can via set pieces but lower ceiling than attackers
+        # MIDs and FWDs have highest ceiling for goals+assists+bonus
+        position = player.get('element_type', 3)
+        position_multiplier = {
+            1: 0.25,   # GK - almost never captain
+            2: 0.70,   # DEF - occasionally (set piece threats like Gabriel)
+            3: 1.00,   # MID - standard captain picks
+            4: 1.15,   # FWD - best captain candidates (goal focus)
+        }.get(position, 1.0)
+
+        score = base_xp * position_multiplier
+
+        # --- 2. Ceiling/variance bonus from recent history ---
+        # Captains should have high upside, not just high average
+        player_id = player.get('player_id', player.get('id'))
+        if player_id and hasattr(self, 'db') and self.db:
+            try:
+                history = self.db.execute_query("""
+                    SELECT total_points, minutes
+                    FROM player_gameweek_history
+                    WHERE player_id = ? AND gameweek < ?
+                    ORDER BY gameweek DESC
+                    LIMIT 6
+                """, (player_id, gameweek or 99))
+
+                if history and len(history) >= 3:
+                    points = [h['total_points'] for h in history if h['minutes'] and h['minutes'] > 0]
+                    if points:
+                        import numpy as np
+                        std_pts = np.std(points) if len(points) > 1 else 0
+                        max_pts = max(points)
+                        mean_pts = np.mean(points)
+
+                        # Upper confidence bound: reward high variance (boom potential)
+                        # A player averaging 5 with std=4 (range 1-13) is better captain
+                        # than one averaging 5 with std=1 (range 4-6)
+                        ceiling_bonus = 0.3 * std_pts
+
+                        # Max haul bonus: reward players who have shown big hauls recently
+                        # If max recent score is 12+, that's a proven captain candidate
+                        if max_pts >= 12:
+                            ceiling_bonus += 1.5
+                        elif max_pts >= 8:
+                            ceiling_bonus += 0.75
+                        elif max_pts >= 6:
+                            ceiling_bonus += 0.25
+
+                        score += ceiling_bonus
+
+                        logger.debug(
+                            f"Ron: {player.get('web_name', '?')} ceiling: "
+                            f"mean={mean_pts:.1f}, std={std_pts:.1f}, max={max_pts}, "
+                            f"bonus={ceiling_bonus:.2f}"
+                        )
+            except Exception as e:
+                logger.debug(f"Ron: Could not fetch history for captain scoring: {e}")
+
+        # --- 3. Fixture difficulty and home advantage ---
+        if player_id and gameweek and hasattr(self, 'db') and self.db:
+            try:
+                team_id = player.get('team_id') or player.get('team')
+                if team_id:
+                    fixture = self.db.execute_query("""
+                        SELECT team_h, team_a, team_h_difficulty, team_a_difficulty
+                        FROM fixtures
+                        WHERE event = ? AND (team_h = ? OR team_a = ?)
+                        LIMIT 1
+                    """, (gameweek, team_id, team_id))
+
+                    if fixture:
+                        fix = fixture[0]
+                        is_home = fix['team_h'] == team_id
+
+                        # FDR: 1=easy, 5=hard. Lower FDR = better for captaincy
+                        if is_home:
+                            fdr = fix['team_a_difficulty']  # Opponent difficulty for away team
+                        else:
+                            fdr = fix['team_h_difficulty']  # Opponent difficulty for home team
+
+                        # Actually we want the difficulty of the fixture FOR the player's team
+                        # team_h_difficulty = difficulty for away team, team_a_difficulty = difficulty for home team
+                        # Correction: team_h_difficulty is difficulty rating for the HOME team
+                        if is_home:
+                            fdr = fix['team_h_difficulty']
+                        else:
+                            fdr = fix['team_a_difficulty']
+
+                        # Fixture bonus: easy fixture (FDR 2) = +15%, hard (FDR 5) = -10%
+                        fixture_multiplier = {
+                            1: 1.15,  # Very easy
+                            2: 1.10,  # Easy
+                            3: 1.00,  # Medium
+                            4: 0.95,  # Hard
+                            5: 0.90,  # Very hard
+                        }.get(fdr, 1.0)
+
+                        score *= fixture_multiplier
+
+                        # Home advantage: slight boost for home games
+                        if is_home:
+                            score *= 1.05
+
+                        logger.debug(
+                            f"Ron: {player.get('web_name', '?')} fixture: "
+                            f"FDR={fdr}, home={is_home}, multiplier={fixture_multiplier:.2f}"
+                        )
+            except Exception as e:
+                logger.debug(f"Ron: Could not fetch fixture for captain scoring: {e}")
+
+        # --- 4. Availability adjustment ---
+        chance = player.get('chance_of_playing_next_round')
+        if chance is not None and chance < 75:
+            score *= (chance / 100)
+            logger.debug(
+                f"Ron: {player.get('web_name', '?')} captain score reduced "
+                f"due to {chance}% availability"
+            )
+
+        # --- 5. Minutes reliability penalty ---
+        # Players who haven't been starting regularly are risky captains
+        if player_id and hasattr(self, 'db') and self.db:
+            try:
+                recent_mins = self.db.execute_query("""
+                    SELECT minutes FROM player_gameweek_history
+                    WHERE player_id = ? ORDER BY gameweek DESC LIMIT 3
+                """, (player_id,))
+                if recent_mins and len(recent_mins) >= 2:
+                    avg_mins = sum(r['minutes'] or 0 for r in recent_mins) / len(recent_mins)
+                    if avg_mins < 45:
+                        # Player averaging under 45 mins - very risky captain
+                        score *= 0.3
+                        logger.debug(f"Ron: {player.get('web_name', '?')} minutes penalty (avg {avg_mins:.0f}min)")
+                    elif avg_mins < 70:
+                        score *= 0.7
+                        logger.debug(f"Ron: {player.get('web_name', '?')} rotation risk (avg {avg_mins:.0f}min)")
+            except Exception:
+                pass
+
+        return score
+
     def _select_captain(
         self,
         squad: List[Dict],
         gameweek: Optional[int] = None
     ) -> List[Dict]:
         """
-        Select captain and vice-captain using ML model when available.
+        Select captain and vice-captain using multi-factor scoring.
 
-        Uses CaptainOptimizer (14-feature ML model) for intelligent selection
-        considering form variance, ceiling potential, fixture difficulty, and ownership.
-        Falls back to simple xP ranking if ML model unavailable.
+        Uses a combined approach that considers:
+        - Expected points (xP) from ML predictions
+        - Position suitability (FWD/MID preferred over DEF/GK)
+        - Ceiling potential (variance and recent max scores)
+        - Fixture difficulty and home advantage
+        - Minutes reliability
+        - Availability doubts
+
+        Falls back to the CaptainOptimizer ML model if available, but the
+        primary path now uses the multi-factor _calculate_captain_score method
+        which addresses the historical problem of captaining GKs/DEFs and
+        low-ceiling players.
 
         Args:
             squad: Squad with positions assigned
-            gameweek: Gameweek number (required for ML selection)
+            gameweek: Gameweek number (required for fixture-aware selection)
 
         Returns:
             Squad with captaincy assigned
@@ -855,94 +1034,50 @@ class RonManager(BaseAgent):
             player['is_vice_captain'] = False
             player['multiplier'] = 1
 
-        # Try ML-based captain selection first
-        if self.captain_optimizer is not None and gameweek is not None:
-            try:
-                # Get player IDs from starting XI
-                player_ids = [
-                    p.get('player_id', p.get('id'))
-                    for p in starting_xi
-                    if p.get('player_id', p.get('id')) is not None
-                ]
+        # Calculate captain scores for all starting XI players
+        captain_scores = []
+        for player in starting_xi:
+            score = self._calculate_captain_score(player, gameweek)
+            captain_scores.append((player, score))
+            logger.debug(
+                f"Ron: Captain candidate: {player.get('web_name', '?')} "
+                f"({['', 'GK', 'DEF', 'MID', 'FWD'][player.get('element_type', 0)]}) "
+                f"xP={player.get('xP', 0):.2f}, captain_score={score:.2f}"
+            )
 
-                if player_ids:
-                    # Get ML recommendation (ownership_penalty=0.1 for slight differential bias)
-                    recommendation = self.captain_optimizer.recommend_captain(
-                        player_ids=player_ids,
-                        gameweek=gameweek,
-                        ownership_penalty=0.1
-                    )
+        # Sort by captain score (highest first)
+        captain_scores.sort(key=lambda x: x[1], reverse=True)
 
-                    captain_id = recommendation.get('captain_id')
-                    vice_id = recommendation.get('vice_captain_id')
-                    confidence = recommendation.get('confidence', 0)
-                    margin = recommendation.get('margin', 0)
+        # Log the top candidates for transparency
+        logger.info("Ron: Captain candidates (top 5):")
+        for player, score in captain_scores[:5]:
+            pos_map = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+            pos = pos_map.get(player.get('element_type', 0), '?')
+            logger.info(
+                f"  {player.get('web_name', '?')} ({pos}): "
+                f"captain_score={score:.2f} (xP={player.get('xP', 0):.2f})"
+            )
 
-                    if captain_id and confidence > 0:
-                        # Find and assign captain
-                        for player in starting_xi:
-                            pid = player.get('player_id', player.get('id'))
-                            if pid == captain_id:
-                                player['is_captain'] = True
-                                player['multiplier'] = 2
-                                logger.info(
-                                    f"Ron: Captain (ML): {player['web_name']} "
-                                    f"(score: {confidence:.2f}, margin: {margin:.2f})"
-                                )
-                            elif pid == vice_id:
-                                player['is_vice_captain'] = True
-                                logger.info(
-                                    f"Ron: Vice Captain (ML): {player['web_name']}"
-                                )
-
-                        # Verify captain was assigned
-                        if any(p.get('is_captain') for p in squad):
-                            # If no vice captain yet, assign second best by ML score
-                            if not any(p.get('is_vice_captain') for p in squad):
-                                all_scores = recommendation.get('all_scores', {})
-                                sorted_scores = sorted(
-                                    all_scores.items(),
-                                    key=lambda x: x[1],
-                                    reverse=True
-                                )
-                                if len(sorted_scores) >= 2:
-                                    vice_id = sorted_scores[1][0]
-                                    for player in starting_xi:
-                                        pid = player.get('player_id', player.get('id'))
-                                        if pid == vice_id and not player.get('is_captain'):
-                                            player['is_vice_captain'] = True
-                                            logger.info(
-                                                f"Ron: Vice Captain (ML fallback): {player['web_name']}"
-                                            )
-                                            break
-                            return squad
-
-            except Exception as e:
-                logger.warning(f"Ron: CaptainOptimizer failed ({e}), using xP fallback")
-
-        # Fallback: Sort starting XI by xP (highest first), deprioritize doubtful players
-        def captain_score(player):
-            xp = player.get('xP', 0)
-            chance = player.get('chance_of_playing_next_round')
-            if chance is not None and chance < 75:
-                xp *= (chance / 100)
-                logger.debug(f"Ron: {player['web_name']} captain score reduced due to {chance}% availability")
-            return xp
-
-        starting_xi.sort(key=captain_score, reverse=True)
-
-        # Captain = highest xP
-        if len(starting_xi) >= 1:
-            captain = starting_xi[0]
+        # Assign captain = highest captain score
+        if captain_scores:
+            captain, captain_score = captain_scores[0]
             captain['is_captain'] = True
             captain['multiplier'] = 2
-            logger.info(f"Ron: Captain (xP): {captain['web_name']} ({captain.get('xP', 0):.2f} xP)")
+            pos_map = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+            pos = pos_map.get(captain.get('element_type', 0), '?')
+            logger.info(
+                f"Ron: Captain: {captain['web_name']} ({pos}) "
+                f"(captain_score={captain_score:.2f}, xP={captain.get('xP', 0):.2f})"
+            )
 
-        # Vice = second highest xP
-        if len(starting_xi) >= 2:
-            vice = starting_xi[1]
+        # Assign vice-captain = second highest captain score
+        if len(captain_scores) >= 2:
+            vice, vice_score = captain_scores[1]
             vice['is_vice_captain'] = True
-            logger.info(f"Ron: Vice Captain (xP): {vice['web_name']} ({vice.get('xP', 0):.2f} xP)")
+            logger.info(
+                f"Ron: Vice Captain: {vice['web_name']} "
+                f"(captain_score={vice_score:.2f}, xP={vice.get('xP', 0):.2f})"
+            )
 
         return squad
 

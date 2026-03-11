@@ -284,6 +284,48 @@ def build_aggregate_features(all_history: List[Dict], recent: List[Dict], curren
             ]) +
             safe_mean([g.get('recoveries', 0) or 0 for g in recent])
         ),
+
+        # Multi-horizon rolling features (matches FeatureEngineer)
+        # Window 1 (last game)
+        'avg_points_1': safe_mean([g['total_points'] for g in recent[-1:]]),
+        'avg_minutes_1': safe_mean([g['minutes'] for g in recent[-1:]]),
+        'avg_goals_1': safe_mean([g['goals_scored'] for g in recent[-1:]]),
+        'avg_assists_1': safe_mean([g['assists'] for g in recent[-1:]]),
+        'avg_bonus_1': safe_mean([g['bonus'] for g in recent[-1:]]),
+        'avg_bps_1': safe_mean([g['bps'] for g in recent[-1:]]),
+        # Window 3
+        'avg_points_3': safe_mean([g['total_points'] for g in recent[-3:]]),
+        'avg_minutes_3': safe_mean([g['minutes'] for g in recent[-3:]]),
+        'avg_goals_3': safe_mean([g['goals_scored'] for g in recent[-3:]]),
+        'avg_assists_3': safe_mean([g['assists'] for g in recent[-3:]]),
+        'avg_bonus_3': safe_mean([g['bonus'] for g in recent[-3:]]),
+        'avg_bps_3': safe_mean([g['bps'] for g in recent[-3:]]),
+        # Window 5
+        'avg_points_5': safe_mean([g['total_points'] for g in recent]),
+        'avg_minutes_5': safe_mean([g['minutes'] for g in recent]),
+        'avg_goals_5': safe_mean([g['goals_scored'] for g in recent]),
+        'avg_assists_5': safe_mean([g['assists'] for g in recent]),
+        'avg_bonus_5': safe_mean([g['bonus'] for g in recent]),
+        'avg_bps_5': safe_mean([g['bps'] for g in recent]),
+        # Window 10
+        'avg_points_10': safe_mean([g['total_points'] for g in all_history[-10:]]),
+        'avg_minutes_10': safe_mean([g['minutes'] for g in all_history[-10:]]),
+        'avg_goals_10': safe_mean([g['goals_scored'] for g in all_history[-10:]]),
+        'avg_assists_10': safe_mean([g['assists'] for g in all_history[-10:]]),
+        'avg_bonus_10': safe_mean([g['bonus'] for g in all_history[-10:]]),
+        'avg_bps_10': safe_mean([g['bps'] for g in all_history[-10:]]),
+        # Derived multi-horizon features
+        'minutes_std': float(np.std([g['minutes'] for g in all_history[-10:]])) if len(all_history) >= 2 else 0.0,
+        'form_momentum': (
+            safe_mean([g['total_points'] for g in recent[-3:]]) -
+            safe_mean([g['total_points'] for g in all_history[-10:]])
+        ),
+
+        # Set piece features - not available in historical data, use defaults
+        'is_penalty_taker': 0,
+        'is_corner_taker': 0,
+        'is_direct_fk_taker': 0,
+        'set_piece_involvement': 0.0,
     }
 
     return features

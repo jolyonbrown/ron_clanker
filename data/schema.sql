@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS players (
     status TEXT,  -- available, injured, suspended, etc.
     news TEXT,
     chance_of_playing_next_round INTEGER,
+    -- Set piece responsibility (from FPL API)
+    penalties_order INTEGER,  -- 1 = first choice penalty taker, NULL = not on pens
+    corners_and_indirect_freekicks_order INTEGER,  -- 1 = first choice, NULL = not assigned
+    direct_freekicks_order INTEGER,  -- 1 = first choice, NULL = not assigned
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

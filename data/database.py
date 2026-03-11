@@ -18,6 +18,7 @@ class Database:
     def __init__(self, db_path: str = "data/ron_clanker.db"):
         self.db_path = db_path
         self._ensure_database_exists()
+        self._run_migrations()
 
     def _ensure_database_exists(self):
         """Create database and tables if they don't exist."""
@@ -26,6 +27,25 @@ class Database:
 
         if not db_file.exists():
             self.initialize_schema()
+
+    def _run_migrations(self):
+        """Run lightweight schema migrations for new columns."""
+        migrations = [
+            ("players", "penalties_order", "ALTER TABLE players ADD COLUMN penalties_order INTEGER"),
+            ("players", "corners_and_indirect_freekicks_order", "ALTER TABLE players ADD COLUMN corners_and_indirect_freekicks_order INTEGER"),
+            ("players", "direct_freekicks_order", "ALTER TABLE players ADD COLUMN direct_freekicks_order INTEGER"),
+        ]
+        with self.get_connection() as conn:
+            for table, column, sql in migrations:
+                try:
+                    # Check if column exists
+                    cursor = conn.execute(f"PRAGMA table_info({table})")
+                    existing_cols = {row[1] for row in cursor.fetchall()}
+                    if column not in existing_cols:
+                        conn.execute(sql)
+                        conn.commit()
+                except Exception:
+                    pass  # Column may already exist
 
     def initialize_schema(self):
         """Initialize database schema from SQL file."""
@@ -86,8 +106,9 @@ class Database:
                 status, news, chance_of_playing_next_round,
                 influence, creativity, threat, ict_index,
                 tackles, interceptions, clearances_blocks_interceptions, recoveries,
+                penalties_order, corners_and_indirect_freekicks_order, direct_freekicks_order,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 now_cost = excluded.now_cost,
                 selected_by_percent = excluded.selected_by_percent,
@@ -118,6 +139,9 @@ class Database:
                 interceptions = excluded.interceptions,
                 clearances_blocks_interceptions = excluded.clearances_blocks_interceptions,
                 recoveries = excluded.recoveries,
+                penalties_order = excluded.penalties_order,
+                corners_and_indirect_freekicks_order = excluded.corners_and_indirect_freekicks_order,
+                direct_freekicks_order = excluded.direct_freekicks_order,
                 updated_at = CURRENT_TIMESTAMP
         """
         params = (
@@ -138,7 +162,9 @@ class Database:
             player_data.get('influence'), player_data.get('creativity'),
             player_data.get('threat'), player_data.get('ict_index'),
             player_data.get('tackles', 0), player_data.get('interceptions', 0),
-            player_data.get('clearances_blocks_interceptions', 0), player_data.get('recoveries', 0)
+            player_data.get('clearances_blocks_interceptions', 0), player_data.get('recoveries', 0),
+            player_data.get('penalties_order'), player_data.get('corners_and_indirect_freekicks_order'),
+            player_data.get('direct_freekicks_order')
         )
         return self.execute_update(query, params)
 

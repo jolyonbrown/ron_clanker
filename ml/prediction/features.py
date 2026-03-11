@@ -169,6 +169,64 @@ class FeatureEngineer:
             'dc_score': dc_score
         }
 
+    def get_multi_horizon_form(self, player_id: int, gameweek: int) -> Dict:
+        """
+        Calculate rolling averages across multiple time horizons (1, 3, 5, 10 games).
+
+        This captures both immediate form (last 1 game) and longer-term consistency
+        (last 10 games). Also computes:
+        - minutes_std: Standard deviation of minutes over 10 games (rotation risk)
+        - form_momentum: Difference between 3-game and 10-game avg points (hot streak)
+
+        Args:
+            player_id: Player ID
+            gameweek: Current gameweek (predict for next GW)
+
+        Returns:
+            Dict with rolling averages at each horizon plus derived features
+        """
+        # Fetch up to 10 games (max window needed)
+        history = self.db.execute_query("""
+            SELECT
+                gameweek, total_points, minutes, goals_scored, assists,
+                bonus, bps
+            FROM player_gameweek_history
+            WHERE player_id = ?
+            AND gameweek < ?
+            ORDER BY gameweek DESC
+            LIMIT 10
+        """, (player_id, gameweek))
+
+        result = {}
+        windows = [1, 3, 5, 10]
+        core_fields = [
+            ('points', 'total_points'),
+            ('minutes', 'minutes'),
+            ('goals', 'goals_scored'),
+            ('assists', 'assists'),
+            ('bonus', 'bonus'),
+            ('bps', 'bps'),
+        ]
+
+        for w in windows:
+            subset = history[:w] if history else []
+            for feat_name, db_col in core_fields:
+                if subset:
+                    result[f'avg_{feat_name}_{w}'] = np.mean([h[db_col] or 0 for h in subset])
+                else:
+                    result[f'avg_{feat_name}_{w}'] = 0.0
+
+        # minutes_std: rotation risk indicator (std dev over 10 games)
+        if history and len(history) >= 2:
+            result['minutes_std'] = float(np.std([h['minutes'] or 0 for h in history]))
+        else:
+            result['minutes_std'] = 0.0
+
+        # form_momentum: hot streak detection (3-game avg - 10-game avg)
+        result['form_momentum'] = result.get('avg_points_3', 0.0) - result.get('avg_points_10', 0.0)
+
+        return result
+
     def get_historical_xg_features(self, player_id: int, window: int = 5) -> Dict:
         """
         Get xG/xA features from historical gameweek data.
@@ -230,6 +288,53 @@ class FeatureEngineer:
             'avg_xgi': avg_xgi,
             'xg_overperformance': avg_goals - avg_xg,  # Over/under performing xG
             'xa_overperformance': avg_assists - avg_xa
+        }
+
+    def get_set_piece_features(self, player_id: int) -> Dict:
+        """
+        Get set piece responsibility features for a player.
+
+        Uses FPL API data stored in players table:
+        - penalties_order: 1 = first choice pen taker (high-value set piece)
+        - corners_and_indirect_freekicks_order: 1 = first choice
+        - direct_freekicks_order: 1 = first choice
+
+        Returns features as binary indicators (is_on_X) and a combined
+        set_piece_involvement score.
+        """
+        player = self.db.execute_query("""
+            SELECT penalties_order, corners_and_indirect_freekicks_order,
+                   direct_freekicks_order
+            FROM players WHERE id = ?
+        """, (player_id,))
+
+        if not player:
+            return {
+                'is_penalty_taker': 0,
+                'is_corner_taker': 0,
+                'is_direct_fk_taker': 0,
+                'set_piece_involvement': 0.0,
+            }
+
+        p = player[0]
+        pen_order = p['penalties_order']
+        corner_order = p['corners_and_indirect_freekicks_order']
+        fk_order = p['direct_freekicks_order']
+
+        # Binary: is this player the first-choice taker?
+        is_pen = 1 if pen_order is not None and pen_order == 1 else 0
+        is_corner = 1 if corner_order is not None and corner_order <= 2 else 0
+        is_fk = 1 if fk_order is not None and fk_order <= 2 else 0
+
+        # Combined score: penalties are most valuable (direct goal chance),
+        # corners/FKs provide assist opportunities
+        set_piece_score = (is_pen * 3.0) + (is_corner * 1.0) + (is_fk * 1.5)
+
+        return {
+            'is_penalty_taker': is_pen,
+            'is_corner_taker': is_corner,
+            'is_direct_fk_taker': is_fk,
+            'set_piece_involvement': set_piece_score,
         }
 
     def get_fixture_difficulty(
@@ -431,6 +536,12 @@ class FeatureEngineer:
         # Get season stats
         season = self.get_player_season_stats(player_id)
 
+        # Get multi-horizon rolling features (1, 3, 5, 10 game windows)
+        multi_horizon = self.get_multi_horizon_form(player_id, gameweek)
+
+        # Get set piece responsibility features
+        set_pieces = self.get_set_piece_features(player_id)
+
         # Combine all features
         features = {
             # Player attributes
@@ -509,6 +620,45 @@ class FeatureEngineer:
                 recent_form.get('avg_cbi', 0),
                 recent_form.get('avg_recoveries', 0)
             ),
+
+            # Multi-horizon rolling features (1, 3, 5, 10 game windows)
+            'avg_points_1': multi_horizon.get('avg_points_1', 0.0),
+            'avg_minutes_1': multi_horizon.get('avg_minutes_1', 0.0),
+            'avg_goals_1': multi_horizon.get('avg_goals_1', 0.0),
+            'avg_assists_1': multi_horizon.get('avg_assists_1', 0.0),
+            'avg_bonus_1': multi_horizon.get('avg_bonus_1', 0.0),
+            'avg_bps_1': multi_horizon.get('avg_bps_1', 0.0),
+
+            'avg_points_3': multi_horizon.get('avg_points_3', 0.0),
+            'avg_minutes_3': multi_horizon.get('avg_minutes_3', 0.0),
+            'avg_goals_3': multi_horizon.get('avg_goals_3', 0.0),
+            'avg_assists_3': multi_horizon.get('avg_assists_3', 0.0),
+            'avg_bonus_3': multi_horizon.get('avg_bonus_3', 0.0),
+            'avg_bps_3': multi_horizon.get('avg_bps_3', 0.0),
+
+            'avg_points_5': multi_horizon.get('avg_points_5', 0.0),
+            'avg_minutes_5': multi_horizon.get('avg_minutes_5', 0.0),
+            'avg_goals_5': multi_horizon.get('avg_goals_5', 0.0),
+            'avg_assists_5': multi_horizon.get('avg_assists_5', 0.0),
+            'avg_bonus_5': multi_horizon.get('avg_bonus_5', 0.0),
+            'avg_bps_5': multi_horizon.get('avg_bps_5', 0.0),
+
+            'avg_points_10': multi_horizon.get('avg_points_10', 0.0),
+            'avg_minutes_10': multi_horizon.get('avg_minutes_10', 0.0),
+            'avg_goals_10': multi_horizon.get('avg_goals_10', 0.0),
+            'avg_assists_10': multi_horizon.get('avg_assists_10', 0.0),
+            'avg_bonus_10': multi_horizon.get('avg_bonus_10', 0.0),
+            'avg_bps_10': multi_horizon.get('avg_bps_10', 0.0),
+
+            # Derived multi-horizon features
+            'minutes_std': multi_horizon.get('minutes_std', 0.0),  # Rotation risk
+            'form_momentum': multi_horizon.get('form_momentum', 0.0),  # Hot streak detection
+
+            # Set piece responsibility features
+            'is_penalty_taker': set_pieces['is_penalty_taker'],
+            'is_corner_taker': set_pieces['is_corner_taker'],
+            'is_direct_fk_taker': set_pieces['is_direct_fk_taker'],
+            'set_piece_involvement': set_pieces['set_piece_involvement'],
         }
 
         return features
