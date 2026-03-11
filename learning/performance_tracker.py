@@ -280,18 +280,28 @@ class PerformanceTracker:
         """
         logger.info(f"Analyzing systematic biases over last {last_n_weeks} gameweeks")
 
-        # Get recent gameweeks
+        # Get recent gameweeks that have BOTH predictions AND actual results
+        # We must use player_gameweek_history to find the max completed gameweek,
+        # not player_predictions (which includes future, unplayed gameweeks)
         recent_gws = self.db.execute_query("""
-            SELECT DISTINCT gameweek
-            FROM player_predictions
-            WHERE gameweek >= (SELECT MAX(gameweek) - ? FROM player_predictions)
-            ORDER BY gameweek DESC
+            SELECT DISTINCT pp.gameweek
+            FROM player_predictions pp
+            INNER JOIN player_gameweek_history pgh
+                ON pp.player_id = pgh.player_id AND pp.gameweek = pgh.gameweek
+            WHERE pp.gameweek >= (
+                SELECT MAX(pgh2.gameweek) - ?
+                FROM player_gameweek_history pgh2
+                INNER JOIN player_predictions pp2
+                    ON pgh2.player_id = pp2.player_id AND pgh2.gameweek = pp2.gameweek
+            )
+            ORDER BY pp.gameweek DESC
         """, (last_n_weeks,))
 
         if not recent_gws:
             return {'error': 'Insufficient data for bias analysis'}
 
         gws = [row['gameweek'] for row in recent_gws]
+        logger.info(f"Bias analysis using completed gameweeks: {sorted(gws)}")
 
         # Analyze by position
         biases = {'by_position': {}, 'by_price_range': {}, 'recommendations': []}
@@ -342,18 +352,28 @@ class PerformanceTracker:
         """
         logger.info(f"Analyzing prediction accuracy by price bracket over last {last_n_weeks} gameweeks")
 
-        # Get recent gameweeks
+        # Get recent gameweeks that have BOTH predictions AND actual results
+        # We must use player_gameweek_history to find the max completed gameweek,
+        # not player_predictions (which includes future, unplayed gameweeks)
         recent_gws = self.db.execute_query("""
-            SELECT DISTINCT gameweek
-            FROM player_predictions
-            WHERE gameweek >= (SELECT MAX(gameweek) - ? FROM player_predictions)
-            ORDER BY gameweek DESC
+            SELECT DISTINCT pp.gameweek
+            FROM player_predictions pp
+            INNER JOIN player_gameweek_history pgh
+                ON pp.player_id = pgh.player_id AND pp.gameweek = pgh.gameweek
+            WHERE pp.gameweek >= (
+                SELECT MAX(pgh2.gameweek) - ?
+                FROM player_gameweek_history pgh2
+                INNER JOIN player_predictions pp2
+                    ON pgh2.player_id = pp2.player_id AND pgh2.gameweek = pp2.gameweek
+            )
+            ORDER BY pp.gameweek DESC
         """, (last_n_weeks,))
 
         if not recent_gws:
             return {'error': 'Insufficient data for price bracket analysis'}
 
         gws = [row['gameweek'] for row in recent_gws]
+        logger.info(f"Price bracket analysis using completed gameweeks: {sorted(gws)}")
 
         # Get predictions with player prices
         results = self.db.execute_query(f"""

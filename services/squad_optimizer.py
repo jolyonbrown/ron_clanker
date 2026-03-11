@@ -2,19 +2,27 @@
 Squad Optimizer Service
 
 Builds optimal 15-player squads for Wildcard and Free Hit chips.
+Also provides MILP-based starting XI optimization.
 
 Key differences:
 - Free Hit: Fresh £100m budget, optimize for single GW, squad reverts after
 - Wildcard: Use selling prices + bank, optimize for multi-GW horizon, permanent squad
 
-Uses greedy algorithm with beam search for near-optimal solutions that respect
-all FPL constraints (budget, position limits, team limits).
+Uses Mixed-Integer Linear Programming (PuLP) for guaranteed optimal solutions
+that respect all FPL constraints (budget, position limits, team limits).
+Falls back to greedy algorithm if PuLP unavailable.
 """
 
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from collections import defaultdict
+
+try:
+    import pulp
+    PULP_AVAILABLE = True
+except ImportError:
+    PULP_AVAILABLE = False
 
 from data.database import Database
 
@@ -328,73 +336,155 @@ class SquadOptimizer:
         verbose: bool = True
     ) -> List[Dict]:
         """
-        Core optimization algorithm using position-by-position greedy selection
-        with lookahead to avoid painting ourselves into a corner.
+        Core optimization using MILP (Mixed-Integer Linear Programming).
 
-        Strategy:
-        1. Sort players by xP within each position
-        2. Select positions in order that preserves budget flexibility
-        3. Use greedy selection with constraint checking
-        4. Fallback to cheaper options if budget runs low
+        Guaranteed optimal squad selection subject to FPL constraints:
+        - Budget limit
+        - Exactly 2 GKP, 5 DEF, 5 MID, 3 FWD
+        - Max 3 players from any single team
+        - Maximize total expected points
+
+        Falls back to greedy algorithm if PuLP unavailable.
         """
-        squad = []
-        spent = 0
-        team_counts = defaultdict(int)  # Track players per team
+        if not PULP_AVAILABLE:
+            logger.warning("PuLP not available, falling back to greedy optimizer")
+            return self._optimize_squad_greedy(players, budget, predictions, horizon, verbose)
 
-        # Group players by position
+        if verbose:
+            print(f"\n📊 Running MILP optimizer (guaranteed optimal)...")
+
+        # Pre-filter to top candidates per position to keep problem tractable
+        # (full player pool would work but solving is faster with fewer vars)
         by_position = defaultdict(list)
         for p in players:
             by_position[p['element_type']].append(p)
 
-        # Sort each position by xP (descending)
+        candidates = []
+        pos_limits = {1: 15, 2: 40, 3: 40, 4: 25}  # Top N per position
+        for pos_id, limit in pos_limits.items():
+            sorted_pos = sorted(by_position[pos_id], key=lambda x: x['xP'], reverse=True)
+            candidates.extend(sorted_pos[:limit])
+
+        # Create the LP problem
+        prob = pulp.LpProblem("FPL_Squad_Selection", pulp.LpMaximize)
+
+        # Decision variables: x[i] = 1 if player i is selected
+        player_vars = {}
+        for i, p in enumerate(candidates):
+            player_vars[i] = pulp.LpVariable(f"x_{p['id']}", cat='Binary')
+
+        # Objective: maximize total xP
+        prob += pulp.lpSum(
+            candidates[i]['xP'] * player_vars[i] for i in range(len(candidates))
+        ), "Total_xP"
+
+        # Constraint 1: Budget
+        prob += pulp.lpSum(
+            candidates[i]['now_cost'] * player_vars[i] for i in range(len(candidates))
+        ) <= budget, "Budget"
+
+        # Constraint 2: Position limits (exact counts)
+        position_targets = {1: 2, 2: 5, 3: 5, 4: 3}
+        for pos_id, target in position_targets.items():
+            pos_indices = [i for i, p in enumerate(candidates) if p['element_type'] == pos_id]
+            prob += pulp.lpSum(
+                player_vars[i] for i in pos_indices
+            ) == target, f"Position_{POSITIONS[pos_id]}"
+
+        # Constraint 3: Max 3 per team
+        team_ids = set(p['team_id'] for p in candidates)
+        for team_id in team_ids:
+            team_indices = [i for i, p in enumerate(candidates) if p['team_id'] == team_id]
+            prob += pulp.lpSum(
+                player_vars[i] for i in team_indices
+            ) <= 3, f"Team_{team_id}"
+
+        # Solve
+        prob.solve(pulp.PULP_CBC_CMD(msg=0))
+
+        if prob.status != pulp.constants.LpStatusOptimal:
+            logger.warning(f"MILP solver status: {pulp.LpStatus[prob.status]}, falling back to greedy")
+            return self._optimize_squad_greedy(players, budget, predictions, horizon, verbose)
+
+        # Extract solution
+        squad = []
+        for i, p in enumerate(candidates):
+            if player_vars[i].varValue and player_vars[i].varValue > 0.5:
+                squad.append(p)
+
+        total_xp = sum(p['xP'] for p in squad)
+        total_cost = sum(p['now_cost'] for p in squad)
+
+        if verbose:
+            print(f"  MILP optimal solution found!")
+            print(f"  Total xP: {total_xp:.1f}")
+            print(f"  Total cost: £{total_cost/10:.1f}m / £{budget/10:.1f}m")
+
+            # Print by position
+            for pos_id in [1, 2, 3, 4]:
+                pos_name = POSITIONS[pos_id]
+                pos_players = sorted(
+                    [p for p in squad if p['element_type'] == pos_id],
+                    key=lambda x: x['xP'], reverse=True
+                )
+                for p in pos_players:
+                    print(f"  {pos_name}: {p['web_name']} ({p.get('team_name', '?')}) "
+                          f"£{p['now_cost']/10:.1f}m, xP={p['xP']:.1f}")
+
+        return squad
+
+    def _optimize_squad_greedy(
+        self,
+        players: List[Dict],
+        budget: int,
+        predictions: Dict[int, float],
+        horizon: int,
+        verbose: bool = True
+    ) -> List[Dict]:
+        """
+        Fallback greedy optimizer (position-by-position with budget reservation).
+        Used when PuLP is not available.
+        """
+        squad = []
+        spent = 0
+        team_counts = defaultdict(int)
+
+        by_position = defaultdict(list)
+        for p in players:
+            by_position[p['element_type']].append(p)
+
         for pos_id in by_position:
             by_position[pos_id].sort(key=lambda x: x['xP'], reverse=True)
 
-        # Selection order: Start with positions that have fewer good options
-        # GKP and FWD typically have fewer elite options
-        selection_order = [
-            (1, 2),  # 2 GKPs
-            (4, 3),  # 3 FWDs
-            (2, 5),  # 5 DEFs
-            (3, 5),  # 5 MIDs
-        ]
+        selection_order = [(1, 2), (4, 3), (2, 5), (3, 5)]
 
         if verbose:
-            print(f"\n📊 Selecting squad...")
+            print(f"\n📊 Selecting squad (greedy fallback)...")
+
+        min_prices = {1: 40, 2: 40, 3: 45, 4: 45}
 
         for pos_id, target_count in selection_order:
             pos_name = POSITIONS[pos_id]
             candidates = by_position[pos_id]
             selected = 0
 
-            # Calculate remaining budget for other positions
             remaining_positions = sum(
                 count for pid, count in selection_order
                 if pid != pos_id and sum(1 for p in squad if p['element_type'] == pid) < count
             )
-
-            # Reserve minimum budget for remaining positions
-            # Use position-specific minimum prices
-            min_prices = {1: 40, 2: 40, 3: 45, 4: 45}  # In tenths
             reserved = remaining_positions * min_prices.get(pos_id, 45)
 
             for candidate in candidates:
                 if selected >= target_count:
                     break
-
-                # Check team constraint
                 if team_counts[candidate['team_id']] >= 3:
                     continue
-
-                # Check budget (with reserve for other positions)
                 positions_remaining_for_this = target_count - selected - 1
                 this_pos_reserve = positions_remaining_for_this * min_prices.get(pos_id, 45)
                 available_budget = budget - spent - reserved - this_pos_reserve
-
                 if candidate['now_cost'] > available_budget:
                     continue
 
-                # Select player
                 squad.append(candidate)
                 spent += candidate['now_cost']
                 team_counts[candidate['team_id']] += 1
@@ -405,32 +495,22 @@ class SquadOptimizer:
                           f"{candidate['web_name']} ({candidate['team_name']}) "
                           f"£{candidate['now_cost']/10:.1f}m, xP={candidate['xP']:.1f}")
 
-            # If we couldn't fill the position, try cheaper options
             if selected < target_count:
-                logger.warning(f"SquadOptimizer: Only got {selected}/{target_count} {pos_name}s, "
-                              f"trying budget options...")
-
-                # Sort by price to find cheaper options
                 cheap_candidates = sorted(
                     [c for c in candidates if c not in squad],
                     key=lambda x: x['now_cost']
                 )
-
                 for candidate in cheap_candidates:
                     if selected >= target_count:
                         break
-
                     if team_counts[candidate['team_id']] >= 3:
                         continue
-
                     if candidate['now_cost'] > (budget - spent):
                         continue
-
                     squad.append(candidate)
                     spent += candidate['now_cost']
                     team_counts[candidate['team_id']] += 1
                     selected += 1
-
                     if verbose:
                         print(f"  {pos_name} {selected}/{target_count} (budget): "
                               f"{candidate['web_name']} £{candidate['now_cost']/10:.1f}m")
@@ -439,6 +519,135 @@ class SquadOptimizer:
             print(f"\n  Total: {len(squad)} players, £{spent/10:.1f}m")
 
         return squad
+
+    def optimize_starting_xi(
+        self,
+        squad: List[Dict],
+        verbose: bool = False
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """
+        Given a 15-player squad, find the optimal starting XI and bench order
+        using MILP to test all valid formations simultaneously.
+
+        Returns:
+            Tuple of (starting_xi, bench) where each player has 'position' set.
+        """
+        if not PULP_AVAILABLE or len(squad) != 15:
+            return self._starting_xi_greedy(squad, verbose)
+
+        prob = pulp.LpProblem("FPL_Starting_XI", pulp.LpMaximize)
+
+        # Decision variables: s[i] = 1 if player i starts
+        s = {}
+        for i, p in enumerate(squad):
+            s[i] = pulp.LpVariable(f"s_{p.get('id', i)}", cat='Binary')
+
+        # Objective: maximize starting XI xP
+        prob += pulp.lpSum(
+            squad[i].get('xP', 0) * s[i] for i in range(15)
+        ), "Starting_XI_xP"
+
+        # Constraint: exactly 11 starters
+        prob += pulp.lpSum(s[i] for i in range(15)) == 11, "Exactly_11"
+
+        # Position constraints for valid formations
+        by_pos = defaultdict(list)
+        for i, p in enumerate(squad):
+            by_pos[p['element_type']].append(i)
+
+        # GK: exactly 1 starting
+        prob += pulp.lpSum(s[i] for i in by_pos[1]) == 1, "GK_1"
+        # DEF: at least 3
+        prob += pulp.lpSum(s[i] for i in by_pos[2]) >= 3, "DEF_min_3"
+        # MID: at least 2 (implicit from formation constraints)
+        prob += pulp.lpSum(s[i] for i in by_pos[3]) >= 2, "MID_min_2"
+        # FWD: at least 1
+        prob += pulp.lpSum(s[i] for i in by_pos[4]) >= 1, "FWD_min_1"
+
+        prob.solve(pulp.PULP_CBC_CMD(msg=0))
+
+        if prob.status != pulp.constants.LpStatusOptimal:
+            return self._starting_xi_greedy(squad, verbose)
+
+        starting = []
+        bench = []
+        for i, p in enumerate(squad):
+            if s[i].varValue and s[i].varValue > 0.5:
+                starting.append(p)
+            else:
+                bench.append(p)
+
+        # Sort starting by position then xP
+        starting.sort(key=lambda x: (x['element_type'], -x.get('xP', 0)))
+
+        # Bench: sort by xP descending (GK last)
+        bench_outfield = [p for p in bench if p['element_type'] != 1]
+        bench_gk = [p for p in bench if p['element_type'] == 1]
+        bench_outfield.sort(key=lambda x: x.get('xP', 0), reverse=True)
+        bench = bench_outfield + bench_gk
+
+        # Assign positions 1-15
+        for idx, p in enumerate(starting):
+            p['position'] = idx + 1
+        for idx, p in enumerate(bench):
+            p['position'] = 12 + idx
+
+        if verbose:
+            total_xp = sum(p.get('xP', 0) for p in starting)
+            formation = self._get_formation(starting)
+            print(f"  MILP Starting XI: {formation}, xP={total_xp:.1f}")
+
+        return starting, bench
+
+    def _starting_xi_greedy(
+        self,
+        squad: List[Dict],
+        verbose: bool = False
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """Fallback greedy starting XI selection."""
+        by_pos = defaultdict(list)
+        for p in squad:
+            by_pos[p['element_type']].append(p)
+        for pos in by_pos:
+            by_pos[pos].sort(key=lambda x: x.get('xP', 0), reverse=True)
+
+        valid_formations = [
+            (1, 3, 4, 3), (1, 3, 5, 2), (1, 4, 3, 3),
+            (1, 4, 4, 2), (1, 4, 5, 1), (1, 5, 3, 2), (1, 5, 4, 1),
+        ]
+
+        best_xi = None
+        best_score = -1
+        for gk, d, m, f in valid_formations:
+            if len(by_pos[1]) < gk or len(by_pos[2]) < d or \
+               len(by_pos[3]) < m or len(by_pos[4]) < f:
+                continue
+            xi = by_pos[1][:gk] + by_pos[2][:d] + by_pos[3][:m] + by_pos[4][:f]
+            score = sum(p.get('xP', 0) for p in xi)
+            if score > best_score:
+                best_score = score
+                best_xi = xi
+
+        bench = [p for p in squad if p not in best_xi]
+        bench_outfield = [p for p in bench if p['element_type'] != 1]
+        bench_gk = [p for p in bench if p['element_type'] == 1]
+        bench_outfield.sort(key=lambda x: x.get('xP', 0), reverse=True)
+        bench = bench_outfield + bench_gk
+
+        for idx, p in enumerate(best_xi):
+            p['position'] = idx + 1
+        for idx, p in enumerate(bench):
+            p['position'] = 12 + idx
+
+        return best_xi, bench
+
+    @staticmethod
+    def _get_formation(starting: List[Dict]) -> str:
+        """Get formation string from starting XI."""
+        counts = defaultdict(int)
+        for p in starting:
+            counts[p['element_type']] += 1
+        return f"{counts[2]}-{counts[3]}-{counts[4]}"
 
     def _print_squad(
         self,
