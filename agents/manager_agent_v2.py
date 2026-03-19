@@ -847,15 +847,15 @@ class RonManager(BaseAgent):
             return 0.0
 
         # --- 1. Position multiplier ---
-        # GKs almost never return captain-worthy hauls
-        # DEFs can via set pieces but lower ceiling than attackers
-        # MIDs and FWDs have highest ceiling for goals+assists+bonus
+        # 2025/26 DC rules changed the game: DEF haul rate (10.5%) is HIGHEST
+        # of any position, ahead of FWD (9.9%) and MID (8.9%).
+        # GKs still rarely return captain-worthy hauls.
         position = player.get('element_type', 3)
         position_multiplier = {
             1: 0.25,   # GK - almost never captain
-            2: 0.70,   # DEF - occasionally (set piece threats like Gabriel)
+            2: 0.95,   # DEF - DC rules make them consistent haulers
             3: 1.00,   # MID - standard captain picks
-            4: 1.15,   # FWD - best captain candidates (goal focus)
+            4: 1.05,   # FWD - slight edge for goal focus, but not dominant
         }.get(position, 1.0)
 
         score = base_xp * position_multiplier

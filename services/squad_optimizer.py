@@ -111,7 +111,8 @@ class SquadOptimizer:
             print(f"Optimization: Single gameweek")
 
         # Get all available players with predictions
-        players = self._get_available_players(predictions)
+        # Pass gameweek to filter out teams with no fixture (blank GW handling)
+        players = self._get_available_players(predictions, gameweek=gameweek)
 
         if verbose:
             print(f"Available players: {len(players)}")
@@ -198,7 +199,7 @@ class SquadOptimizer:
             horizon
         )
 
-        # Get all available players
+        # Get all available players (no BGW filter for wildcard - optimizing multi-GW)
         players = self._get_available_players(aggregated_predictions)
 
         if verbose:
@@ -237,14 +238,30 @@ class SquadOptimizer:
 
     def _get_available_players(
         self,
-        predictions: Dict[int, float]
+        predictions: Dict[int, float],
+        gameweek: int = None
     ) -> List[Dict]:
         """
         Get all available players with their predictions.
 
         Filters out injured/unavailable players.
+        If gameweek is provided, also filters out players whose teams
+        don't have a fixture in that gameweek (blank gameweek handling).
         Returns players with all fields needed by downstream processors.
         """
+        # If gameweek specified, find which teams actually play
+        playing_teams = None
+        if gameweek is not None:
+            fixtures = self.db.execute_query(
+                "SELECT team_h, team_a FROM fixtures WHERE event = ?",
+                (gameweek,)
+            )
+            if fixtures:
+                playing_teams = set()
+                for f in fixtures:
+                    playing_teams.add(f['team_h'])
+                    playing_teams.add(f['team_a'])
+
         # Get players from database with all needed fields
         players = self.db.execute_query("""
             SELECT
@@ -269,6 +286,17 @@ class SquadOptimizer:
                  OR p.chance_of_playing_next_round >= 50)
             ORDER BY p.id
         """)
+
+        # Filter to only players whose teams play in the target gameweek
+        if playing_teams is not None:
+            before_count = len(players)
+            players = [p for p in players if p['team_id'] in playing_teams]
+            filtered = before_count - len(players)
+            if filtered > 0:
+                logger.info(
+                    f"BGW filter: Removed {filtered} players from "
+                    f"{before_count - filtered} teams not playing in GW{gameweek}"
+                )
 
         # Add predictions and ensure all required fields are set
         for player in players:
