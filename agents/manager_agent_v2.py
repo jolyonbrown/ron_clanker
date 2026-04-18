@@ -1536,12 +1536,20 @@ Captain: {captain['web_name']}
                         # Free Hit: Fresh £100m budget, single GW optimization
                         logger.info("Ron: Activating FREE HIT - building optimal one-week squad")
 
-                        # Get single GW predictions
-                        predictions = {}
-                        if self.synthesis_engine:
-                            recs = self.synthesis_engine.synthesize_recommendations(gameweek)
-                            for p in recs.get('top_players', []):
-                                predictions[p['player_id']] = p.get('xp', 0)
+                        # Read cached predictions directly from DB. These were
+                        # produced by the synthesis engine earlier; calling
+                        # synthesize_recommendations() here again repeats all
+                        # that ML work and blew the GW33 deadline budget.
+                        rows = self.db.execute_query(
+                            "SELECT player_id, predicted_points FROM player_predictions "
+                            "WHERE gameweek = ?",
+                            (gameweek,)
+                        )
+                        predictions = {
+                            r['player_id']: float(r['predicted_points'] or 0.0)
+                            for r in rows
+                        }
+                        logger.info(f"Ron: Loaded {len(predictions)} predictions for GW{gameweek}")
 
                         optimized = squad_optimizer.optimize_free_hit(
                             gameweek=gameweek,
@@ -1559,18 +1567,26 @@ Captain: {captain['web_name']}
                         # Wildcard: Use selling prices + bank, multi-GW optimization
                         logger.info("Ron: Activating WILDCARD - rebuilding for multi-GW horizon")
 
-                        # Get multi-GW predictions
-                        multi_gw_predictions = {}
                         horizon = 6  # Extended planning horizon
 
-                        if self.synthesis_engine:
-                            for gw in range(gameweek, gameweek + horizon):
-                                recs = self.synthesis_engine.synthesize_recommendations(gw)
-                                for p in recs.get('top_players', []):
-                                    player_id = p['player_id']
-                                    if player_id not in multi_gw_predictions:
-                                        multi_gw_predictions[player_id] = {}
-                                    multi_gw_predictions[player_id][gw] = p.get('xp', 0)
+                        # Bulk-load predictions across the WC horizon from DB
+                        # instead of re-running synthesis for every GW (the
+                        # per-GW synthesis loop was the bottleneck on GW33).
+                        rows = self.db.execute_query(
+                            "SELECT player_id, gameweek, predicted_points FROM player_predictions "
+                            "WHERE gameweek BETWEEN ? AND ?",
+                            (gameweek, gameweek + horizon - 1)
+                        )
+                        multi_gw_predictions: Dict[int, Dict[int, float]] = {}
+                        for r in rows:
+                            multi_gw_predictions.setdefault(r['player_id'], {})[r['gameweek']] = float(
+                                r['predicted_points'] or 0.0
+                            )
+                        total_preds = sum(len(g) for g in multi_gw_predictions.values())
+                        logger.info(
+                            f"Ron: Loaded {total_preds} predictions across "
+                            f"GW{gameweek}-{gameweek + horizon - 1}"
+                        )
 
                         optimized = squad_optimizer.optimize_wildcard(
                             gameweek=gameweek,
