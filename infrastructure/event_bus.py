@@ -10,6 +10,7 @@ event-driven architecture. It handles:
 """
 
 import asyncio
+import inspect
 import logging
 from typing import Callable, Dict, List, Optional, Set
 from contextlib import asynccontextmanager
@@ -241,11 +242,13 @@ class EventBus:
                     handlers = self._subscriptions.get(event.event_type, [])
                     for handler in handlers:
                         try:
-                            # Run handler (support both sync and async)
-                            if asyncio.iscoroutinefunction(handler):
-                                await handler(event)
-                            else:
-                                handler(event)
+                            # Run handler (support both sync and async).
+                            # `inspect.iscoroutine` on the return value covers
+                            # async functions, methods, and callable classes
+                            # whose __call__ is async (e.g. EventCollector).
+                            result = handler(event)
+                            if inspect.iscoroutine(result):
+                                await result
                         except Exception as e:
                             logger.error(
                                 f"Error in handler for {event}: {e}",

@@ -218,9 +218,14 @@ def create_analysis_request_event(
 
 def create_data_refresh_event(
     data_type: str = 'all',
-    force: bool = False
+    force: bool = False,
+    source: str = '',
 ) -> Event:
-    """Create a data refresh request event."""
+    """Create a data refresh request event.
+
+    Leave `source` empty to let the publishing agent's name fill in
+    automatically in BaseAgent.publish_event.
+    """
     return Event(
         event_type=EventType.DATA_REFRESH_REQUESTED,
         priority=EventPriority.HIGH if force else EventPriority.NORMAL,
@@ -228,7 +233,7 @@ def create_data_refresh_event(
             'data_type': data_type,  # 'all', 'players', 'fixtures', 'teams'
             'force': force
         },
-        source='scheduler'
+        source=source,
     )
 
 
