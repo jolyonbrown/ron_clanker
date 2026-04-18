@@ -74,6 +74,20 @@ class DecisionSynthesisEngine:
         self.ml_predictions = {}
         self.intelligence_cache = {}
 
+        # Within-process memoization of synthesize_recommendations().
+        # The full synthesis (~9 min ML inference + intel gathering) runs
+        # once per gameweek per process; repeated calls for the same GW
+        # return the cached dict. Cross-process runs are handled by the
+        # freshness check in run_ml_predictions against player_predictions.
+        self._cached_recs_gw: Optional[int] = None
+        self._cached_recs: Optional[Dict] = None
+
+        # How recent player_predictions rows must be to skip the ML
+        # inference loop. Daily data collection refreshes the table, so
+        # 24h is the right ceiling; during a selection run nothing else
+        # would write to the table so intra-process reads are always fresh.
+        self._predictions_cache_ttl_hours = 24
+
         logger.info("DecisionSynthesisEngine: Initialized")
 
     def _load_config(self) -> Dict:
@@ -92,12 +106,27 @@ class DecisionSynthesisEngine:
         """
         Run ML predictions for all players for target gameweek.
 
+        If `player_predictions` already has fresh rows for this GW
+        (within self._predictions_cache_ttl_hours), they are loaded
+        directly and the ML inference loop is skipped. That loop is
+        ~9 min of per-player feature engineering + neural inference —
+        worth avoiding when the daily data-collection job has already
+        populated the table.
+
         Args:
             gameweek: Target gameweek
 
         Returns:
             Dict mapping player_id -> expected_points
         """
+        cached = self._load_cached_predictions(gameweek)
+        if cached is not None:
+            logger.info(
+                f"DecisionSynthesis: Using {len(cached)} cached predictions "
+                f"for GW{gameweek} (skipping ML inference)"
+            )
+            return cached
+
         logger.info(f"DecisionSynthesis: Running ML predictions for GW{gameweek}")
 
         # Load trained models (auto-detect latest version)
@@ -418,17 +447,29 @@ class DecisionSynthesisEngine:
         """
         Main synthesis method: combines ML + intelligence → recommendations.
 
+        Results are memoized within the process: the first call for a
+        given gameweek does the full work (~9 min with ML inference);
+        subsequent calls for the same gameweek return the cached dict
+        immediately. Use `invalidate_cache()` to force a recompute after
+        new data lands.
+
         Args:
             gameweek: Target gameweek
 
         Returns:
             Dict with comprehensive recommendations
         """
+        if self._cached_recs_gw == gameweek and self._cached_recs is not None:
+            logger.info(
+                f"DecisionSynthesis: Using cached recommendations for GW{gameweek}"
+            )
+            return self._cached_recs
+
         logger.info(f"DecisionSynthesis: Synthesizing recommendations for GW{gameweek}")
 
         self.current_gw = gameweek
 
-        # Step 1: Run ML predictions
+        # Step 1: Run ML predictions (itself DB-cached when fresh)
         self.ml_predictions = self.run_ml_predictions(gameweek)
 
         # Step 2: Gather intelligence
@@ -448,7 +489,69 @@ class DecisionSynthesisEngine:
 
         logger.info("DecisionSynthesis: Recommendations complete")
 
+        self._cached_recs_gw = gameweek
+        self._cached_recs = recommendations
         return recommendations
+
+    def invalidate_cache(self) -> None:
+        """Clear cached recommendations (call after new data is collected)."""
+        self._cached_recs_gw = None
+        self._cached_recs = None
+        self.ml_predictions = {}
+        self.intelligence_cache = {}
+        logger.info("DecisionSynthesis: Cache invalidated")
+
+    def _load_cached_predictions(self, gameweek: int) -> Optional[Dict[int, float]]:
+        """
+        Return cached predictions from player_predictions if rows exist
+        and the newest row is within the TTL. Returns None otherwise.
+        """
+        try:
+            stats = self.db.execute_query(
+                "SELECT COUNT(*) AS row_count, MAX(created_at) AS newest "
+                "FROM player_predictions WHERE gameweek = ?",
+                (gameweek,)
+            )
+        except Exception as exc:
+            logger.warning(
+                f"DecisionSynthesis: cached predictions freshness check failed: {exc}"
+            )
+            return None
+
+        if not stats or not stats[0]['row_count']:
+            return None
+
+        newest_str = stats[0]['newest']
+        if not newest_str:
+            return None
+
+        # SQLite stores created_at as 'YYYY-MM-DD HH:MM:SS' (local time).
+        # Treat both newest and now as naive local times for the delta.
+        try:
+            newest = datetime.fromisoformat(str(newest_str).replace(' ', 'T'))
+        except ValueError:
+            logger.warning(
+                f"DecisionSynthesis: unparseable created_at '{newest_str}', "
+                "skipping DB cache"
+            )
+            return None
+
+        from datetime import timedelta
+        age = datetime.now() - newest
+        if age >= timedelta(hours=self._predictions_cache_ttl_hours):
+            logger.info(
+                f"DecisionSynthesis: player_predictions for GW{gameweek} "
+                f"are {age.total_seconds()/3600:.1f}h old, re-running ML"
+            )
+            return None
+
+        # Load the predictions
+        rows = self.db.execute_query(
+            "SELECT player_id, predicted_points FROM player_predictions "
+            "WHERE gameweek = ?",
+            (gameweek,)
+        )
+        return {r['player_id']: float(r['predicted_points'] or 0.0) for r in rows}
 
     def _determine_strategy(self, intelligence: Dict) -> Dict:
         """Determine overall strategy based on competitive position."""
