@@ -1597,6 +1597,37 @@ Captain: {captain['web_name']}
                     traceback.print_exc()
                     # Fall back to normal team + transfers
 
+            # Triple Captain may ask to swap the captain to its best target
+            captain_override_id = chip_decision.get('captain_override')
+            if chip_used == '3xc' and captain_override_id:
+                current_captain = next(
+                    (p for p in new_team if p.get('is_captain')), None
+                )
+                current_cap_id = (
+                    current_captain.get('player_id') or current_captain.get('id')
+                    if current_captain else None
+                )
+                if current_cap_id != captain_override_id:
+                    override_name = chip_decision.get('captain_override_name') or str(captain_override_id)
+                    logger.info(
+                        f"Ron: TC captain override — swapping armband to {override_name} "
+                        f"(id={captain_override_id})"
+                    )
+                    for p in new_team:
+                        pid = p.get('player_id') or p.get('id')
+                        p['is_captain'] = (pid == captain_override_id)
+                        if pid == captain_override_id:
+                            p['is_vice_captain'] = False
+                    # Ensure exactly one vice_captain remains; if override grabbed the
+                    # existing vc slot, promote the prior captain into VC.
+                    if not any(p.get('is_vice_captain') for p in new_team):
+                        prior_cap_id = current_cap_id
+                        for p in new_team:
+                            pid = p.get('player_id') or p.get('id')
+                            if pid == prior_cap_id:
+                                p['is_vice_captain'] = True
+                                break
+
             self.chips_used.append(chip_used)
         else:
             logger.info("Ron: No chip used this week")

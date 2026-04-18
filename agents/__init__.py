@@ -14,7 +14,6 @@ from .data_collector import DataCollector
 from .player_valuation import PlayerValuationAgent
 from .manager_agent_v2 import RonManager  # Event-driven manager
 from .transfer_strategy import TransferStrategyAgent
-from .chip_strategist import ChipStrategistAgent
 from .learning_agent import LearningAgent
 from .scout import ScoutAgent
 
@@ -30,7 +29,6 @@ __all__ = [
     'PlayerValuationAgent',
     'RonManager',  # Preferred manager (event-driven)
     'TransferStrategyAgent',
-    'ChipStrategistAgent',
     'LearningAgent',
     'ScoutAgent',
 ]
