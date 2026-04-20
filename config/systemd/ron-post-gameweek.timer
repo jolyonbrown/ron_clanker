@@ -1,0 +1,13 @@
+[Unit]
+Description=Ron Clanker - Post-gameweek review (12h check, runs when GW finished)
+
+[Timer]
+# Fire twice daily; the workflow script self-skips if no finished GW or
+# the latest finished GW has already been processed. 12h cadence handles
+# midweek-finishing gameweeks (e.g. DGWs running through Wed evening)
+# without waiting until the following Tuesday.
+OnCalendar=*-*-* 08,20:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
