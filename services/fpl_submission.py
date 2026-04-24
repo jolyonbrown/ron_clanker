@@ -407,13 +407,18 @@ class FPLSubmissionClient:
                 'selling_price': t['selling_price'],
             })
 
+        # FPL's /transfers/ endpoint activates transfer chips via the
+        # `chip` string field, NOT the `wildcard: bool` / `freehit: bool`
+        # flags (those are silently ignored by the current API). Verified
+        # live on 2026-04-24: `wildcard: true` → 9 transfers recorded as
+        # regular with -4 hit; `chip: 'wildcard'` → chip status_for_entry
+        # flipped to 'active' and transfers.made reset to 0.
         payload = {
             'confirmed': True,
             'entry': self.team_id,
             'event': gameweek,
             'transfers': transfer_list,
-            'wildcard': chip == 'wildcard',
-            'freehit': chip == 'freehit',
+            'chip': chip if chip in ('wildcard', 'freehit') else None,
         }
 
         transfer_summary = ", ".join(
@@ -587,6 +592,14 @@ class FPLSubmissionClient:
             )
 
         current_picks = {p['element'] for p in my_team.get('picks', [])}
+        # FPL's /my-team/ response carries the authoritative selling_price
+        # per player — use it so transfer submissions don't fail with
+        # "Selling price for element_out has changed" when our local
+        # current_team table is stale.
+        fpl_selling_price = {
+            p['element']: p.get('selling_price', 0)
+            for p in my_team.get('picks', [])
+        }
         logger.info(f"Current FPL team has {len(current_picks)} players")
 
         # --- Step 2: Submit transfers ---
@@ -685,13 +698,17 @@ class FPLSubmissionClient:
                     "SELECT now_cost FROM players WHERE id = ?",
                     (player_in_id,)
                 )
-                player_out_selling = db.execute_query(
-                    "SELECT selling_price FROM current_team WHERE player_id = ?",
-                    (player_out_id,)
-                )
 
                 purchase_price = player_in[0]['now_cost'] if player_in else 0
-                selling_price = player_out_selling[0]['selling_price'] if player_out_selling else 0
+                # Prefer FPL's authoritative selling_price (from my_team).
+                # Fall back to local DB only if somehow missing.
+                selling_price = fpl_selling_price.get(player_out_id)
+                if selling_price is None:
+                    db_row = db.execute_query(
+                        "SELECT selling_price FROM current_team WHERE player_id = ?",
+                        (player_out_id,)
+                    )
+                    selling_price = db_row[0]['selling_price'] if db_row else 0
 
                 transfers_for_api.append({
                     'element_in': player_in_id,
@@ -749,8 +766,13 @@ class FPLSubmissionClient:
                 'is_vice_captain': False,
             })
 
-        # Team endpoint handles bboost/3xc chips
-        team_chip = chip_used if chip_used in ('bboost', '3xc', 'bench_boost', 'triple_captain') else None
+        # Team endpoint handles bboost/3xc chips only. WC/FH are
+        # "transfer chips" activated via the /transfers/ endpoint's
+        # wildcard/freehit flags. Do NOT pass WC/FH here — the team
+        # endpoint rejects with "wildcard is not a valid choice".
+        team_chip = chip_used if chip_used in (
+            'bboost', '3xc', 'bench_boost', 'triple_captain'
+        ) else None
         team_result = self.submit_team(picks_for_api, chip=team_chip)
         team_result.gameweek = gameweek
         results.append(team_result)
