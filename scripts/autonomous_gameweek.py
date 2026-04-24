@@ -140,8 +140,14 @@ def get_deadline_time(db: Database, gameweek: int) -> Optional[str]:
     return rows[0]['deadline_time'] if rows else None
 
 
+_SLACK_ENABLED = True  # module-level flag; --no-slack disables
+
+
 def send_slack_notification(message: str, gameweek: int = 0):
-    """Send a status notification to Slack."""
+    """Send a status notification to Slack unless suppressed."""
+    if not _SLACK_ENABLED:
+        logger.info(f"[slack-suppressed] {message}")
+        return
     try:
         from notifications.slack import SlackNotifier
         notifier = SlackNotifier()
@@ -370,12 +376,19 @@ Designed to be triggered automatically by the deadline scheduler.
                         help='Run even if deadline has passed')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Verbose logging')
+    parser.add_argument('--no-slack', action='store_true',
+                        help='Suppress Slack notifications (useful during debugging)')
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args()
     setup_logging(args.verbose)
+    if getattr(args, 'no_slack', False):
+        _SLACK_ENABLED = False
+        # assign to module attribute so send_slack_notification sees it
+        import sys as _sys
+        _sys.modules[__name__]._SLACK_ENABLED = False
 
     try:
         exit_code = asyncio.run(run_pipeline(args))
