@@ -199,8 +199,16 @@ class SquadOptimizer:
             horizon
         )
 
-        # Get all available players (no BGW filter for wildcard - optimizing multi-GW)
-        players = self._get_available_players(aggregated_predictions)
+        # Filter to players whose teams play in the target gameweek. A WC
+        # squad still has to field an XI *this* GW; without this filter
+        # the optimizer could pick 6+ players from blanking teams (happened
+        # on GW34 2026-04-24 — Haaland, Semenyo, Van Hecke, João Pedro,
+        # Calvert-Lewin, Cherki all blanked, captain was Haaland with zero
+        # fixtures). Trade-off: some multi-GW value is lost when a key
+        # player (e.g. Haaland) blanks the target GW but plays later in the
+        # horizon — accepted because a 5-blank XI costs far more than
+        # missing one player's horizon contribution.
+        players = self._get_available_players(aggregated_predictions, gameweek=gameweek)
 
         if verbose:
             print(f"Available players: {len(players)}")
