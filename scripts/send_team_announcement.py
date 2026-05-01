@@ -43,6 +43,42 @@ logger = logging.getLogger('ron_clanker.announcement')
 POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 
 
+def _detect_chip_from_decisions(db, gameweek: int):
+    """
+    Read the chip Ron decided to play this GW from the decisions table.
+
+    The FPL /picks/ endpoint only exposes active_chip after deadline lock,
+    so pre-deadline announcements would always say "no chip" unless we
+    pull from the local decision log. Mirrors the pattern in
+    services/fpl_submission.py:_detect_chip_from_draft.
+
+    Returns 'wildcard' / 'freehit' / 'bboost' / '3xc' or None.
+    """
+    import json
+    try:
+        row = db.execute_query(
+            """SELECT decision_data FROM decisions
+               WHERE gameweek = ? AND decision_type = 'chip_usage'
+               ORDER BY id DESC LIMIT 1""",
+            (gameweek,),
+        )
+    except Exception as exc:
+        logger.warning(f"Could not read chip decision for GW{gameweek}: {exc}")
+        return None
+    if not row:
+        return None
+    data = row[0].get('decision_data')
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except (ValueError, TypeError):
+            return None
+    if not isinstance(data, dict):
+        return None
+    chip = data.get('chip')
+    return chip if chip and chip != 'none' else None
+
+
 def fetch_team_from_database(gameweek: int) -> dict:
     """
     Fetch team from draft_team table (for pre-deadline announcements).
@@ -80,7 +116,7 @@ def fetch_team_from_database(gameweek: int) -> dict:
         'picks': picks,
         'players': players,
         'teams': teams,
-        'active_chip': None,
+        'active_chip': _detect_chip_from_decisions(db, gameweek),
         'entry_history': {}
     }
 
