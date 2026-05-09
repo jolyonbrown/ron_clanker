@@ -383,6 +383,34 @@ def sync_current_team_from_fpl(team_id: int, gameweek: int = None, verbose: bool
             print(f"❌ No picks data for GW{gw}")
             return False
 
+        # Free Hit is ephemeral — the picks endpoint for an FH gameweek
+        # returns the temporary FH squad, but FPL reverts to the pre-FH
+        # squad once the GW ends. So when the latest GW used FH, walk
+        # back to find the persistent squad state. Wildcard squads are
+        # permanent (no skip). Team chips (BB / TC) don't affect squad
+        # composition (no skip).
+        # GW36 2026-05-09 lost -28 points to this: GW35 FH squad was
+        # synced to current_team, manager planned 2 transfers off that
+        # baseline, submission found 9 differences vs FPL's actual
+        # post-revert state. See ron_clanker-mi13.
+        walk_back_chips = {'freehit'}
+        while (
+            picks
+            and picks.get('active_chip') in walk_back_chips
+            and gw > 1
+        ):
+            chip = picks.get('active_chip')
+            if verbose:
+                print(
+                    f"  GW{gw} used {chip} (ephemeral) — walking back to "
+                    f"GW{gw - 1} for the persistent squad state"
+                )
+            gw -= 1
+            picks = fetch_team_picks(team_id, gw)
+            if not picks or 'picks' not in picks:
+                print(f"❌ No picks data for GW{gw} during chip walk-back")
+                return False
+
         # Build purchase price map from transfer history
         purchase_prices = build_purchase_price_map(team_id, players_lookup, verbose)
 
