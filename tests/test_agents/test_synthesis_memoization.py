@@ -177,6 +177,71 @@ def test_unparseable_timestamp_forces_rerun():
 # End-to-end: full synthesize_recommendations flow uses cache chain
 # ---------------------------------------------------------------------------
 
+def test_dgw_multiplier_doubles_dgw_players():
+    """
+    _apply_dgw_multiplier should double the xP of players whose teams
+    have two fixtures, leave SGW players alone, and zero blanking
+    players. This is the fix for GW36 2026-05-09 where TC went to
+    Fernandes (1 fix, 6.58 per-fixture) over Haaland (2 fix, 6.03
+    per-fixture but ~12 GW-total).
+    """
+    class DGWFakeDB(FakeDB):
+        def execute_query(self, query, params=()):
+            q = query.lower()
+            if 'team_h' in q and 'union all' in q:
+                # Two fixtures for team_id=1 (DGW), one for team_id=2 (SGW),
+                # zero for team_id=3 (blank)
+                return [
+                    {'team_id': 1}, {'team_id': 1},  # DGW
+                    {'team_id': 2},                  # SGW
+                ]
+            if 'select id, team_id from players' in q:
+                return [
+                    {'id': 100, 'team_id': 1},  # DGW player
+                    {'id': 200, 'team_id': 2},  # SGW player
+                    {'id': 300, 'team_id': 3},  # blank player
+                ]
+            return super().execute_query(query, params)
+
+    db = DGWFakeDB(predictions={})
+    eng = _make_engine(db)
+    raw = {100: 6.0, 200: 5.0, 300: 4.0}
+
+    adjusted = eng._apply_dgw_multiplier(raw, gameweek=36)
+
+    assert adjusted[100] == 12.0  # DGW: 6.0 × 2
+    assert adjusted[200] == 5.0   # SGW: unchanged
+    assert adjusted[300] == 0.0   # Blank: zeroed
+    # input dict shouldn't be mutated
+    assert raw[100] == 6.0
+
+
+def test_dgw_multiplier_handles_unknown_team():
+    """If a player's team_id can't be resolved, leave xP alone."""
+    class StrangeFakeDB(FakeDB):
+        def execute_query(self, query, params=()):
+            q = query.lower()
+            if 'team_h' in q and 'union all' in q:
+                return [{'team_id': 1}, {'team_id': 1}]
+            if 'select id, team_id from players' in q:
+                return []  # No team mapping returned
+            return super().execute_query(query, params)
+
+    db = StrangeFakeDB(predictions={})
+    eng = _make_engine(db)
+    raw = {100: 6.0}
+
+    adjusted = eng._apply_dgw_multiplier(raw, gameweek=36)
+
+    assert adjusted[100] == 6.0  # untouched fallback
+
+
+def test_dgw_multiplier_empty_predictions_returns_empty():
+    db = FakeDB(predictions={})
+    eng = _make_engine(db)
+    assert eng._apply_dgw_multiplier({}, gameweek=36) == {}
+
+
 def test_full_flow_uses_db_cache_and_memoizes():
     predictions = {101: 5.0, 102: 3.5}
     db = FakeDB(predictions=predictions, newest=datetime.now() - timedelta(hours=1))

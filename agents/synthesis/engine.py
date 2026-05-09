@@ -186,10 +186,74 @@ class DecisionSynthesisEngine:
         adjusted_predictions = self.news_adjuster.adjust_predictions(predictions, gameweek)
         print(f"   ✓ Adjusted {len([k for k in predictions.keys() if predictions[k] != adjusted_predictions.get(k, predictions[k])])} predictions based on news")
 
+        # Sum across DGW fixtures so the stored xP is the gameweek total
+        # rather than a per-fixture value. The model receives one fixture's
+        # features (FeatureEngineer.get_fixture_difficulty uses LIMIT 1) so
+        # raw output is per-fixture. Multiplying by fixture count gives a
+        # reasonable GW-total under the simplifying assumption that DGW
+        # opponents have similar difficulty (true on average; can over- or
+        # under-estimate individual cases). Documented as bug ron_clanker-...
+        # — accepted as-is for now because it's the right ballpark and
+        # keeps DGW players from being systematically undervalued in TC,
+        # captain, and squad-rank decisions (GW36 2026-05-09 case).
+        adjusted_predictions = self._apply_dgw_multiplier(adjusted_predictions, gameweek)
+
         # Store to database (store adjusted predictions)
         self._store_predictions(adjusted_predictions, gameweek)
 
         return adjusted_predictions
+
+    def _apply_dgw_multiplier(self, predictions: Dict[int, float], gameweek: int) -> Dict[int, float]:
+        """
+        Multiply each player's per-fixture xP by their team's fixture
+        count for the target gameweek. Players whose teams have no
+        fixture get xP = 0; SGW players unchanged; DGW players doubled.
+
+        Returns a new dict, doesn't mutate the input.
+        """
+        # Count fixtures per team for the gameweek
+        rows = self.db.execute_query(
+            "SELECT team_h AS team_id FROM fixtures WHERE event = ? "
+            "UNION ALL "
+            "SELECT team_a AS team_id FROM fixtures WHERE event = ?",
+            (gameweek, gameweek),
+        )
+        from collections import Counter
+        fixture_count: Dict[int, int] = Counter(r['team_id'] for r in rows)
+
+        # Map player_id -> team_id once
+        player_ids = list(predictions.keys())
+        if not player_ids:
+            return predictions
+        placeholders = ','.join('?' * len(player_ids))
+        team_rows = self.db.execute_query(
+            f"SELECT id, team_id FROM players WHERE id IN ({placeholders})",
+            tuple(player_ids),
+        )
+        player_team = {r['id']: r['team_id'] for r in team_rows}
+
+        adjusted: Dict[int, float] = {}
+        dgw_players = 0
+        blank_players = 0
+        for pid, xp in predictions.items():
+            team_id = player_team.get(pid)
+            if team_id is None:
+                adjusted[pid] = xp  # unknown team — leave alone
+                continue
+            count = fixture_count.get(team_id, 0)
+            adjusted[pid] = xp * count
+            if count == 2:
+                dgw_players += 1
+            elif count == 0:
+                blank_players += 1
+
+        if dgw_players or blank_players:
+            logger.info(
+                f"DecisionSynthesis: DGW multiplier applied for GW{gameweek} — "
+                f"{dgw_players} DGW players doubled, {blank_players} blanking players zeroed"
+            )
+
+        return adjusted
 
     def _fallback_predictions(self, gameweek: int) -> Dict[int, float]:
         """
