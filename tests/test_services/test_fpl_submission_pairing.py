@@ -34,10 +34,16 @@ def _build_transfer_pairs(
     player_type: Dict[int, int],
     player_now_cost: Dict[int, int],
     player_selling_price: Dict[int, int],
+    new_player_order: Optional[List[int]] = None,
 ):
     """
     Re-implementation of the pairing logic for testing.
     Produces the same transfers_for_api list that the live code does.
+
+    new_player_order: optional explicit iteration order over new_players
+        (sets are hash-ordered so tests want determinism). If None, sorts
+        ascending which matches the order Python tends to use on small
+        integer sets.
     """
     removed_by_type: Dict[int, List[int]] = defaultdict(list)
     for pid in removed_players:
@@ -49,14 +55,19 @@ def _build_transfer_pairs(
 
     transfers_for_api = []
     errors = []
-    for player_in_id in new_players:
+    used_outs: set = set()
+
+    iter_order = new_player_order if new_player_order is not None else sorted(new_players)
+    for player_in_id in iter_order:
         player_out_id = None
 
         if not skip_explicit_pairs:
             for t in (draft_transfers or []):
                 t_in = t.get('player_in_id', t.get('element_in'))
                 t_out = t.get('player_out_id', t.get('element_out'))
-                if t_in == player_in_id and t_out in removed_players:
+                if (t_in == player_in_id
+                        and t_out in removed_players
+                        and t_out not in used_outs):
                     player_out_id = t_out
                     et = player_type.get(t_out)
                     if et is not None and t_out in removed_by_type[et]:
@@ -65,13 +76,18 @@ def _build_transfer_pairs(
 
         if not player_out_id:
             in_type = player_type.get(player_in_id)
+            while (in_type is not None
+                   and removed_by_type[in_type]
+                   and removed_by_type[in_type][-1] in used_outs):
+                removed_by_type[in_type].pop()
             if in_type is not None and removed_by_type[in_type]:
                 player_out_id = removed_by_type[in_type].pop()
 
-        if not player_out_id:
+        if player_out_id is None:
             errors.append(player_in_id)
             continue
 
+        used_outs.add(player_out_id)
         transfers_for_api.append({
             'element_in': player_in_id,
             'element_out': player_out_id,
@@ -236,6 +252,81 @@ def test_pairing_logs_error_when_no_same_type_available():
 
     assert transfers == []
     assert errors == [311]
+
+
+def test_no_out_player_used_twice_when_explicit_pair_collides_with_fallback():
+    """
+    GW36 2026-05-09 regression: with chip='3xc' (team chip → explicit
+    lookup runs), an out player matched by an explicit pair to one
+    in_id was ALSO popped by the type-matched fallback for a different
+    in_id processed earlier in the iteration. Result: same out player
+    referenced twice, FPL 400 'transfer_duplicate_element'.
+
+    Scenario: new_players = [488, 237], removed_players = [47],
+    draft_transfers explicitly pairs 47→237. If the iteration processes
+    488 first, fallback pops 47. Then 237 hits the explicit branch, sees
+    47 still in removed_players, and uses it again.
+    """
+    removed = {47}
+    new = {488, 237}
+    # Both in-players are MID, the only out (47) is MID
+    player_type = {47: MID, 488: MID, 237: MID}
+    draft_transfers = [{'player_in_id': 237, 'player_out_id': 47}]
+
+    transfers, errors = _build_transfer_pairs(
+        new_players=new,
+        removed_players=removed,
+        draft_transfers=draft_transfers,
+        chip_used='3xc',  # team chip -> explicit lookup runs (skip_explicit_pairs=False)
+        player_type=player_type,
+        player_now_cost={pid: 50 for pid in new},
+        player_selling_price={pid: 50 for pid in removed},
+        new_player_order=[488, 237],  # force the order that triggered the bug
+    )
+
+    # Only ONE pair can be made (one out, two ins) — the other in_id must error
+    used_outs = [t['element_out'] for t in transfers]
+    assert len(used_outs) == len(set(used_outs)), (
+        f"Out player used more than once: {used_outs}"
+    )
+    assert len(transfers) == 1
+    # The one in_id we couldn't pair should be reported, not silently dropped
+    assert len(errors) == 1
+
+
+def test_balanced_pairing_no_duplicates_when_explicit_pair_present():
+    """
+    Balanced case: 2 new MIDs, 2 removed MIDs, one explicit pair in
+    draft_transfers. The algorithm must produce a valid pairing —
+    each removed player used exactly once, each new player paired —
+    without duplicates. Whether the explicit pair's specific out_id
+    ends up against its specific in_id is order-dependent and not
+    a correctness property; both pairings are valid for FPL.
+    """
+    removed = {47, 80}
+    new = {488, 237}
+    player_type = {47: MID, 80: MID, 488: MID, 237: MID}
+    draft_transfers = [{'player_in_id': 237, 'player_out_id': 47}]
+
+    transfers, errors = _build_transfer_pairs(
+        new_players=new,
+        removed_players=removed,
+        draft_transfers=draft_transfers,
+        chip_used='3xc',
+        player_type=player_type,
+        player_now_cost={pid: 50 for pid in new},
+        player_selling_price={pid: 50 for pid in removed},
+        new_player_order=[488, 237],
+    )
+
+    assert errors == []
+    assert len(transfers) == 2
+    # Correctness: each removed player used exactly once
+    used_outs = sorted(t['element_out'] for t in transfers)
+    assert used_outs == [47, 80]
+    # Correctness: each new player accounted for exactly once
+    used_ins = sorted(t['element_in'] for t in transfers)
+    assert used_ins == [237, 488]
 
 
 def test_mixed_position_counts_still_pair_correctly():

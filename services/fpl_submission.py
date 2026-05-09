@@ -665,6 +665,15 @@ class FPLSubmissionClient:
             skip_explicit_pairs = chip_used in ('wildcard', 'freehit')
 
             transfers_for_api = []
+            # Track outs already paired to prevent double-use across the
+            # explicit-pair branch and the type-matched fallback. Without
+            # this, an out player could be popped by the fallback for one
+            # in_id, then matched again by an explicit pair for another
+            # in_id (the explicit lookup checks `removed_players` which is
+            # never updated). GW36 2026-05-09 hit this when player 47 got
+            # paired with both 488 (fallback) and 237 (explicit pair),
+            # producing FPL 400 "Element referenced more than once".
+            used_outs: set = set()
             for player_in_id in new_players:
                 player_out_id = None
 
@@ -673,7 +682,9 @@ class FPLSubmissionClient:
                     for t in (draft_transfers or []):
                         t_in = t.get('player_in_id', t.get('element_in'))
                         t_out = t.get('player_out_id', t.get('element_out'))
-                        if t_in == player_in_id and t_out in removed_players:
+                        if (t_in == player_in_id
+                                and t_out in removed_players
+                                and t_out not in used_outs):
                             player_out_id = t_out
                             et = player_type.get(t_out)
                             if et is not None and t_out in removed_by_type[et]:
@@ -683,8 +694,18 @@ class FPLSubmissionClient:
                 # 2. Type-matched pairing (primary for WC/FH, fallback otherwise)
                 if not player_out_id:
                     in_type = player_type.get(player_in_id)
+                    # Defensive: drain any already-used players from the top
+                    # of the same-type pool (shouldn't happen since we
+                    # remove() on use, but guards against future regressions).
+                    while (in_type is not None
+                           and removed_by_type[in_type]
+                           and removed_by_type[in_type][-1] in used_outs):
+                        removed_by_type[in_type].pop()
                     if in_type is not None and removed_by_type[in_type]:
                         player_out_id = removed_by_type[in_type].pop()
+
+                if player_out_id is not None:
+                    used_outs.add(player_out_id)
 
                 if not player_out_id:
                     logger.error(
