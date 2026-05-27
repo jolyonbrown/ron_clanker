@@ -229,6 +229,29 @@ def test_triple_captain_decision_carries_captain_override():
     assert decision.captain_override == 304
 
 
+def test_enrich_squad_prefers_player_id_over_id_db_row_collision():
+    """
+    Regression: current_team rows carry `id` = DB row pk AND `player_id` =
+    real FPL ID. _enrich_squad must use player_id so predictions lookups
+    hit the right players. Picking `id` first wasted the GW38 Bench Boost
+    (EV computed against random/missing IDs → 0 → forced chip not played).
+    """
+    # Simulate current_team shape: row id is unrelated to FPL id
+    squad = [
+        {'id': 1750, 'player_id': 101, 'position': 1,  'element_type': 1, 'multiplier': 1, 'is_captain': False, 'team_id': 1},
+        {'id': 1751, 'player_id': 102, 'position': 12, 'element_type': 1, 'multiplier': 1, 'is_captain': False, 'team_id': 12},
+        {'id': 1752, 'player_id': 205, 'position': 13, 'element_type': 2, 'multiplier': 1, 'is_captain': False, 'team_id': 13},
+        {'id': 1753, 'player_id': 305, 'position': 14, 'element_type': 3, 'multiplier': 1, 'is_captain': False, 'team_id': 14},
+        {'id': 1754, 'player_id': 403, 'position': 15, 'element_type': 4, 'multiplier': 1, 'is_captain': False, 'team_id': 15},
+    ]
+    svc = ChipStrategyService(database=None)
+    enriched = svc._enrich_squad(squad)
+    # FPL IDs must be used downstream, not DB row IDs
+    assert sorted(p['id'] for p in enriched) == [101, 102, 205, 305, 403]
+    bench_ids = sorted(p['id'] for p in enriched if p['is_bench'])
+    assert bench_ids == [102, 205, 305, 403]
+
+
 def test_deadline_pressure_forces_bb_when_only_one_gw_remains():
     """When chips_available >= gws_remaining, must play the chip even without
     a high-EV target. Verifies BB is eligible for force-play (was not before)."""

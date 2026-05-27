@@ -523,6 +523,17 @@ class ChipStrategyService:
             reason_bits.append(
                 f"FORCED: {chips_available} chips, only {gws_remaining} GWs left"
             )
+            if not play_now:
+                # Forced to play but EV is 0 — almost certainly a data bug
+                # (squad missing player IDs, predictions table empty, etc).
+                # Log loudly so we don't silently waste a chip again.
+                logger.error(
+                    "ChipStrategy: %s is forced (1 chip, %d GWs left) but EV=0. "
+                    "This usually means the squad passed in lacks valid FPL "
+                    "player IDs or the predictions table has no rows for GW%d. "
+                    "Check squad shape and player_predictions coverage.",
+                    chip_name, gws_remaining, current_gw,
+                )
         elif ev_now <= 0:
             play_now = False
             reason_bits.append("No positive EV this GW")
@@ -596,7 +607,12 @@ class ChipStrategyService:
         if not squad:
             return []
 
-        ids = [p.get('id') or p.get('player_id') for p in squad if p.get('id') or p.get('player_id')]
+        # Prefer player_id (FPL ID) over id, because callers that load from
+        # current_team / draft_team pass DB row IDs in `id` and the real FPL
+        # ID in `player_id`. Falling back the other way silently wasted the
+        # GW38 Bench Boost (BB EV = 0 because predictions lookup matched no
+        # one). Callers that only pass FPL IDs use `id` and still work.
+        ids = [p.get('player_id') or p.get('id') for p in squad if p.get('player_id') or p.get('id')]
         player_rows: Dict[int, Dict[str, Any]] = {}
         if self.db and ids:
             placeholders = ','.join('?' * len(ids))
@@ -612,7 +628,7 @@ class ChipStrategyService:
 
         enriched: List[Dict[str, Any]] = []
         for p in squad:
-            pid = p.get('id') or p.get('player_id')
+            pid = p.get('player_id') or p.get('id')
             if pid is None:
                 continue
             base = dict(player_rows.get(pid, {}))
