@@ -219,6 +219,11 @@ data/*.db-shm
 # Database backups (keep latest only)
 data/backups/*
 !data/backups/.gitkeep
+
+# Season archives (large self-contained snapshots - keep off-box, not in git)
+data/archives/
+# Raw FPL API season-end snapshots (large JSON, captured into archives/ instead)
+data/season_end_stats_*/
 # Generated crontab files (user-specific)
 config/crontab
 
