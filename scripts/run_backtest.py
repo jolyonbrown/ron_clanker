@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from backtest.baselines import GreedyModelStrategy
 from backtest.data import DEFAULT_DB, HistoricalDataProvider
 from backtest.metrics import (
     captain_quality,
@@ -26,6 +27,7 @@ from backtest.metrics import (
     summarize_prediction_quality,
 )
 from backtest.replay import replay_season
+from backtest.simulate import RonReplayStrategy, simulate_season
 
 
 def section(title):
@@ -106,6 +108,41 @@ def report(db_path, season):
           f'total regret {c["total_regret"]} pts  |  '
           f'mean {c["mean_regret"]:.1f} pts/GW')
     print('(regret = extra points a perfect within-squad captain pick would have added)')
+
+    # ------------------------------------------------------------------
+    section('COUNTERFACTUAL SIMULATION')
+    with HistoricalDataProvider(db_path=db_path, season=season) as provider:
+        start_gw, end_gw = replays[0].gameweek, replays[-1].gameweek
+        ron_sim = simulate_season(RonReplayStrategy(provider), provider,
+                                  start_gw=start_gw, end_gw=end_gw)
+        sim_valid = all(
+            g.score.gross_points == provider.entry(g.gameweek).event_points
+            and g.bank == provider.entry(g.gameweek).bank
+            and g.hit_cost == provider.entry(g.gameweek).event_transfers_cost
+            for g in ron_sim.gameweeks
+        )
+        greedy = simulate_season(GreedyModelStrategy(), provider,
+                                 start_gw=start_gw, end_gw=end_gw)
+    if sim_valid:
+        print('✅ Simulator validation: Ron replay reproduces official points, '
+              'hits and bank on every gameweek')
+    else:
+        print('❌ Simulator validation FAILED — counterfactual numbers below '
+              'are untrustworthy')
+    print()
+    print(f'{"strategy":<28} {"points":>7} {"hits":>5} {"transfers":>9} {"chips":>6}')
+    rows = [
+        ('Ron (actual season)', total, sum(r.transfer_cost for r in replays),
+         '-', 8),
+        (f'{greedy.strategy_name} (counterfactual)', greedy.total_net_points,
+         greedy.total_hits, sum(g.n_transfers for g in greedy.gameweeks), 0),
+        ('average manager', avg_total, '-', '-', '-'),
+    ]
+    for label, pts, hits, ntr, chips in sorted(rows, key=lambda r: -r[1]):
+        print(f'{label:<28} {pts:>7} {str(hits):>5} {str(ntr):>9} {str(chips):>6}')
+    print()
+    print('greedy-model = stored predictions followed naively: one best-gain')
+    print('transfer/week, no hits, no chips, top-xP lineup and captain.')
 
 
 def main():

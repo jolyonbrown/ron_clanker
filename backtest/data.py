@@ -193,6 +193,67 @@ class HistoricalDataProvider:
         rows = self._con.execute("SELECT id, element_type FROM players").fetchall()
         return {r['id']: r['element_type'] for r in rows}
 
+    def player_team_ids(self) -> Dict[int, int]:
+        """Club assignment per player, from end-of-season state. Mid-season
+        intra-PL moves are rare enough that this is an accepted
+        approximation for the max-3-per-club rule in counterfactuals."""
+        rows = self._con.execute("SELECT id, team_id FROM players").fetchall()
+        return {r['id']: r['team_id'] for r in rows}
+
+    def prices(self, gameweek: int) -> Dict[int, int]:
+        """Market price (tenths) per player at the gameweek, from their
+        fixture-time value. Players without a fixture that GW are absent —
+        callers should carry forward (see price_map_through)."""
+        rows = self._con.execute(
+            "SELECT player_id, MAX(value) AS value FROM player_gameweek_history "
+            "WHERE gameweek = ? AND value IS NOT NULL GROUP BY player_id",
+            (gameweek,),
+        ).fetchall()
+        return {r['player_id']: r['value'] for r in rows}
+
+    def price_map_through(self, gameweek: int) -> Dict[int, int]:
+        """Latest known price per player up to and including a gameweek."""
+        rows = self._con.execute(
+            "SELECT player_id, value FROM player_gameweek_history "
+            "WHERE gameweek <= ? AND value IS NOT NULL "
+            "ORDER BY gameweek",
+            (gameweek,),
+        ).fetchall()
+        prices: Dict[int, int] = {}
+        for r in rows:
+            prices[r['player_id']] = r['value']
+        return prices
+
+    def fixture_counts(self, gameweek: int) -> Dict[int, int]:
+        """team_id -> number of fixtures in the gameweek (0 = blank, 2 = DGW).
+        Schedule knowledge, safe pre-deadline."""
+        rows = self._con.execute(
+            "SELECT team_h, team_a FROM fixtures WHERE event = ?",
+            (gameweek,),
+        ).fetchall()
+        counts: Dict[int, int] = {}
+        for r in rows:
+            counts[r['team_h']] = counts.get(r['team_h'], 0) + 1
+            counts[r['team_a']] = counts.get(r['team_a'], 0) + 1
+        return counts
+
+    def transfers_by_gw(self) -> Optional[Dict[int, List[Dict]]]:
+        """Ron's recorded transfers grouped by GW, chronological within
+        each, from the season archive. Costs are the actual transaction
+        prices (element_out_cost is the sale price received)."""
+        archives = Path(__file__).resolve().parent.parent / 'data' / 'archives'
+        candidates = sorted(
+            archives.glob(f'{self.season}_*/fpl_api_snapshots/ron_transfers.json')
+        )
+        if not candidates:
+            return None
+        with open(candidates[-1]) as f:
+            transfers = json.load(f)
+        by_gw: Dict[int, List[Dict]] = {}
+        for t in sorted(transfers, key=lambda t: t['time']):
+            by_gw.setdefault(t['event'], []).append(t)
+        return by_gw
+
     def api_picks(self) -> Optional[Dict[str, Dict]]:
         """Raw picks-by-GW JSON from the season archive, if present.
 
