@@ -78,3 +78,49 @@ def test_backfill_processes_all_pairs(db):
     player1 = [r for r in changes(db) if r['player_id'] == 1]
     assert [(r['old_price'], r['new_price']) for r in player1] == \
         [(100, 101), (101, 102)]
+
+
+class TestPredictionVerification:
+    def _seed(self, tmp_path):
+        from collect_price_snapshots import verify_price_predictions
+        d = Database(str(tmp_path / 'verify.db'))
+        # two snapshot days, one detected rise for player 1
+        for pid in range(1, 11):
+            for day, cost in (('2026-09-01', 50), ('2026-09-02', 50)):
+                d.execute_update(
+                    "INSERT INTO player_transfer_snapshots "
+                    "(player_id, snapshot_date, now_cost, gameweek) "
+                    "VALUES (?, ?, ?, 5)",
+                    (pid, day, cost + (1 if pid == 1 and day.endswith('02') else 0)))
+        detect_price_changes(d)
+        return d, verify_price_predictions
+
+    def test_outcomes_settled_correct_incorrect_and_hold(self, tmp_path):
+        d, verify = self._seed(tmp_path)
+        preds = [
+            (1, '2026-09-02', 1),    # predicted rise, player 1 rose: correct
+            (2, '2026-09-02', 1),    # predicted rise, no change: wrong
+            (3, '2026-09-02', -1),   # predicted fall, no change: wrong
+        ]
+        for pid, day, change in preds:
+            d.execute_update(
+                "INSERT INTO price_predictions "
+                "(player_id, prediction_for_date, predicted_change, confidence) "
+                "VALUES (?, ?, ?, 0.8)", (pid, day, change))
+        assert verify(d) == 3
+        rows = d.execute_query(
+            "SELECT player_id, actual_change, prediction_correct "
+            "FROM price_predictions ORDER BY player_id")
+        assert [(r['actual_change'], r['prediction_correct']) for r in rows] == \
+            [(1, 1), (0, 0), (0, 0)]
+
+    def test_uncovered_dates_stay_null(self, tmp_path):
+        d, verify = self._seed(tmp_path)
+        # prediction for a date with no snapshot coverage (outage)
+        d.execute_update(
+            "INSERT INTO price_predictions "
+            "(player_id, prediction_for_date, predicted_change, confidence) "
+            "VALUES (1, '2026-09-10', 1, 0.9)")
+        assert verify(d) == 0
+        row = d.execute_query("SELECT actual_change FROM price_predictions")[0]
+        assert row['actual_change'] is None

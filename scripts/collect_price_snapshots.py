@@ -108,6 +108,50 @@ def detect_price_changes(db, backfill: bool = False) -> int:
     return inserted
 
 
+def verify_price_predictions(db) -> int:
+    """Fill price_predictions outcomes (actual_change, prediction_correct)
+    once the night they predicted has been observed.
+
+    A prediction made at 23:00 for date d is settled by the ~02:00 change
+    on d, which the nightly snapshot+detection run records on d's run.
+    Only dates detection actually covered are verified: d must be a
+    snapshot date whose previous snapshot is within the gap guard —
+    otherwise (outage, season boundary) the prediction stays NULL rather
+    than being scored against missing data."""
+    dates = [str(r['snapshot_date'])[:10] for r in db.execute_query(
+        "SELECT DISTINCT snapshot_date FROM player_transfer_snapshots "
+        "ORDER BY snapshot_date")]
+    verifiable = set()
+    for prev_d, cur_d in zip(dates, dates[1:]):
+        gap = (date.fromisoformat(cur_d) - date.fromisoformat(prev_d)).days
+        if gap <= MAX_DETECTION_GAP_DAYS:
+            verifiable.add(cur_d)
+    if not verifiable:
+        return 0
+
+    pending = db.execute_query(
+        "SELECT id, player_id, prediction_for_date, predicted_change "
+        "FROM price_predictions WHERE actual_change IS NULL")
+    verified = 0
+    for p in pending:
+        d = str(p['prediction_for_date'])[:10]
+        if d not in verifiable:
+            continue
+        change = db.execute_query(
+            "SELECT change_amount FROM price_changes "
+            "WHERE player_id = ? AND DATE(detected_at) = ?",
+            (p['player_id'], d))
+        actual = 0
+        if change:
+            actual = 1 if change[0]['change_amount'] > 0 else -1
+        db.execute_update(
+            "UPDATE price_predictions "
+            "SET actual_change = ?, prediction_correct = ? WHERE id = ?",
+            (actual, 1 if actual == p['predicted_change'] else 0, p['id']))
+        verified += 1
+    return verified
+
+
 async def collect_snapshots():
     """Collect today's player snapshots."""
 
@@ -215,6 +259,10 @@ async def collect_snapshots():
         # Derive nightly price changes from the latest snapshot pair
         changes = detect_price_changes(db)
         print(f"💱 Price changes detected since previous snapshot: {changes}")
+
+        # Settle last night's predictions against what actually happened
+        verified = verify_price_predictions(db)
+        print(f"🎯 Price predictions verified: {verified}")
 
         # Show top movers (high net transfers)
         print("\n" + "-" * 80)

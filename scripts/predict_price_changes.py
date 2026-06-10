@@ -210,7 +210,7 @@ async def predict_prices():
         print(f"Total duration: {duration:.1f} seconds")
         print(f"Predictions stored in database")
         print(f"\nNext: Wait for actual price changes (02:00 AM)")
-        print(f"Then: Verify accuracy with scripts/verify_predictions.py")
+        print(f"Then: Outcomes are settled by the nightly snapshot run (verify_price_predictions in collect_price_snapshots.py)")
 
         # Send Telegram notification (if configured and enabled)
         if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
