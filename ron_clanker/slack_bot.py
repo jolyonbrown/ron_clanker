@@ -33,6 +33,11 @@ import time
 from collections import defaultdict, deque
 from typing import Dict, Optional
 
+# Load .env (ANTHROPIC_API_KEY, SLACK_* tokens) — this module runs as a
+# standalone daemon/CLI, not via the pipeline scripts that already do
+# this through utils.config.
+import utils.config  # noqa: F401  (importing triggers load_dotenv)
+
 from ron_clanker.llm_banter import RON_CHARACTER
 
 logger = logging.getLogger('ron_clanker.slack_bot')
