@@ -179,28 +179,48 @@ class EraDatabase:
         finally:
             con.close()
 
-    def apply_shrinkage(self, params: Optional[Dict[int, tuple]]) -> None:
-        """Rewrite predicted_points = max(0, a + b*raw) per position with
-        the given walk-forward calibration params, or restore raw values
-        when params is None (insufficient history)."""
+    def apply_transform(self, multiplier_fn=None,
+                        params: Optional[Dict[int, tuple]] = None) -> None:
+        """Rewrite predicted_points = max(0, a + b * (raw * m)).
+
+        multiplier_fn(player_id) -> m applies a per-player factor
+        (two-stage P(plays)); params gives (a, b) per element_type
+        (winner's-curse calibration). Either may be None; both None
+        restores raw values."""
         con = self._connect(self.path)
         try:
-            if params is None:
+            if multiplier_fn is None and params is None:
                 con.execute(
                     "UPDATE player_predictions SET predicted_points = raw_xp"
                 )
-            else:
-                for et, (a, b) in params.items():
-                    con.execute(
-                        "UPDATE player_predictions "
-                        "SET predicted_points = MAX(0, ? + ? * raw_xp) "
-                        "WHERE player_id IN "
-                        "  (SELECT id FROM players WHERE element_type = ?)",
-                        (a, b, et),
-                    )
+                con.commit()
+                return
+            etypes = dict(con.execute(
+                "SELECT id, element_type FROM players"
+            ).fetchall())
+            rows = con.execute(
+                "SELECT rowid, player_id, raw_xp FROM player_predictions"
+            ).fetchall()
+            updates = []
+            for rowid, pid, raw in rows:
+                v = (raw or 0.0)
+                if multiplier_fn is not None:
+                    v *= multiplier_fn(pid)
+                if params is not None:
+                    a, b = params.get(etypes.get(pid), (0.0, 1.0))
+                    v = max(0.0, a + b * v)
+                updates.append((v, rowid))
+            con.executemany(
+                "UPDATE player_predictions SET predicted_points = ? "
+                "WHERE rowid = ?", updates,
+            )
             con.commit()
         finally:
             con.close()
+
+    def apply_shrinkage(self, params: Optional[Dict[int, tuple]]) -> None:
+        """Back-compat wrapper over apply_transform."""
+        self.apply_transform(multiplier_fn=None, params=params)
 
     def cleanup(self) -> None:
         if self.path.exists():
@@ -232,7 +252,8 @@ class LiveOptimizerStrategy(Strategy):
     name = 'live-optimizer'
 
     def __init__(self, provider: HistoricalDataProvider, horizon: int = 4,
-                 shrink_predictions: bool = False):
+                 shrink_predictions: bool = False,
+                 two_stage: bool = False):
         self._provider = provider
         self._horizon = horizon
         self._era = EraDatabase(provider.db_path)
@@ -256,6 +277,14 @@ class LiveOptimizerStrategy(Strategy):
             from backtest.calibration import PredictionShrinker
             self._shrinker = PredictionShrinker(provider)
             self.name = f'{self.name}+shrink'
+        # Two-stage adjustment: xP' = P(plays) x xP (ron_clanker-vtw).
+        # Walk-forward play-rate; kills the rotation-risk tail without
+        # compressing the whole scale.
+        self._play_prob = None
+        if two_stage:
+            from backtest.two_stage import PlayProbability
+            self._play_prob = PlayProbability(provider)
+            self.name = f'{self.name}+2stage'
         self._decision_gw: int = 0
 
     def close(self) -> None:
@@ -263,21 +292,35 @@ class LiveOptimizerStrategy(Strategy):
 
     # ------------------------------------------------------------------
 
-    def _predictions_for(self, target_gw: int) -> Dict[int, float]:
-        """Predictions for a target GW, calibrated with parameters known
-        at the DECISION gameweek (never the target — that would leak
-        actuals that don't exist yet at the deadline)."""
-        preds = self._provider.predictions(target_gw)
-        if self._shrinker:
-            preds = self._shrinker.shrink(preds, as_of_gw=self._decision_gw)
+    def _apply_adjustments(self, preds: Dict[int, float],
+                           shrinker) -> Dict[int, float]:
+        """Two-stage first (per-player P(plays)), then calibration."""
+        if self._play_prob:
+            preds = self._play_prob.adjust(preds, as_of_gw=self._decision_gw)
+        if shrinker:
+            preds = shrinker.shrink(preds, as_of_gw=self._decision_gw)
         return preds
+
+    def _predictions_for(self, target_gw: int) -> Dict[int, float]:
+        """Predictions for a target GW, adjusted with information known
+        at the DECISION gameweek (never the target — that would leak
+        actuals/minutes that don't exist yet at the deadline)."""
+        return self._apply_adjustments(
+            self._provider.predictions(target_gw), self._shrinker
+        )
 
     def _refresh_era(self, gameweek: int, view: AsOfView) -> None:
         self._decision_gw = gameweek
         self._era.refresh(view.prices())
         shrinker = self._era_shrinker or self._shrinker
-        if shrinker:
-            self._era.apply_shrinkage(shrinker.params_as_of(gameweek))
+        if shrinker or self._play_prob:
+            self._era.apply_transform(
+                multiplier_fn=(
+                    (lambda pid: self._play_prob.prob(pid, gameweek))
+                    if self._play_prob else None
+                ),
+                params=shrinker.params_as_of(gameweek) if shrinker else None,
+            )
 
     def _multi_gw_predictions(self, gameweek: int) -> Dict[int, Dict[int, float]]:
         multi: Dict[int, Dict[int, float]] = {}
@@ -478,17 +521,26 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
 
     def __init__(self, provider: HistoricalDataProvider, horizon: int = 4,
                  shrink_predictions: bool = True,
-                 shrink_chip_ev: bool = False):
-        """Full prediction shrinkage is the DEFAULT for the chip-aware
-        strategy: it was the only configuration in the 2025-26 A/B that
-        was both strong and robust — 1739 points regardless of the
-        wc_organic_gain knob (raw peaked at 1770 but collapsed to 1618
-        one knob-notch away; chip-EV-only and EV+rebuild hybrids scored
-        1624-1720 and stayed knob-sensitive). shrink_chip_ev=True with
-        shrink_predictions=False gives the hybrid (era DB + WC/FH
-        rebuild inputs calibrated, weekly transfers raw) for A/B use."""
+                 shrink_chip_ev: bool = False,
+                 two_stage: bool = True):
+        """Two-stage + full shrinkage is the DEFAULT for the chip-aware
+        strategy — the best measured 2025-26 configuration:
+
+            raw 1770 (knife-edge: 1618/1676 one knob-notch away)
+            shrink-only 1739 (flat) | 2stage-only 1720
+            2stage+shrink 1782 (n=3,d=0.6) .. 1702 (n=5,d=0.7)
+
+        The 2stage decision-level number is parameter-sensitive (single
+        season trajectories amplify small input changes) but its
+        prediction-level gain is unambiguous (MAE -20%, top-15 no-shows
+        -42%), and with two-stage active, shrinking the weekly engine
+        HELPS (chipless 1663 -> 1708) — the earlier -31 was
+        shrink-without-two-stage. shrink_chip_ev=True with
+        shrink_predictions=False gives the live-matching hybrid (1751)
+        for A/B use."""
         super().__init__(provider, horizon=horizon,
-                         shrink_predictions=shrink_predictions)
+                         shrink_predictions=shrink_predictions,
+                         two_stage=two_stage)
         if shrink_chip_ev and not shrink_predictions:
             from backtest.calibration import PredictionShrinker
             self._era_shrinker = PredictionShrinker(provider)
@@ -513,11 +565,10 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
     # while the weekly transfer engine stays on the raw scale.
 
     def _chip_execution_predictions(self, target_gw: int) -> Dict[int, float]:
-        preds = self._provider.predictions(target_gw)
-        shrinker = self._era_shrinker or self._shrinker
-        if shrinker:
-            preds = shrinker.shrink(preds, as_of_gw=self._decision_gw)
-        return preds
+        return self._apply_adjustments(
+            self._provider.predictions(target_gw),
+            self._era_shrinker or self._shrinker,
+        )
 
     def _chip_multi_gw_predictions(self, gameweek: int) -> Dict[int, Dict[int, float]]:
         multi: Dict[int, Dict[int, float]] = {}
