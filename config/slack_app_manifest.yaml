@@ -1,0 +1,52 @@
+# Slack app manifest for Ron Clanker (ron_clanker-y5f5).
+#
+# This is NOT local software — the bot daemon already runs on this
+# machine (ron-slack-bot.service). This manifest registers the app in
+# your Slack workspace so Slack will issue the tokens the daemon needs.
+#
+# ONE-TIME SETUP (~2 minutes):
+#   1. https://api.slack.com/apps -> "Create New App" ->
+#      "From a manifest" -> pick your workspace -> paste this file -> Create
+#   2. Basic Information -> App-Level Tokens -> "Generate Token and
+#      Scopes" -> name it "socket", add scope connections:write ->
+#      copy the xapp-... token
+#   3. Install App (left sidebar) -> "Install to Workspace" -> allow ->
+#      copy the Bot User OAuth Token (xoxb-...)
+#   4. Incoming Webhooks (left sidebar) -> "Add New Webhook to
+#      Workspace" -> choose your private #ron-ops channel -> copy URL
+#   5. In Slack, invite the bot to the league channel: /invite @Ron Clanker
+#   6. Add to /home/jolyon/ron_clanker/.env:
+#        SLACK_BOT_TOKEN=xoxb-...
+#        SLACK_APP_TOKEN=xapp-...
+#        SLACK_OPS_WEBHOOK_URL=https://hooks.slack.com/services/...
+#   7. systemctl --user restart ron-slack-bot.service
+#      journalctl --user -u ron-slack-bot -f   # expect "Ron is in the channel."
+
+display_information:
+  name: Ron Clanker
+  description: Gruff 1970s football manager. Runs the FPL team. Replies when spoken to.
+  background_color: "#2d2d2d"
+
+features:
+  bot_user:
+    display_name: Ron Clanker
+    always_online: true
+  incoming_webhooks:
+    incoming_webhooks_enabled: true
+
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - chat:write
+      - incoming-webhook
+
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+  socket_mode_enabled: true
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  token_rotation_enabled: false

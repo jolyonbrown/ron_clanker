@@ -624,15 +624,11 @@ retry, then a deterministic fallback. Boring beats wrong.
 **The chat bot** (`ron_clanker/slack_bot.py`, `ron-slack-bot.service`)
 replies in character to @mentions. Safety: NO tools on the reply call,
 override attempts refused in character, injection attempts declined and
-audit-logged, 5 msgs/user/min + 200/day budget. One-time setup:
-
-1. api.slack.com/apps → Create App → enable **Socket Mode** (gives an
-   `xapp-...` app token with `connections:write`)
-2. OAuth scopes (Bot Token): `app_mentions:read`, `chat:write` →
-   install to workspace (gives `xoxb-...` bot token)
-3. Event Subscriptions → subscribe to `app_mention`
-4. Invite the bot to the league channel
-5. Add to `.env`: `SLACK_BOT_TOKEN=xoxb-...`, `SLACK_APP_TOKEN=xapp-...`
-6. `systemctl --user restart ron-slack-bot.service`
+audit-logged, 5 msgs/user/min + 200/day budget. One-time setup: use
+the prepared manifest — paste `config/slack_app_manifest.yaml` into
+api.slack.com/apps → "Create New App" → "From a manifest", then follow
+the 7 numbered steps in that file's header (generate the two tokens,
+add the #ron-ops webhook, invite the bot, fill `.env`, restart the
+service).
 
 The service exits cleanly (no crash-loop) until tokens exist.
