@@ -5,11 +5,11 @@
 ### Core Commands (Most Used)
 
 ```bash
-# Daily data sync
-python scripts/collect_fpl_data.py
+# AUTONOMOUS: Full pipeline (collect → select → submit → announce)
+python scripts/autonomous_gameweek.py
 
-# Pre-deadline team selection (run 6 hours before deadline)
-python scripts/pre_deadline_selection.py
+# Check next deadline and schedule pipeline
+python scripts/schedule_next_deadline.py --check
 
 # Post-gameweek workflow (unified - run after GW finishes)
 python scripts/post_gameweek_workflow.py
@@ -23,29 +23,69 @@ python scripts/health_check.py
 
 ---
 
-## Gameweek Workflow
+## Autonomous Operation (Default)
 
-### Pre-Deadline (6 hours before)
+Ron now operates fully autonomously via systemd timers:
+
+| Timer | Schedule | What it does |
+|-------|----------|--------------|
+| `ron-deadline-check` | Every 2 hours | Checks FPL API for next deadline, triggers pipeline 6h before |
+| `ron-data-collection` | Daily 02:30 | Syncs FPL data (players, fixtures, prices) |
+| `ron-daily-scout` | Daily 03:00 | Intelligence gathering (injuries, news) |
+| `ron-post-gameweek` | Tuesday 08:00 | Post-GW analysis, ML retraining |
+| `ron-db-maintenance` | Sunday 03:00 | Database backup and optimization |
+
+**Manage timers:**
+```bash
+systemctl --user list-timers | grep ron        # Check all timer status
+systemctl --user start ron-deadline-check.service  # Trigger manually
+journalctl --user -u ron-deadline-check -f     # View logs
+systemctl --user disable ron-deadline-check.timer  # Disable a timer
+```
+
+### Pre-Deadline Pipeline (autonomous_gameweek.py)
+
+The autonomous pipeline runs end-to-end with no human intervention:
+1. Collect latest FPL data
+2. Run team selection (transfers, captain, formation)
+3. Login to FPL via headless Chromium (PingOne OIDC auth)
+4. Submit transfers and team selection via FPL API
+5. Verify submission matches draft
+6. Announce on Slack
+
+```bash
+# Full autonomous run (triggered automatically by deadline scheduler)
+python scripts/autonomous_gameweek.py
+
+# Dry run (selection only, no FPL submission)
+python scripts/autonomous_gameweek.py --dry-run
+
+# Specific gameweek
+python scripts/autonomous_gameweek.py --gameweek 32
+
+# Skip data collection (use existing)
+python scripts/autonomous_gameweek.py --skip-collect
+
+# Submit existing draft without re-selecting
+python scripts/autonomous_gameweek.py --skip-select
+```
+
+### Manual Override
+
+If you need to run steps individually:
 
 ```bash
 # 1. Sync latest FPL data
 python scripts/collect_fpl_data.py
 
-# 2. Gather intelligence (injuries, press conferences, expert picks)
-# Use Claude Code subagent pattern - see "Intelligence Gathering" section below
-
-# 3. Run pre-deadline selection (generates team, transfers, captain)
+# 2. Run pre-deadline selection
 python scripts/pre_deadline_selection.py --no-notify
 
-# Or specify gameweek and override free transfers (e.g., AFCON GW16 = 5 FTs)
-python scripts/pre_deadline_selection.py --gameweek 16 --free-transfers 5 --no-notify
+# 3. Submit to FPL directly
+python services/fpl_submission.py --gameweek 32
+python services/fpl_submission.py --gameweek 32 --dry-run  # Test first
 
-# 4. Submit team via Chrome Plugin
-# Open Chrome with Claude plugin → Navigate to FPL → Login → Apply transfers,
-# captain, bench order → Confirm submission
-# See "Team Submission via Chrome Plugin" section below
-
-# 5. Send Slack announcement (after submission confirmed)
+# 4. Send Slack announcement
 python scripts/send_team_announcement.py
 ```
 

@@ -33,6 +33,7 @@ sys.path.insert(0, str(project_root))
 
 from data.database import Database
 from utils.config import load_config
+from utils.gameweek import is_season_complete
 
 logger = logging.getLogger('ron_clanker.post_gw_workflow')
 
@@ -464,6 +465,19 @@ Examples:
         print()
         print("Before deadline, run:")
         print(f"  python scripts/pre_deadline_selection.py --gameweek {next_gw['id']}")
+    elif is_season_complete(db):
+        print("🏁 SEASON COMPLETE - that's GW38 done and dusted.")
+        print()
+        print("No further gameweeks this season. Recommended:")
+        print("  1. Archive the full season dataset:")
+        print("       python scripts/archive_season.py")
+        print("  2. Pause the deadline scheduler over the break:")
+        print("       systemctl --user disable --now ron-deadline-check.timer")
+        print()
+        print("That's it from Ron this season. Good effort, lads.")
+    else:
+        print("No upcoming gameweek found, and the season does not look complete.")
+        print("Run scripts/sync_gameweek_status.py / collect_fpl_data.py to refresh.")
 
     logger.info(f"PostGWWorkflow: Complete - GW{gameweek}, Duration: {duration:.1f}s")
 

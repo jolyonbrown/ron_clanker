@@ -79,6 +79,57 @@ def get_next_gameweek(db) -> Optional[int]:
         return None
 
 
+def season_complete_from_events(events: list) -> bool:
+    """
+    Decide whether the season is over from a list of FPL API event dicts
+    (the `events` array of bootstrap-static).
+
+    The FPL API has no explicit "season done" flag. It is signalled
+    implicitly: once the final gameweek is settled, every event has
+    ``finished == True`` and no event has ``is_next == True``.
+
+    A fresh season's fixtures loading into the API resets this (GW1 becomes
+    is_next with finished False), so this correctly returns False again.
+
+    Returns:
+        bool: True only if there is at least one event and all are finished
+              with none flagged as next.
+    """
+    if not events:
+        return False
+    all_finished = all(e.get('finished') for e in events)
+    any_next = any(e.get('is_next') for e in events)
+    return all_finished and not any_next
+
+
+def is_season_complete(db) -> bool:
+    """
+    Determine from the local database whether the season is over.
+
+    Mirrors :func:`season_complete_from_events` against the synced
+    ``gameweeks`` table: True when every gameweek is finished and none is
+    flagged as next.
+
+    Returns:
+        bool: True if the season is complete, False otherwise (including
+              when the table is empty or unreadable).
+    """
+    try:
+        rows = db.execute_query("""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN finished = 0 THEN 1 ELSE 0 END) AS unfinished,
+                SUM(CASE WHEN is_next = 1 THEN 1 ELSE 0 END) AS upcoming
+            FROM gameweeks
+        """)
+        if not rows or not rows[0]['total']:
+            return False
+        return rows[0]['unfinished'] == 0 and rows[0]['upcoming'] == 0
+    except Exception as e:
+        logger.error(f"GameweekUtils: Error checking season completion: {e}")
+        return False
+
+
 def get_gameweek_info(db, gameweek_id: int) -> Optional[Dict]:
     """
     Get detailed info about a specific gameweek.
