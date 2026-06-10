@@ -1,0 +1,13 @@
+[Unit]
+Description=Ron Clanker - Nightly price change predictions
+After=network-online.target ron-price-snapshot.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python scripts/predict_price_changes.py
+StandardOutput=append:/home/jolyon/ron_clanker/logs/cron_price.log
+StandardError=append:/home/jolyon/ron_clanker/logs/cron_price.log
+TimeoutStartSec=900
+Environment=HOME=/home/jolyon

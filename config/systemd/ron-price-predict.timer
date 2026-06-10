@@ -1,0 +1,9 @@
+[Unit]
+Description=Ron Clanker - Price predictions daily at 23:00 (uses fresh snapshot)
+
+[Timer]
+OnCalendar=*-*-* 23:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -23,6 +23,69 @@ import logging
 
 logger = logging.getLogger('ron_clanker.price_snapshots')
 
+# A change is only a NIGHTLY price move if the snapshots are close
+# together. Larger gaps (collection outage, season boundary) would
+# record months of price drift as one night and poison training labels.
+MAX_DETECTION_GAP_DAYS = 3
+
+
+def detect_price_changes(db, backfill: bool = False) -> int:
+    """Derive price_changes rows from day-over-day snapshot prices.
+
+    monitor_prices.py was meant to write price_changes but its detection
+    was never implemented (the trainer waited on an empty table all
+    season). Snapshots already carry now_cost per day, so changes are
+    consecutive-snapshot diffs. Idempotent: at most one change row per
+    (player, date).
+
+    backfill=True processes every consecutive snapshot-date pair;
+    otherwise only the latest pair (the nightly path).
+    """
+    dates = [r['snapshot_date'] for r in db.execute_query(
+        "SELECT DISTINCT snapshot_date FROM player_transfer_snapshots "
+        "ORDER BY snapshot_date")]
+    if len(dates) < 2:
+        return 0
+    pairs = list(zip(dates, dates[1:])) if backfill else [(dates[-2], dates[-1])]
+
+    inserted = 0
+    for prev_d, cur_d in pairs:
+        gap = (date.fromisoformat(str(cur_d)[:10])
+               - date.fromisoformat(str(prev_d)[:10])).days
+        if gap > MAX_DETECTION_GAP_DAYS:
+            logger.info(
+                "PriceChanges: skipping %s -> %s (gap %dd > %dd, not a "
+                "nightly move)", prev_d, cur_d, gap, MAX_DETECTION_GAP_DAYS)
+            continue
+        rows = db.execute_query("""
+            SELECT cur.player_id,
+                   prev.now_cost AS old_price,
+                   cur.now_cost AS new_price,
+                   cur.gameweek
+            FROM player_transfer_snapshots cur
+            JOIN player_transfer_snapshots prev
+              ON prev.player_id = cur.player_id
+             AND prev.snapshot_date = ?
+            WHERE cur.snapshot_date = ?
+              AND cur.now_cost != prev.now_cost
+        """, (prev_d, cur_d))
+        detected_at = f'{str(cur_d)[:10]} 02:30:00'
+        for r in rows:
+            db.execute_update("""
+                INSERT INTO price_changes
+                    (player_id, old_price, new_price, change_amount,
+                     detected_at, gameweek)
+                SELECT ?, ?, ?, ?, ?, ?
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM price_changes
+                    WHERE player_id = ? AND DATE(detected_at) = ?
+                )
+            """, (r['player_id'], r['old_price'], r['new_price'],
+                  r['new_price'] - r['old_price'], detected_at,
+                  r['gameweek'], r['player_id'], str(cur_d)[:10]))
+            inserted += 1
+    return inserted
+
 
 async def collect_snapshots():
     """Collect today's player snapshots."""
@@ -128,6 +191,10 @@ async def collect_snapshots():
         if skipped_count > 0:
             print(f"⚠️  Skipped {skipped_count} existing snapshots")
 
+        # Derive nightly price changes from the latest snapshot pair
+        changes = detect_price_changes(db)
+        print(f"💱 Price changes detected since previous snapshot: {changes}")
+
         # Show top movers (high net transfers)
         print("\n" + "-" * 80)
         print("TOP TRANSFER TARGETS (Today)")
@@ -226,6 +293,11 @@ async def collect_snapshots():
 
 
 if __name__ == '__main__':
+    if '--backfill-changes' in sys.argv:
+        # One-off: derive price_changes from ALL existing snapshot history
+        n = detect_price_changes(Database(), backfill=True)
+        print(f"Backfilled {n} price changes from snapshot history")
+        sys.exit(0)
     try:
         exit_code = asyncio.run(collect_snapshots())
         sys.exit(exit_code)

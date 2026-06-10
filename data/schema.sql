@@ -253,16 +253,47 @@ CREATE TABLE IF NOT EXISTS player_gameweek_history (
     UNIQUE(player_id, gameweek, fixture_id)
 );
 
+-- Shape matches migrations/003_add_price_tracking.sql (the live table).
+-- An older definition here (change_date/net_transfers) diverged from
+-- what the migration actually created — fresh installs got a table the
+-- price pipeline couldn't write to.
 CREATE TABLE IF NOT EXISTS price_changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id INTEGER NOT NULL,
     old_price INTEGER NOT NULL,
     new_price INTEGER NOT NULL,
-    change_date DATE NOT NULL,
-    net_transfers INTEGER,
-    selected_by_percent REAL,
-    FOREIGN KEY (player_id) REFERENCES players(id)
+    change_amount INTEGER NOT NULL,
+    detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    gameweek INTEGER
 );
+
+-- Daily transfer/price snapshots feeding the price model (was only in
+-- migrations/003 — fresh installs lacked it entirely)
+CREATE TABLE IF NOT EXISTS player_transfer_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_id INTEGER NOT NULL,
+    snapshot_date DATE NOT NULL,
+    transfers_in INTEGER DEFAULT 0,
+    transfers_out INTEGER DEFAULT 0,
+    net_transfers INTEGER DEFAULT 0,
+    transfers_in_event INTEGER DEFAULT 0,
+    transfers_out_event INTEGER DEFAULT 0,
+    selected_by_percent REAL DEFAULT 0.0,
+    form REAL DEFAULT 0.0,
+    points_per_game REAL DEFAULT 0.0,
+    total_points INTEGER DEFAULT 0,
+    now_cost INTEGER NOT NULL,
+    cost_change_event INTEGER DEFAULT 0,
+    cost_change_start INTEGER DEFAULT 0,
+    gameweek INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(player_id, snapshot_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_player_date
+    ON player_transfer_snapshots(player_id, snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_snapshots_date
+    ON player_transfer_snapshots(snapshot_date);
 
 -- ============================================================================
 -- AGENT PERFORMANCE TRACKING
@@ -299,6 +330,6 @@ CREATE INDEX IF NOT EXISTS idx_transfers_gameweek ON transfers(gameweek);
 CREATE INDEX IF NOT EXISTS idx_player_predictions_gameweek ON player_predictions(gameweek);
 CREATE INDEX IF NOT EXISTS idx_price_predictions_date ON price_predictions(prediction_for_date);
 CREATE INDEX IF NOT EXISTS idx_history_player_gameweek ON player_gameweek_history(player_id, gameweek);
-CREATE INDEX IF NOT EXISTS idx_price_changes_date ON price_changes(change_date);
+CREATE INDEX IF NOT EXISTS idx_price_changes_date ON price_changes(detected_at);
 CREATE INDEX IF NOT EXISTS idx_agent_performance_gameweek ON agent_performance(gameweek);
 CREATE INDEX IF NOT EXISTS idx_agent_performance_agent ON agent_performance(agent_name);

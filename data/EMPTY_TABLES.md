@@ -26,16 +26,20 @@ is a one-line change instead of a schema migration.
 | `model_predictions` | `ml/model_registry.py:393` `record_prediction()` | Method exists but no caller invokes it |
 | `model_performance` | `ml/model_registry.py` `update_actuals()` | Same |
 | `learned_thresholds` | (no writer found) | Read by `transfer_optimizer.py:88` with default fallback. Feature gate for learned per-position transfer thresholds. |
-| `price_changes` | `scripts/monitor_prices.py:136` | Script not on any systemd timer |
-| `price_predictions` | `scripts/predict_price_changes.py:118` | Script not on any systemd timer |
-| `price_model_performance` | `scripts/train_price_model.py:140` | Script not on any systemd timer |
+| `price_changes` | ~~monitor_prices.py~~ → `collect_price_snapshots.py::detect_price_changes` | WIRED 2026-06-10: detection derived from snapshot diffs (monitor_prices.py's detection was a TODO that never ran); 415 changes backfilled from Oct-Dec 2025 snapshots |
+| `price_predictions` | `scripts/predict_price_changes.py` | WIRED 2026-06-10: ron-price-predict.timer daily 23:00 (stores confidence>0.5 only — empty off-season is expected) |
+| `price_model_performance` | `scripts/train_price_model.py` | WIRED 2026-06-10: ron-price-train.timer Sundays 04:00; first model trained on backfilled data |
 
 ## What to do over the summer
 
-- **Price tracking trio** (`price_changes`, `price_predictions`,
-  `price_model_performance`): wire up `monitor_prices.py` + the predictor
-  into the daily scout timer. Schema is ready, code is ready, just not
-  scheduled.
+- **Price tracking trio**: DONE 2026-06-10 (ron_clanker-34). Three
+  timers: ron-price-snapshot (22:30, snapshot + change detection),
+  ron-price-predict (23:00), ron-price-train (Sun 04:00). Note
+  monitor_prices.py's "detection" was an unimplemented TODO — changes
+  are now derived from consecutive snapshot price diffs with a 3-day
+  gap guard against season-boundary phantom changes. schema.sql's
+  price_changes definition was reconciled with the live (migration 003)
+  shape and player_transfer_snapshots added to it.
 - **Learning agent tables** (`chips_used`, `agent_performance`): decide if
   the post-GW learning loop is worth building. If not, delete
   `learning_agent.py` and these two tables in a second migration.

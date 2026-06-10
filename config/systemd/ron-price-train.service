@@ -1,0 +1,12 @@
+[Unit]
+Description=Ron Clanker - Weekly price model retrain
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python scripts/train_price_model.py
+StandardOutput=append:/home/jolyon/ron_clanker/logs/cron_price.log
+StandardError=append:/home/jolyon/ron_clanker/logs/cron_price.log
+TimeoutStartSec=1800
+Environment=HOME=/home/jolyon

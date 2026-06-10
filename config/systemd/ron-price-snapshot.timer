@@ -1,0 +1,9 @@
+[Unit]
+Description=Ron Clanker - Price snapshot daily at 22:30 (before ~02:00 price changes)
+
+[Timer]
+OnCalendar=*-*-* 22:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
