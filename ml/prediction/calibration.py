@@ -131,12 +131,18 @@ class PredictionCalibrator:
       2. linear calibration: a + b * (...)   (winner's curse)
     The combination was the best measured 2025-26 configuration in the
     backtest harness (chips strategy 1782/1702 across params vs 1739
-    calibration-only and 1770-knife-edge raw)."""
+    calibration-only and 1770-knife-edge raw).
+
+    two_stage defaults OFF here because the synthesis engine now bakes
+    P(plays) into stored predictions at WRITE time (ron_clanker-e71f) —
+    every consumer inherits it, and enabling it here as well would
+    double-apply. Set two_stage=True only when calibrating predictions
+    that bypassed the synthesis write path."""
 
     def __init__(self, database, min_history_gws: int = MIN_HISTORY_GWS,
                  prior: Optional[Dict[int, Tuple[float, float]]] = None,
                  since: Optional[str] = None,
-                 two_stage: bool = True):
+                 two_stage: bool = False):
         self.db = database
         self.min_history_gws = min_history_gws
         self.prior = dict(DEFAULT_PRIOR if prior is None else prior)

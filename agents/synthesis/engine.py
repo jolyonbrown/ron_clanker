@@ -69,6 +69,14 @@ class DecisionSynthesisEngine:
         self.price_predictor = PriceChangePredictor()
         self.news_adjuster = NewsAwarePredictionAdjuster(self.db)
 
+        # Two-stage prediction (ron_clanker-e71f): stored xP is
+        # P(plays) x E[points|plays]. Applied at WRITE time so every
+        # consumer (transfer optimizer, chip strategy, squad builds)
+        # inherits it. PredictionCalibrator must therefore keep its own
+        # two_stage OFF (double-apply hazard).
+        from ml.prediction.calibration import LivePlayProbability
+        self.play_probability = LivePlayProbability(self.db)
+
         # State
         self.current_gw = None
         self.ml_predictions = {}
@@ -136,7 +144,9 @@ class DecisionSynthesisEngine:
             logger.warning(f"DecisionSynthesis: Could not load models: {e}")
             logger.warning("DecisionSynthesis: Will use fallback predictions")
             print(f"\n⚠️  ML Models not available - using fallback predictions based on form")
-            return self._fallback_predictions(gameweek)
+            return self._apply_play_probability(
+                self._fallback_predictions(gameweek), gameweek
+            )
 
         # Get all players
         players = self.db.execute_query("""
@@ -198,10 +208,30 @@ class DecisionSynthesisEngine:
         # captain, and squad-rank decisions (GW36 2026-05-09 case).
         adjusted_predictions = self._apply_dgw_multiplier(adjusted_predictions, gameweek)
 
+        # Two-stage: multiply by P(plays) so stored xP prices rotation/
+        # availability risk. Walk-forward by construction live — the DB
+        # cannot contain minutes from unplayed gameweeks. Measured on
+        # 2025-26: prediction MAE -20%, top-15 no-shows -48%.
+        adjusted_predictions = self._apply_play_probability(
+            adjusted_predictions, gameweek
+        )
+
         # Store to database (store adjusted predictions)
         self._store_predictions(adjusted_predictions, gameweek)
 
         return adjusted_predictions
+
+    def _apply_play_probability(self, predictions: Dict[int, float],
+                                gameweek: int) -> Dict[int, float]:
+        """xP' = P(plays) x xP, with P(plays) from recent minutes."""
+        try:
+            return {
+                pid: xp * self.play_probability.prob(pid, gameweek)
+                for pid, xp in predictions.items()
+            }
+        except Exception as e:
+            logger.warning(f"DecisionSynthesis: play-probability failed: {e}")
+            return predictions
 
     def _apply_dgw_multiplier(self, predictions: Dict[int, float], gameweek: int) -> Dict[int, float]:
         """

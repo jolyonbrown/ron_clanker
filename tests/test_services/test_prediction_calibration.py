@@ -141,7 +141,7 @@ class TestTwoStageLive:
     def test_ever_present_multiplier_is_one(self):
         """Everyone in the fake history played 90 every GW, so the
         two-stage multiplier is 1.0 and results match linear-only."""
-        cal_two = PredictionCalibrator(make_db(slope=0.5))
+        cal_two = PredictionCalibrator(make_db(slope=0.5), two_stage=True)
         cal_lin = PredictionCalibrator(make_db(slope=0.5), two_stage=False)
         a = cal_two.calibrate({1: 6.0}, as_of_gw=7)
         b = cal_lin.calibrate({1: 6.0}, as_of_gw=7)
@@ -158,12 +158,19 @@ class TestTwoStageLive:
                         for r in rows]
             return rows
         db.execute_query = patched
-        cal = PredictionCalibrator(db)
+        cal = PredictionCalibrator(db, two_stage=True)
         out = cal.calibrate({1: 6.0, 2: 6.0}, as_of_gw=7)
         assert out[1] < out[2]
         assert out[1] == pytest.approx(0.0, abs=0.2)
 
     def test_multi_uses_same_multiplier_for_all_targets(self):
-        cal = PredictionCalibrator(make_db(slope=1.0))
+        cal = PredictionCalibrator(make_db(slope=1.0), two_stage=True)
         out = cal.calibrate_multi({1: {7: 4.0, 8: 8.0}}, as_of_gw=7)
         assert out[1][8] / max(out[1][7], 1e-9) == pytest.approx(2.0, abs=0.05)
+
+
+    def test_default_is_two_stage_off(self):
+        """Synthesis bakes P(plays) in at write time (ron_clanker-e71f);
+        the consumer-level calibrator must not double-apply."""
+        cal = PredictionCalibrator(make_db())
+        assert cal.play_prob is None

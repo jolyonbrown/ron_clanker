@@ -70,7 +70,15 @@ from backtest.strategy import AsOfView, GWDecision, InitialSquad, Strategy
 
 logger = logging.getLogger('ron_clanker.backtest.live_strategy')
 
-ERA_DB_PATH = Path(__file__).resolve().parent.parent / 'data' / '.backtest_era.db'
+_ERA_DB_DIR = Path(__file__).resolve().parent.parent / 'data'
+
+
+def _unique_era_path() -> Path:
+    """Per-instance scratch path: concurrent runs (test suite + ad-hoc
+    scripts) previously shared one file and corrupted each other."""
+    import os
+    import uuid
+    return _ERA_DB_DIR / f'.backtest_era_{os.getpid()}_{uuid.uuid4().hex[:8]}.db'
 
 
 class EraDatabase:
@@ -90,8 +98,8 @@ class EraDatabase:
         con.execute("PRAGMA journal_mode = MEMORY")
         return con
 
-    def __init__(self, source_db_path: Path, era_path: Path = ERA_DB_PATH):
-        self.path = Path(era_path)
+    def __init__(self, source_db_path: Path, era_path: Optional[Path] = None):
+        self.path = Path(era_path) if era_path else _unique_era_path()
         if self.path.exists():
             self.path.unlink()
         self.db = Database(str(self.path))   # creates empty schema
