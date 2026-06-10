@@ -275,6 +275,23 @@ class HistoricalDataProvider:
         """Average manager score for a GW, from a bootstrap_static snapshot."""
         return self._bootstrap_events.get(gameweek)
 
+    def chip_definitions(self) -> Optional[List[Dict]]:
+        """The season's real chip windows from the archived bootstrap:
+        id/name/number/start_event/stop_event/chip_type per instance."""
+        archives = Path(__file__).resolve().parent.parent / 'data' / 'archives'
+        candidates = sorted(
+            archives.glob(f'{self.season}_*/fpl_api_snapshots/bootstrap_static.json')
+        )
+        if not candidates:
+            return None
+        with open(candidates[-1]) as f:
+            chips = json.load(f).get('chips', [])
+        return [
+            {k: c[k] for k in
+             ('id', 'name', 'number', 'start_event', 'stop_event', 'chip_type')}
+            for c in chips
+        ]
+
     # ------------------------------------------------------------------
 
     def _load_bootstrap_events(self, bootstrap_path: Optional[Path]) -> Dict[int, int]:

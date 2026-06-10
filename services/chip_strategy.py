@@ -262,7 +262,7 @@ class ChipStrategyService:
                     )
                 elif name == FREE_HIT:
                     plans[name] = self._plan_free_hit(
-                        status, current_gw, window, squad_meta,
+                        status, current_gw, window, squad_meta, bank,
                     )
                 elif name == BENCH_BOOST:
                     plans[name] = self._plan_bench_boost(
@@ -355,15 +355,25 @@ class ChipStrategyService:
         current_gw: int,
         window: List[int],
         squad: List[Dict[str, Any]],
+        bank: float = 0.0,
     ) -> ChipPlan:
         """
         FH EV = xP(optimal_FH_squad_XI, gw) - xP(current_XI, gw).
 
-        Uses SquadOptimizer.optimize_free_hit for the hypothetical squad.
+        Uses SquadOptimizer.optimize_free_hit for the hypothetical squad,
+        with the REAL Free Hit budget: the squad's selling value + bank,
+        not a fresh £100m (which over-budgets whenever team value is
+        above £100m... and under a falling team value built squads the
+        entry couldn't afford — caught by the backtest, 2026-06).
         Evaluated for at most FH_HORIZON_GWS ahead to cap optimizer cost.
         """
         # Cap horizon; user's WC/BB/TC planning typically drives FH timing
         eval_window = window[:FH_HORIZON_GWS]
+
+        selling_value = sum(
+            p.get('selling_price') or p.get('now_cost') or 0 for p in squad
+        )
+        fh_budget = selling_value + int(bank * 10) if selling_value else None
 
         ev_by_gw: Dict[int, float] = {}
         for gw in eval_window:
@@ -379,6 +389,7 @@ class ChipStrategyService:
             try:
                 fh_squad = self._get_optimizer().optimize_free_hit(
                     gameweek=gw, predictions=preds_all, verbose=False,
+                    budget=fh_budget,
                 )
                 fh_xi_xp = self._best_xi_xp_from_players(
                     fh_squad.players, preds_all,

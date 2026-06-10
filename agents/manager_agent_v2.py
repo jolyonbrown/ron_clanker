@@ -1533,7 +1533,10 @@ Captain: {captain['web_name']}
                     squad_optimizer = SquadOptimizer(self.db)
 
                     if chip_used == 'freehit':
-                        # Free Hit: Fresh £100m budget, single GW optimization
+                        # Free Hit budget = squad selling value + bank. NOT a
+                        # fresh £100m: with team value under £100m the fixed
+                        # budget builds a squad the entry can't afford
+                        # (surfaced by the 2025-26 season backtest).
                         logger.info("Ron: Activating FREE HIT - building optimal one-week squad")
 
                         # Read cached predictions directly from DB. These were
@@ -1551,10 +1554,20 @@ Captain: {captain['web_name']}
                         }
                         logger.info(f"Ron: Loaded {len(predictions)} predictions for GW{gameweek}")
 
+                        selling_value = sum(
+                            p.get('selling_price') or p.get('now_cost') or 0
+                            for p in current_team
+                        )
+                        fh_budget = (
+                            selling_value + int(bank * 10)
+                            if selling_value else None
+                        )
+
                         optimized = squad_optimizer.optimize_free_hit(
                             gameweek=gameweek,
                             predictions=predictions,
-                            verbose=True
+                            verbose=True,
+                            budget=fh_budget
                         )
 
                         # Replace team with optimized squad

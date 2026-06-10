@@ -28,11 +28,18 @@ What is shimmed, and why:
 Known fidelity gaps (accepted, documented):
     - Horizon predictions (gw+1..gw+3) are the FINAL pre-GW stored
       values — slightly fresher than the live system would have had at
-      gw. Mild optimism in multi-GW planning.
+      gw. Mild optimism in multi-GW planning. The chip planner sees the
+      same freshness across its whole window.
     - Captain is the top stored xP in the XI, not the live
       ceiling-bonus captain model (whose pickle is post-season anyway).
-    - Chips are not wrapped yet; this strategy plays chipless.
     - Ownership-based risk adjustment is inert (MODERATE default).
+
+Two strategies are exported: LiveOptimizerStrategy plays chipless;
+LiveOptimizerWithChipsStrategy adds the real ChipStrategyService
+(services/chip_strategy.py) deciding chip timing each gameweek. Both
+bugs the chip replay surfaced on first run — optimize_free_hit assuming
+a fresh £100m budget, and TransferOptimizer ignoring the max-3-per-club
+rule — are fixed in the live code (2026-06-10).
 
 Illegal recommendations from the live code (club rule, budget) are
 VETOED so the season can finish, but counted and logged loudly — a veto
@@ -46,11 +53,19 @@ from typing import Dict, List, Optional, Set
 
 from agents.transfer_optimizer import TransferOptimizer
 from data.database import Database
+from services.chip_availability import ChipAvailabilityService, ChipDefinition
+from services.chip_strategy import (
+    BENCH_BOOST,
+    FREE_HIT,
+    TRIPLE_CAPTAIN,
+    WILDCARD,
+    ChipStrategyService,
+)
 from services.squad_optimizer import SquadOptimizer
 
 from backtest.data import HistoricalDataProvider
 from backtest.scoring import Pick
-from backtest.state import OwnedPlayer, sell_price
+from backtest.state import OwnedPlayer, Transfer, sell_price
 from backtest.strategy import AsOfView, GWDecision, InitialSquad, Strategy
 
 logger = logging.getLogger('ron_clanker.backtest.live_strategy')
@@ -71,7 +86,13 @@ class EraDatabase:
         if self.path.exists():
             self.path.unlink()
         self.db = Database(str(self.path))   # creates empty schema
-        self._copy_tables(source_db_path, ('teams', 'players', 'fixtures'))
+        # player_predictions is the walk-forward-safe store the live chip
+        # strategy queries directly; copying it lets those query paths run
+        # unmodified.
+        self._copy_tables(
+            source_db_path,
+            ('teams', 'players', 'fixtures', 'player_predictions'),
+        )
 
     def _copy_tables(self, source: Path, tables) -> None:
         src = sqlite3.connect(f'file:{source}?mode=ro', uri=True)
@@ -185,15 +206,12 @@ class LiveOptimizerStrategy(Strategy):
         picks = self._build_picks(set(purchases), gameweek, view)
         return InitialSquad(purchases=purchases, picks=picks)
 
-    def decide(self, gameweek: int, state_info: Dict, view: AsOfView) -> GWDecision:
-        prices = view.prices()
-        self._era.refresh(prices)
-
-        squad: Dict[int, OwnedPlayer] = dict(state_info['squad'])
-        current_team = []
+    def _current_team_dicts(self, squad: Dict[int, OwnedPlayer],
+                            prices: Dict[int, int]) -> List[Dict]:
+        team = []
         for pid, owned in squad.items():
             price = prices.get(pid, owned.purchase_price)
-            current_team.append({
+            team.append({
                 'player_id': pid,
                 'id': pid,
                 'web_name': self._names.get(pid, str(pid)),
@@ -201,6 +219,14 @@ class LiveOptimizerStrategy(Strategy):
                 'now_cost': price,
                 'selling_price': sell_price(owned.purchase_price, price),
             })
+        return team
+
+    def decide(self, gameweek: int, state_info: Dict, view: AsOfView) -> GWDecision:
+        prices = view.prices()
+        self._era.refresh(prices)
+
+        squad: Dict[int, OwnedPlayer] = dict(state_info['squad'])
+        current_team = self._current_team_dicts(squad, prices)
 
         result = self._transfer_opt.optimize_transfers(
             current_team=current_team,
@@ -230,7 +256,7 @@ class LiveOptimizerStrategy(Strategy):
         """Mirror the simulator's rules over the live recommendations.
         Anything vetoed here is a defect in the live optimizer — counted
         and logged, never silently fixed."""
-        from backtest.state import MAX_PER_CLUB, Transfer
+        from backtest.state import MAX_PER_CLUB
 
         club_counts: Dict[Optional[int], int] = {}
         for pid in squad:
@@ -283,7 +309,8 @@ class LiveOptimizerStrategy(Strategy):
     # ------------------------------------------------------------------
 
     def _build_picks(self, squad_ids: Set[int], gameweek: int,
-                     view: AsOfView) -> List[Pick]:
+                     view: AsOfView,
+                     captain_override: Optional[int] = None) -> List[Pick]:
         preds = self._provider.predictions(gameweek)
         prices = view.prices()
         players = [
@@ -300,6 +327,10 @@ class LiveOptimizerStrategy(Strategy):
         starting, bench = self._squad_opt.optimize_starting_xi(players)
         ranked = sorted(starting, key=lambda p: -p.get('xP', 0.0))
         captain, vice = ranked[0]['id'], ranked[1]['id']
+        starter_ids = {p['id'] for p in starting}
+        if captain_override is not None and captain_override in starter_ids:
+            if captain_override != captain:
+                captain, vice = captain_override, ranked[0]['id']
         return [
             Pick(
                 player_id=p['id'],
@@ -310,3 +341,167 @@ class LiveOptimizerStrategy(Strategy):
             )
             for p in starting + bench
         ]
+
+
+class _SimChipAvailability(ChipAvailabilityService):
+    """ChipAvailabilityService with its two FPL-API seams replaced.
+
+    Definitions come from the season archive's bootstrap snapshot (the
+    real 2025/26 windows); used chips come from the simulator's entry
+    state, set before each decision. The window/instance-matching logic
+    in get_available_chips runs unmodified.
+    """
+
+    def __init__(self, definitions: List[Dict]):
+        super().__init__()
+        self._defs = [ChipDefinition(**d) for d in definitions]
+        self.used: List[Dict] = []   # [{'name': chip, 'event': gw}]
+
+    def get_chip_definitions(self, force_refresh: bool = False):
+        return self._defs
+
+    def _fetch_used_chips(self, team_id: int) -> List[Dict]:
+        return list(self.used)
+
+
+class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
+    """Layer-3 strategy plus the live ChipStrategyService deciding chips.
+
+    The real horizon-based chip engine (services/chip_strategy.py) runs
+    each gameweek: per-chip EV curves over the remaining window, hold-vs-
+    play thresholds, forced-chip handling. Wildcard/Free Hit squads are
+    rebuilt with the real MILP optimizer.
+
+    Chip transfers are batch-vetted (total affordability) rather than
+    per-transfer — batches may dip negative transiently, like Ron's real
+    GW19 wildcard did. A failed batch vetoes the WHOLE chip and falls
+    back to the chipless decision: that veto is a live-code defect (e.g.
+    optimize_free_hit assumes a fresh £100m, but FPL's Free Hit budget
+    is selling value + bank).
+    """
+
+    name = 'live-optimizer+chips'
+
+    def __init__(self, provider: HistoricalDataProvider, horizon: int = 4):
+        super().__init__(provider, horizon=horizon)
+        definitions = provider.chip_definitions()
+        if not definitions:
+            raise RuntimeError(
+                "LiveOptimizerWithChipsStrategy needs chip definitions "
+                "from the season archive bootstrap — none found"
+            )
+        self._avail = _SimChipAvailability(definitions)
+        self._chip_service = ChipStrategyService(
+            database=self._era.db,
+            squad_optimizer=self._squad_opt,
+            availability_service=self._avail,
+        )
+
+    def decide(self, gameweek: int, state_info: Dict, view: AsOfView) -> GWDecision:
+        prices = view.prices()
+        self._era.refresh(prices)
+        squad: Dict[int, OwnedPlayer] = dict(state_info['squad'])
+
+        # The chip planner needs positions (bench detection drives BB EV),
+        # so give it the would-be lineup of the current squad.
+        pre_picks = self._build_picks(set(squad), gameweek, view)
+        positions = {p.player_id: p.position for p in pre_picks}
+        team_dicts = self._current_team_dicts(squad, prices)
+        for d in team_dicts:
+            d['position'] = positions.get(d['id'], 0)
+
+        self._avail.used = [
+            {'name': chip, 'event': gw} for gw, chip in state_info['chips_used']
+        ]
+        decision = self._chip_service.get_recommended_chip(
+            team_id=0,
+            gameweek=gameweek,
+            squad=team_dicts,
+            transfers_needed=0,
+            free_transfers=state_info['available_ft'],
+            bank=state_info['bank'] / 10.0,
+        )
+        chip = decision.chip_name if decision and decision.use_chip else None
+
+        if chip == WILDCARD:
+            rebuilt = self._squad_opt.optimize_wildcard(
+                gameweek=gameweek,
+                current_squad=team_dicts,
+                bank=state_info['bank'] / 10.0,
+                multi_gw_predictions=self._multi_gw_predictions(gameweek),
+                horizon=self._horizon,
+                verbose=False,
+            )
+            chip_decision = self._squad_swap_decision(
+                gameweek, squad, {p['id'] for p in rebuilt.players},
+                chip, state_info['bank'], prices, view,
+            )
+            if chip_decision is not None:
+                return chip_decision
+            chip = None   # batch vetoed — fall through chipless
+
+        elif chip == FREE_HIT:
+            selling_value = sum(d['selling_price'] for d in team_dicts)
+            fh = self._squad_opt.optimize_free_hit(
+                gameweek=gameweek,
+                predictions=self._provider.predictions(gameweek),
+                verbose=False,
+                budget=selling_value + state_info['bank'],
+            )
+            chip_decision = self._squad_swap_decision(
+                gameweek, squad, {p['id'] for p in fh.players},
+                chip, state_info['bank'], prices, view,
+            )
+            if chip_decision is not None:
+                return chip_decision
+            chip = None
+
+        # No chip, or a team chip (BB/TC): normal weekly transfer logic.
+        base = super().decide(gameweek, state_info, view)
+        if chip == BENCH_BOOST:
+            base.chip = chip
+        elif chip == TRIPLE_CAPTAIN:
+            base.chip = chip
+            if decision.captain_override is not None:
+                squad_ids = set(squad)
+                for t in base.transfers:
+                    squad_ids.discard(t.out_id)
+                    squad_ids.add(t.in_id)
+                base.picks = self._build_picks(
+                    squad_ids, gameweek, view,
+                    captain_override=decision.captain_override,
+                )
+        return base
+
+    def _squad_swap_decision(
+        self, gameweek: int, squad: Dict[int, OwnedPlayer],
+        new_ids: Set[int], chip: str, bank: int,
+        prices: Dict[int, int], view: AsOfView,
+    ) -> Optional[GWDecision]:
+        """Turn a WC/FH rebuild into transfers, batch-vetting affordability.
+        Returns None if the batch is unaffordable (live-code defect; the
+        chip is vetoed and the caller falls back to a chipless decision)."""
+        outs = sorted(set(squad) - new_ids)
+        ins = sorted(new_ids - set(squad))
+        received = sum(
+            sell_price(squad[pid].purchase_price,
+                       prices.get(pid, squad[pid].purchase_price))
+            for pid in outs
+        )
+        paid = sum(prices.get(pid, 0) for pid in ins)
+        missing = [pid for pid in ins if pid not in prices]
+        if missing or bank + received - paid < 0:
+            why = (f'no price for {missing}' if missing else
+                   f'batch unaffordable: bank {bank} + sell {received} '
+                   f'< buy {paid}')
+            msg = (f"GW{gameweek}: VETOED {chip} rebuild "
+                   f"({len(outs)} out / {len(ins)} in): {why}")
+            logger.error(msg)
+            self.vetoed.append(msg)
+            return None
+
+        transfers = [
+            Transfer(out_id=o, in_id=i) for o, i in zip(outs, ins)
+        ]
+        picks = self._build_picks(new_ids, gameweek, view)
+        return GWDecision(transfers=transfers, chip=chip, picks=picks)

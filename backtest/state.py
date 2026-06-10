@@ -196,11 +196,10 @@ class EntryState:
         (selling a player bought earlier the same window, as happens on
         wildcards) resolves with correct prices.
         """
-        if chip and chip in (WILDCARD, FREE_HIT):
-            if not self.chip_available(chip, gameweek):
-                raise IllegalTransferError(
-                    f"GW{gameweek}: {chip} not available (already used this half)"
-                )
+        if chip and not self.chip_available(chip, gameweek):
+            raise IllegalTransferError(
+                f"GW{gameweek}: {chip} not available (already used this half)"
+            )
 
         for t in transfers:
             if t.out_id not in self.squad:

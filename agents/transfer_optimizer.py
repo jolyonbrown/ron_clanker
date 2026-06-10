@@ -20,6 +20,7 @@ from data.database import Database
 logger = logging.getLogger('ron_clanker.transfer_optimizer')
 
 POSITIONS = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+MAX_PER_CLUB = 3
 
 
 @dataclass
@@ -358,6 +359,12 @@ class TransferOptimizer:
 
         all_options.sort(key=lambda x: x.total_gain, reverse=True)
 
+        # Step 3b: Drop options that would breach the max-3-per-club rule.
+        # Found by the season backtest (GW29-31 replay recommended a 4th
+        # Arsenal player three weeks running) — the FPL API would reject
+        # the submission.
+        all_options = self._filter_club_legal(all_options, current_team)
+
         # Step 4: Chip decisions now handled by manager separately
         # TransferOptimizer focuses purely on transfer recommendations
         chip_recommendation = None
@@ -457,6 +464,53 @@ class TransferOptimizer:
             self._print_analysis(result, current_gw, horizon)
 
         return result
+
+    def _club_map(self, player_ids: List[int]) -> Dict[int, int]:
+        """player_id -> club (team_id) for the given ids."""
+        if not player_ids:
+            return {}
+        placeholders = ','.join('?' * len(player_ids))
+        rows = self.db.execute_query(
+            f"SELECT id, team_id FROM players WHERE id IN ({placeholders})",
+            tuple(player_ids),
+        )
+        return {r['id']: r['team_id'] for r in rows}
+
+    def _filter_club_legal(
+        self,
+        options: List[TransferOption],
+        current_team: List[Dict],
+    ) -> List[TransferOption]:
+        """Drop single-swap options that would put 4+ players at one club.
+
+        Combinations of transfers are additionally checked with running
+        counts in optimize_multi_transfers.
+        """
+        if not options:
+            return options
+        squad_ids = [p['player_id'] for p in current_team]
+        option_ids = [o.player_in_id for o in options] + \
+                     [o.player_out_id for o in options]
+        clubs = self._club_map(list(set(squad_ids + option_ids)))
+        counts: Dict[Optional[int], int] = {}
+        for pid in squad_ids:
+            club = clubs.get(pid)
+            counts[club] = counts.get(club, 0) + 1
+
+        legal = []
+        for opt in options:
+            in_club = clubs.get(opt.player_in_id)
+            out_club = clubs.get(opt.player_out_id)
+            after = counts.get(in_club, 0) + 1 - (1 if in_club == out_club else 0)
+            if after > MAX_PER_CLUB:
+                logger.info(
+                    "TransferOptimizer: dropping %s -> %s (would be %d "
+                    "players from club %s)",
+                    opt.player_out_name, opt.player_in_name, after, in_club,
+                )
+                continue
+            legal.append(opt)
+        return legal
 
     def _get_multi_gw_predictions(
         self,
@@ -800,6 +854,16 @@ class TransferOptimizer:
         # Get current squad player IDs
         current_player_ids = {p['player_id'] for p in current_team}
 
+        # Running club counts: individually-legal swaps can still combine
+        # into a 4-from-one-club squad (max-3 rule).
+        option_ids = [o.player_in_id for o in all_options] + \
+                     [o.player_out_id for o in all_options]
+        clubs = self._club_map(list(current_player_ids | set(option_ids)))
+        club_counts: Dict[Optional[int], int] = {}
+        for pid in current_player_ids:
+            club = clubs.get(pid)
+            club_counts[club] = club_counts.get(club, 0) + 1
+
         for _ in range(free_transfers):
             # Find best valid option
             best_option = None
@@ -826,6 +890,14 @@ class TransferOptimizer:
                 if opt.avg_gain_per_gw < min_gain_threshold:
                     continue
 
+                # Check club rule against the running combination
+                in_club = clubs.get(opt.player_in_id)
+                out_club = clubs.get(opt.player_out_id)
+                after = club_counts.get(in_club, 0) + 1 \
+                    - (1 if in_club == out_club else 0)
+                if after > MAX_PER_CLUB:
+                    continue
+
                 best_option = opt
                 break
 
@@ -840,6 +912,10 @@ class TransferOptimizer:
             used_player_out_ids.add(best_option.player_out_id)
             used_player_in_ids.add(best_option.player_in_id)
             remaining_budget -= (best_option.player_in_price - best_option.player_out_price)
+            in_club = clubs.get(best_option.player_in_id)
+            out_club = clubs.get(best_option.player_out_id)
+            club_counts[out_club] = club_counts.get(out_club, 1) - 1
+            club_counts[in_club] = club_counts.get(in_club, 0) + 1
 
             if self.verbose:
                 print(f"  ✓ Transfer {len(recommended)}/{free_transfers}: "

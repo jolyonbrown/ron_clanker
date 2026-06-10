@@ -85,13 +85,19 @@ class SquadOptimizer:
         self,
         gameweek: int,
         predictions: Dict[int, float],
-        verbose: bool = True
+        verbose: bool = True,
+        budget: Optional[int] = None
     ) -> OptimizedSquad:
         """
         Build optimal squad for Free Hit chip.
 
         Free Hit rules:
-        - Fresh £100m budget (ignores current squad)
+        - Budget = current squad's SELLING value + bank (the squad is
+          temporarily sold, not replaced with a fresh £100m — callers
+          should pass `budget` in tenths). The £100m fallback is only
+          safe while team value stays above £100m; below it, the
+          optimizer would build an unaffordable squad (caught by the
+          backtest, 2026-06).
         - Optimize for single gameweek only
         - Squad reverts to pre-FH squad after gameweek
 
@@ -99,15 +105,18 @@ class SquadOptimizer:
             gameweek: Target gameweek
             predictions: Dict mapping player_id -> expected points for GW
             verbose: Whether to print progress
+            budget: Selling value + bank in tenths; defaults to £100.0m
 
         Returns:
             OptimizedSquad with optimal 15 players
         """
+        if budget is None:
+            budget = FREE_HIT_BUDGET
         if verbose:
             print(f"\n{'='*60}")
             print(f"FREE HIT SQUAD OPTIMIZER - GW{gameweek}")
             print(f"{'='*60}")
-            print(f"Budget: £100.0m (fresh)")
+            print(f"Budget: £{budget/10:.1f}m")
             print(f"Optimization: Single gameweek")
 
         # Get all available players with predictions
@@ -120,7 +129,7 @@ class SquadOptimizer:
         # Run optimization
         squad = self._optimize_squad(
             players=players,
-            budget=FREE_HIT_BUDGET,
+            budget=budget,
             predictions=predictions,
             horizon=1,
             verbose=verbose
@@ -132,7 +141,7 @@ class SquadOptimizer:
         reasoning = (
             f"Free Hit squad optimized for GW{gameweek}. "
             f"Total xP: {total_xp:.1f} from 15 players. "
-            f"Budget: £{total_cost:.1f}m / £100.0m."
+            f"Budget: £{total_cost:.1f}m / £{budget/10:.1f}m."
         )
 
         if verbose:
@@ -142,7 +151,7 @@ class SquadOptimizer:
             players=squad,
             total_cost=total_cost,
             total_xp=total_xp,
-            budget_remaining=(FREE_HIT_BUDGET - sum(p['now_cost'] for p in squad)) / 10,
+            budget_remaining=(budget - sum(p['now_cost'] for p in squad)) / 10,
             mode='freehit',
             horizon_gws=1,
             reasoning=reasoning

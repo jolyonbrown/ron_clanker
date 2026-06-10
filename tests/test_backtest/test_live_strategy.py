@@ -22,7 +22,10 @@ import logging
 import pytest
 
 from backtest.data import DEFAULT_DB, HistoricalDataProvider
-from backtest.live_strategy import LiveOptimizerStrategy
+from backtest.live_strategy import (
+    LiveOptimizerStrategy,
+    LiveOptimizerWithChipsStrategy,
+)
 from backtest.simulate import simulate_season
 
 pytestmark = pytest.mark.skipif(
@@ -37,6 +40,17 @@ logging.getLogger('ron_clanker').setLevel(logging.ERROR)
 def live_run():
     with HistoricalDataProvider() as provider:
         strategy = LiveOptimizerStrategy(provider)
+        try:
+            result = simulate_season(strategy, provider, start_gw=8, end_gw=38)
+        finally:
+            strategy.close()
+        return result, strategy
+
+
+@pytest.fixture(scope='module')
+def chips_run():
+    with HistoricalDataProvider() as provider:
+        strategy = LiveOptimizerWithChipsStrategy(provider)
         try:
             result = simulate_season(strategy, provider, start_gw=8, end_gw=38)
         finally:
@@ -69,3 +83,40 @@ def test_stays_within_free_transfers(live_run):
 def test_bank_never_negative(live_run):
     result, _ = live_run
     assert all(g.bank >= 0 for g in result.gameweeks)
+
+
+class TestChipAwareStrategy:
+    """The live ChipStrategyService deciding chips over a replayed season.
+
+    First run of this harness surfaced two live-code bugs (Free Hit
+    assuming a fresh £100m budget; TransferOptimizer ignoring the
+    max-3-per-club rule). Both are fixed; zero vetoes is the contract.
+    """
+
+    def test_completes_all_gameweeks(self, chips_run):
+        result, _ = chips_run
+        assert [g.gameweek for g in result.gameweeks] == list(range(8, 39))
+
+    def test_no_illegal_recommendations(self, chips_run):
+        _, strategy = chips_run
+        assert strategy.vetoed == []
+
+    def test_all_eight_chips_played_legally(self, chips_run):
+        result, _ = chips_run
+        chips = [(g.gameweek, g.chip) for g in result.gameweeks if g.chip]
+        assert len(chips) == 8
+        for half, lo, hi in ((1, 8, 19), (2, 20, 38)):
+            half_chips = [c for gw, c in chips if lo <= gw <= hi]
+            assert sorted(half_chips) == ['3xc', 'bboost', 'freehit', 'wildcard'], \
+                f'half {half} chips: {half_chips}'
+
+    def test_points_regression_floor(self, chips_run):
+        # Baseline 1660 at the time of writing. Chips must add value over
+        # the chipless floor (1550); a drop below 1580 means a chip-timing
+        # or optimizer regression — investigate before weakening.
+        result, _ = chips_run
+        assert result.total_net_points >= 1580
+
+    def test_no_hits(self, chips_run):
+        result, _ = chips_run
+        assert result.total_hits == 0

@@ -20,7 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backtest.baselines import GreedyModelStrategy
 from backtest.data import DEFAULT_DB, HistoricalDataProvider
-from backtest.live_strategy import LiveOptimizerStrategy
+from backtest.live_strategy import (
+    LiveOptimizerStrategy,
+    LiveOptimizerWithChipsStrategy,
+)
 from backtest.metrics import (
     captain_quality,
     prediction_quality,
@@ -130,6 +133,12 @@ def report(db_path, season):
                                           start_gw=start_gw, end_gw=end_gw)
         finally:
             live.close()
+        chips_strat = LiveOptimizerWithChipsStrategy(provider)
+        try:
+            chips_result = simulate_season(chips_strat, provider,
+                                           start_gw=start_gw, end_gw=end_gw)
+        finally:
+            chips_strat.close()
     if sim_valid:
         print('✅ Simulator validation: Ron replay reproduces official points, '
               'hits and bank on every gameweek')
@@ -138,9 +147,13 @@ def report(db_path, season):
               'are untrustworthy')
     print()
     print(f'{"strategy":<34} {"points":>7} {"hits":>5} {"transfers":>9} {"chips":>6}')
+    n_chips = sum(1 for g in chips_result.gameweeks if g.chip)
     rows = [
         ('Ron (actual season)', total, sum(r.transfer_cost for r in replays),
          '-', 8),
+        (f'{chips_result.strategy_name} (counterfactual)',
+         chips_result.total_net_points, chips_result.total_hits,
+         sum(g.n_transfers for g in chips_result.gameweeks), n_chips),
         (f'{live_result.strategy_name} (counterfactual)',
          live_result.total_net_points, live_result.total_hits,
          sum(g.n_transfers for g in live_result.gameweeks), 0),
@@ -150,12 +163,18 @@ def report(db_path, season):
     ]
     for label, pts, hits, ntr, chips in sorted(rows, key=lambda r: -r[1]):
         print(f'{label:<34} {pts:>7} {str(hits):>5} {str(ntr):>9} {str(chips):>6}')
-    if live.vetoed:
-        print(f'⚠ live-optimizer made {len(live.vetoed)} ILLEGAL recommendations '
-              f'(vetoed) — live-code defects, see logs')
+    for strat in (live, chips_strat):
+        if strat.vetoed:
+            print(f'⚠ {strat.name} made {len(strat.vetoed)} ILLEGAL '
+                  f'recommendations (vetoed) — live-code defects, see logs')
+    chip_timing = ', '.join(
+        f'{g.chip}@GW{g.gameweek}' for g in chips_result.gameweeks if g.chip
+    )
+    print(f'live chip timing: {chip_timing}')
     print()
     print('live-optimizer = the real MILP squad/transfer/XI pipeline replayed')
-    print('chipless with era-correct prices and stored predictions.')
+    print('with era-correct prices and stored predictions (+chips variant adds')
+    print('the real ChipStrategyService deciding chip timing).')
     print('greedy-model = stored predictions followed naively: one best-gain')
     print('transfer/week, no hits, no chips, top-xP lineup and captain.')
 
