@@ -106,9 +106,13 @@ class EraDatabase:
         # player_predictions is the walk-forward-safe store the live chip
         # strategy queries directly; copying it lets those query paths run
         # unmodified.
+        # player_gameweek_history feeds the live captain scorer's ceiling
+        # and minutes-reliability signals; its queries filter gameweek < ?
+        # so the full-season copy stays walk-forward safe.
         self._copy_tables(
             source_db_path,
-            ('teams', 'players', 'fixtures', 'player_predictions'),
+            ('teams', 'players', 'fixtures', 'player_predictions',
+             'player_gameweek_history'),
         )
         self._normalize_dgw_predictions()
         # Keep the (normalized) raw values so calibration can be
@@ -261,7 +265,8 @@ class LiveOptimizerStrategy(Strategy):
 
     def __init__(self, provider: HistoricalDataProvider, horizon: int = 4,
                  shrink_predictions: bool = False,
-                 two_stage: bool = False):
+                 two_stage: bool = False,
+                 captain_mode: str = 'xp'):
         self._provider = provider
         self._horizon = horizon
         self._era = EraDatabase(provider.db_path)
@@ -293,6 +298,12 @@ class LiveOptimizerStrategy(Strategy):
             from backtest.two_stage import PlayProbability
             self._play_prob = PlayProbability(provider)
             self.name = f'{self.name}+2stage'
+        # Captain selection: 'xp' = top adjusted xP in the XI;
+        # 'live' = the real manager armband logic (ml/captain_scoring.py:
+        # position multiplier, ceiling bonus, FDR, home, minutes).
+        self.captain_mode = captain_mode
+        if captain_mode == 'live':
+            self.name = f'{self.name}+livecap'
         self._decision_gw: int = 0
 
     def close(self) -> None:
@@ -471,7 +482,15 @@ class LiveOptimizerStrategy(Strategy):
         ]
         starting, bench = self._squad_opt.optimize_starting_xi(players)
         ranked = sorted(starting, key=lambda p: -p.get('xP', 0.0))
-        captain, vice = ranked[0]['id'], ranked[1]['id']
+        if self.captain_mode == 'live':
+            from ml.captain_scoring import select_captain_and_vice
+            for p in starting:
+                p['team_id'] = self._teams.get(p['id'])
+            captain, vice = select_captain_and_vice(
+                starting, gameweek, self._era.db
+            )
+        else:
+            captain, vice = ranked[0]['id'], ranked[1]['id']
         starter_ids = {p['id'] for p in starting}
         if captain_override is not None and captain_override in starter_ids:
             if captain_override != captain:
@@ -530,7 +549,8 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
     def __init__(self, provider: HistoricalDataProvider, horizon: int = 4,
                  shrink_predictions: bool = True,
                  shrink_chip_ev: bool = False,
-                 two_stage: bool = True):
+                 two_stage: bool = True,
+                 captain_mode: str = 'xp'):
         """Two-stage + full shrinkage is the DEFAULT for the chip-aware
         strategy — the best measured 2025-26 configuration:
 
@@ -548,7 +568,8 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
         for A/B use."""
         super().__init__(provider, horizon=horizon,
                          shrink_predictions=shrink_predictions,
-                         two_stage=two_stage)
+                         two_stage=two_stage,
+                         captain_mode=captain_mode)
         if shrink_chip_ev and not shrink_predictions:
             from backtest.calibration import PredictionShrinker
             self._era_shrinker = PredictionShrinker(provider)
