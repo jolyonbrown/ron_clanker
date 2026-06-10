@@ -81,6 +81,15 @@ class EraDatabase:
     neutralises status fields before each decision.
     """
 
+    @staticmethod
+    def _connect(path) -> sqlite3.Connection:
+        # Scratch data, rewritten every gameweek — trade durability for
+        # speed (per-GW shrinkage rewrites 18k prediction rows).
+        con = sqlite3.connect(path)
+        con.execute("PRAGMA synchronous = OFF")
+        con.execute("PRAGMA journal_mode = MEMORY")
+        return con
+
     def __init__(self, source_db_path: Path, era_path: Path = ERA_DB_PATH):
         self.path = Path(era_path)
         if self.path.exists():
@@ -94,6 +103,15 @@ class EraDatabase:
             ('teams', 'players', 'fixtures', 'player_predictions'),
         )
         self._normalize_dgw_predictions()
+        # Keep the (normalized) raw values so calibration can be
+        # re-applied per decision gameweek without compounding.
+        con = self._connect(self.path)
+        try:
+            con.execute("ALTER TABLE player_predictions ADD COLUMN raw_xp REAL")
+            con.execute("UPDATE player_predictions SET raw_xp = predicted_points")
+            con.commit()
+        finally:
+            con.close()
 
     def _normalize_dgw_predictions(self) -> None:
         """Restore the GW-total contract (commit 06551f0) on the copied
@@ -102,7 +120,7 @@ class EraDatabase:
         normal ones. Multiplying by the team's fixture count gives the
         numbers next season's pipeline stores natively (doubles ×2,
         blanks ×0)."""
-        con = sqlite3.connect(self.path)
+        con = self._connect(self.path)
         try:
             con.execute("""
                 UPDATE player_predictions SET predicted_points =
@@ -140,7 +158,7 @@ class EraDatabase:
 
     def refresh(self, prices: Dict[int, int]) -> None:
         """Re-price every player for the current decision gameweek."""
-        con = sqlite3.connect(self.path)
+        con = self._connect(self.path)
         try:
             con.execute(
                 "UPDATE players SET status = 'a', "
@@ -157,6 +175,29 @@ class EraDatabase:
                 f"WHERE id NOT IN ({placeholders})",
                 list(prices),
             )
+            con.commit()
+        finally:
+            con.close()
+
+    def apply_shrinkage(self, params: Optional[Dict[int, tuple]]) -> None:
+        """Rewrite predicted_points = max(0, a + b*raw) per position with
+        the given walk-forward calibration params, or restore raw values
+        when params is None (insufficient history)."""
+        con = self._connect(self.path)
+        try:
+            if params is None:
+                con.execute(
+                    "UPDATE player_predictions SET predicted_points = raw_xp"
+                )
+            else:
+                for et, (a, b) in params.items():
+                    con.execute(
+                        "UPDATE player_predictions "
+                        "SET predicted_points = MAX(0, ? + ? * raw_xp) "
+                        "WHERE player_id IN "
+                        "  (SELECT id FROM players WHERE element_type = ?)",
+                        (a, b, et),
+                    )
             con.commit()
         finally:
             con.close()
@@ -190,33 +231,63 @@ class _BacktestTransferOptimizer(TransferOptimizer):
 class LiveOptimizerStrategy(Strategy):
     name = 'live-optimizer'
 
-    def __init__(self, provider: HistoricalDataProvider, horizon: int = 4):
+    def __init__(self, provider: HistoricalDataProvider, horizon: int = 4,
+                 shrink_predictions: bool = False):
         self._provider = provider
         self._horizon = horizon
         self._era = EraDatabase(provider.db_path)
         self._squad_opt = SquadOptimizer(self._era.db)
         self._transfer_opt = _BacktestTransferOptimizer(
-            self._era.db, provider.predictions
+            self._era.db, self._predictions_for
         )
         self._etypes = provider.player_element_types()
         self._teams = provider.player_team_ids()
         self._names = provider.player_names()
         self.vetoed: List[str] = []   # live-code defects surfaced in replay
+        # Winner's-curse correction: walk-forward per-position calibration
+        # applied to every prediction the decision code consumes.
+        # Measured trade-off (2025-26): shrinking EVERYTHING costs ~31 pts
+        # because the transfer optimizer's thresholds are tuned to raw
+        # scale, while shrinking chip EV only keeps the transfer engine
+        # intact and makes chip timing robust.
+        self._shrinker = None        # applied at every seam
+        self._era_shrinker = None    # applied to the era DB only (chip EV)
+        if shrink_predictions:
+            from backtest.calibration import PredictionShrinker
+            self._shrinker = PredictionShrinker(provider)
+            self.name = f'{self.name}+shrink'
+        self._decision_gw: int = 0
 
     def close(self) -> None:
         self._era.cleanup()
 
     # ------------------------------------------------------------------
 
+    def _predictions_for(self, target_gw: int) -> Dict[int, float]:
+        """Predictions for a target GW, calibrated with parameters known
+        at the DECISION gameweek (never the target — that would leak
+        actuals that don't exist yet at the deadline)."""
+        preds = self._provider.predictions(target_gw)
+        if self._shrinker:
+            preds = self._shrinker.shrink(preds, as_of_gw=self._decision_gw)
+        return preds
+
+    def _refresh_era(self, gameweek: int, view: AsOfView) -> None:
+        self._decision_gw = gameweek
+        self._era.refresh(view.prices())
+        shrinker = self._era_shrinker or self._shrinker
+        if shrinker:
+            self._era.apply_shrinkage(shrinker.params_as_of(gameweek))
+
     def _multi_gw_predictions(self, gameweek: int) -> Dict[int, Dict[int, float]]:
         multi: Dict[int, Dict[int, float]] = {}
         for gw in range(gameweek, gameweek + self._horizon):
-            for pid, xp in self._provider.predictions(gw).items():
+            for pid, xp in self._predictions_for(gw).items():
                 multi.setdefault(pid, {})[gw] = xp
         return multi
 
     def initial_squad(self, gameweek: int, view: AsOfView) -> InitialSquad:
-        self._era.refresh(view.prices())
+        self._refresh_era(gameweek, view)
         squad = self._squad_opt.optimize_wildcard(
             gameweek=gameweek,
             current_squad=[],          # fresh entry: no selling value
@@ -246,7 +317,7 @@ class LiveOptimizerStrategy(Strategy):
 
     def decide(self, gameweek: int, state_info: Dict, view: AsOfView) -> GWDecision:
         prices = view.prices()
-        self._era.refresh(prices)
+        self._refresh_era(gameweek, view)
 
         squad: Dict[int, OwnedPlayer] = dict(state_info['squad'])
         current_team = self._current_team_dicts(squad, prices)
@@ -334,7 +405,7 @@ class LiveOptimizerStrategy(Strategy):
     def _build_picks(self, squad_ids: Set[int], gameweek: int,
                      view: AsOfView,
                      captain_override: Optional[int] = None) -> List[Pick]:
-        preds = self._provider.predictions(gameweek)
+        preds = self._predictions_for(gameweek)
         prices = view.prices()
         players = [
             {
@@ -405,8 +476,23 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
 
     name = 'live-optimizer+chips'
 
-    def __init__(self, provider: HistoricalDataProvider, horizon: int = 4):
-        super().__init__(provider, horizon=horizon)
+    def __init__(self, provider: HistoricalDataProvider, horizon: int = 4,
+                 shrink_predictions: bool = True,
+                 shrink_chip_ev: bool = False):
+        """Full prediction shrinkage is the DEFAULT for the chip-aware
+        strategy: it was the only configuration in the 2025-26 A/B that
+        was both strong and robust — 1739 points regardless of the
+        wc_organic_gain knob (raw peaked at 1770 but collapsed to 1618
+        one knob-notch away; chip-EV-only and EV+rebuild hybrids scored
+        1624-1720 and stayed knob-sensitive). shrink_chip_ev=True with
+        shrink_predictions=False gives the hybrid (era DB + WC/FH
+        rebuild inputs calibrated, weekly transfers raw) for A/B use."""
+        super().__init__(provider, horizon=horizon,
+                         shrink_predictions=shrink_predictions)
+        if shrink_chip_ev and not shrink_predictions:
+            from backtest.calibration import PredictionShrinker
+            self._era_shrinker = PredictionShrinker(provider)
+            self.name = f'{self.name}+chipcal'
         definitions = provider.chip_definitions()
         if not definitions:
             raise RuntimeError(
@@ -421,9 +507,28 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
         )
         self.chip_log: List = []   # (gw, {chip: {use, ev_now, best_alt...}})
 
+    # ------------------------------------------------------------------
+    # Chip EXECUTION predictions: WC/FH rebuilds are 15 simultaneous
+    # argmax bets — calibrated inputs build measurably better squads,
+    # while the weekly transfer engine stays on the raw scale.
+
+    def _chip_execution_predictions(self, target_gw: int) -> Dict[int, float]:
+        preds = self._provider.predictions(target_gw)
+        shrinker = self._era_shrinker or self._shrinker
+        if shrinker:
+            preds = shrinker.shrink(preds, as_of_gw=self._decision_gw)
+        return preds
+
+    def _chip_multi_gw_predictions(self, gameweek: int) -> Dict[int, Dict[int, float]]:
+        multi: Dict[int, Dict[int, float]] = {}
+        for gw in range(gameweek, gameweek + self._horizon):
+            for pid, xp in self._chip_execution_predictions(gw).items():
+                multi.setdefault(pid, {})[gw] = xp
+        return multi
+
     def decide(self, gameweek: int, state_info: Dict, view: AsOfView) -> GWDecision:
         prices = view.prices()
-        self._era.refresh(prices)
+        self._refresh_era(gameweek, view)
         squad: Dict[int, OwnedPlayer] = dict(state_info['squad'])
 
         # The chip planner needs positions (bench detection drives BB EV),
@@ -469,7 +574,7 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
                 gameweek=gameweek,
                 current_squad=team_dicts,
                 bank=state_info['bank'] / 10.0,
-                multi_gw_predictions=self._multi_gw_predictions(gameweek),
+                multi_gw_predictions=self._chip_multi_gw_predictions(gameweek),
                 horizon=self._horizon,
                 verbose=False,
             )
@@ -485,7 +590,7 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
             selling_value = sum(d['selling_price'] for d in team_dicts)
             fh = self._squad_opt.optimize_free_hit(
                 gameweek=gameweek,
-                predictions=self._provider.predictions(gameweek),
+                predictions=self._chip_execution_predictions(gameweek),
                 verbose=False,
                 budget=selling_value + state_info['bank'],
             )
