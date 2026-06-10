@@ -297,7 +297,7 @@ CREATE INDEX IF NOT EXISTS idx_decisions_gameweek ON decisions(gameweek);
 CREATE INDEX IF NOT EXISTS idx_decisions_type ON decisions(decision_type);
 CREATE INDEX IF NOT EXISTS idx_transfers_gameweek ON transfers(gameweek);
 CREATE INDEX IF NOT EXISTS idx_player_predictions_gameweek ON player_predictions(gameweek);
-CREATE INDEX IF NOT EXISTS idx_price_predictions_date ON price_predictions(prediction_date);
+CREATE INDEX IF NOT EXISTS idx_price_predictions_date ON price_predictions(prediction_for_date);
 CREATE INDEX IF NOT EXISTS idx_history_player_gameweek ON player_gameweek_history(player_id, gameweek);
 CREATE INDEX IF NOT EXISTS idx_price_changes_date ON price_changes(change_date);
 CREATE INDEX IF NOT EXISTS idx_agent_performance_gameweek ON agent_performance(gameweek);

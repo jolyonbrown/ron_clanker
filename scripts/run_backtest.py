@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backtest.baselines import GreedyModelStrategy
 from backtest.data import DEFAULT_DB, HistoricalDataProvider
+from backtest.live_strategy import LiveOptimizerStrategy
 from backtest.metrics import (
     captain_quality,
     prediction_quality,
@@ -123,6 +124,12 @@ def report(db_path, season):
         )
         greedy = simulate_season(GreedyModelStrategy(), provider,
                                  start_gw=start_gw, end_gw=end_gw)
+        live = LiveOptimizerStrategy(provider)
+        try:
+            live_result = simulate_season(live, provider,
+                                          start_gw=start_gw, end_gw=end_gw)
+        finally:
+            live.close()
     if sim_valid:
         print('✅ Simulator validation: Ron replay reproduces official points, '
               'hits and bank on every gameweek')
@@ -130,17 +137,25 @@ def report(db_path, season):
         print('❌ Simulator validation FAILED — counterfactual numbers below '
               'are untrustworthy')
     print()
-    print(f'{"strategy":<28} {"points":>7} {"hits":>5} {"transfers":>9} {"chips":>6}')
+    print(f'{"strategy":<34} {"points":>7} {"hits":>5} {"transfers":>9} {"chips":>6}')
     rows = [
         ('Ron (actual season)', total, sum(r.transfer_cost for r in replays),
          '-', 8),
+        (f'{live_result.strategy_name} (counterfactual)',
+         live_result.total_net_points, live_result.total_hits,
+         sum(g.n_transfers for g in live_result.gameweeks), 0),
         (f'{greedy.strategy_name} (counterfactual)', greedy.total_net_points,
          greedy.total_hits, sum(g.n_transfers for g in greedy.gameweeks), 0),
         ('average manager', avg_total, '-', '-', '-'),
     ]
     for label, pts, hits, ntr, chips in sorted(rows, key=lambda r: -r[1]):
-        print(f'{label:<28} {pts:>7} {str(hits):>5} {str(ntr):>9} {str(chips):>6}')
+        print(f'{label:<34} {pts:>7} {str(hits):>5} {str(ntr):>9} {str(chips):>6}')
+    if live.vetoed:
+        print(f'⚠ live-optimizer made {len(live.vetoed)} ILLEGAL recommendations '
+              f'(vetoed) — live-code defects, see logs')
     print()
+    print('live-optimizer = the real MILP squad/transfer/XI pipeline replayed')
+    print('chipless with era-correct prices and stored predictions.')
     print('greedy-model = stored predictions followed naively: one best-gain')
     print('transfer/week, no hits, no chips, top-xP lineup and captain.')
 
