@@ -47,10 +47,10 @@ HALVES = {1: range(START_GW, 20), 2: range(20, END_GW + 1)}
 
 def solve_weekly(actuals: Dict[int, PlayerGW], prices: Dict[int, int],
                  etypes: Dict[int, int], teams: Dict[int, int],
-                 bench_counts: bool) -> Tuple[float, float, float]:
+                 bench_counts: bool) -> Tuple[float, float, float, Set[int]]:
     """Best legal £100m squad for one GW by actual points.
 
-    Returns (xi_points_with_captain, captain_actual, bench_actual)."""
+    Returns (xi_points_with_captain, captain_actual, bench_actual, squad)."""
     pool = [p for p in prices if p in etypes]
     pts = {p: actuals.get(p, PlayerGW()).points for p in pool}
 
@@ -89,29 +89,84 @@ def solve_weekly(actuals: Dict[int, PlayerGW], prices: Dict[int, int],
     bench = sum(pts[p] for p in pool
                 if x[p].varValue and x[p].varValue > 0.5
                 and not (s[p].varValue and s[p].varValue > 0.5))
-    return total, cap, bench
+    squad = {p for p in pool if x[p].varValue and x[p].varValue > 0.5}
+    return total, cap, bench, squad
 
 
 def tier_a(provider, etypes, teams) -> Dict:
     price_map = provider.price_map_through(START_GW - 1)
-    weekly, tc_gain, bb_gain = {}, {}, {}
+    weekly, tc_gain, bb_gain, squads = {}, {}, {}, {}
     for gw in range(START_GW, END_GW + 1):
         price_map.update(provider.prices(gw))
         actuals = provider.actuals(gw)
-        v11, cap, _ = solve_weekly(actuals, price_map, etypes, teams,
-                                   bench_counts=False)
-        v15, _, _ = solve_weekly(actuals, price_map, etypes, teams,
-                                 bench_counts=True)
+        v11, cap, _, squad = solve_weekly(actuals, price_map, etypes, teams,
+                                          bench_counts=False)
+        v15, _, _, _ = solve_weekly(actuals, price_map, etypes, teams,
+                                    bench_counts=True)
         weekly[gw] = v11
         tc_gain[gw] = cap            # 3x vs 2x = +1 x captain actual
         bb_gain[gw] = v15 - v11
+        squads[gw] = squad
         print(f'  GW{gw}: best XI {v11:.0f} (captain {cap:.0f}, '
               f'BB +{v15 - v11:.0f})')
     base = sum(weekly.values())
     chips = sum(max(tc_gain[g] for g in HALVES[h]) +
                 max(bb_gain[g] for g in HALVES[h]) for h in HALVES)
     return {'base': base, 'chips': chips, 'total': base + chips,
-            'weekly': weekly, 'tc_gain': tc_gain, 'bb_gain': bb_gain}
+            'weekly': weekly, 'tc_gain': tc_gain, 'bb_gain': bb_gain,
+            'squads': squads}
+
+
+def tier_a_paid(a: Dict) -> Dict:
+    """Tier A but PAYING for the rebuilds: actual squad-to-squad diffs,
+    1 FT/week banking to 5 (AFCON top-up to 5 at GW16), -4 per extra
+    transfer, with WC and FH placed on the most expensive rebuild weeks
+    (one of each per half; a Free Hit week reverts, so the following
+    week's diff is measured against the pre-FH squad). TC/BB overlay
+    unchanged — they don't interact with transfers."""
+    import itertools
+
+    gws = sorted(a['squads'])
+
+    def season_hits(wc_weeks: Set[int], fh_weeks: Set[int]) -> int:
+        banked, hits = 0, 0
+        prev = None   # persistent squad going into each week
+        for gw in gws:
+            target = a['squads'][gw]
+            n = 0 if prev is None else len(target - prev)
+            avail = min(5, banked + 1)
+            if gw == 16:
+                avail = max(avail, 5)   # AFCON top-up
+            if gw in wc_weeks or gw in fh_weeks:
+                pass                     # free rebuild; FTs frozen
+            else:
+                hits += max(0, n - avail) * 4
+                banked = max(0, avail - n)
+            if gw not in fh_weeks:
+                prev = target            # FH reverts: keep pre-FH squad
+        return hits
+
+    h1 = [g for g in gws if g <= 19]
+    h2 = [g for g in gws if g >= 20]
+    best = None
+    for wc1, fh1 in itertools.permutations(h1, 2):
+        for wc2, fh2 in itertools.permutations(h2, 2):
+            cost = season_hits({wc1, wc2}, {fh1, fh2})
+            if best is None or cost < best[0]:
+                best = (cost, (wc1, fh1, wc2, fh2))
+    hits, chip_weeks = best
+    no_chip_hits = season_hits(set(), set())
+    transfers = sum(
+        len(a['squads'][g] - a['squads'][prev_g])
+        for prev_g, g in zip(gws, gws[1:])
+    )
+    return {
+        'total': a['base'] - hits + a['chips'],
+        'hits': hits,
+        'no_chip_hits': no_chip_hits,
+        'transfers': transfers,
+        'chip_weeks': chip_weeks,
+    }
 
 
 # ----------------------------------------------------------------------
@@ -352,6 +407,18 @@ def main():
         print(f"base {a['base']:.0f} + chips {a['chips']:.0f} "
               f"= {a['total']:.0f}")
 
+        paid = tier_a_paid(a)
+        wc1, fh1, wc2, fh2 = paid['chip_weeks']
+        print()
+        print(f"Tier A PAYING for the rebuilds: {paid['transfers']} transfers "
+              f"-> {paid['hits']} pts of hits")
+        print(f"  (would be {paid['no_chip_hits']} without chips; "
+              f"WC@GW{wc1}/GW{wc2} + FH@GW{fh1}/GW{fh2} absorb the worst weeks)")
+        print(f"  {a['base']:.0f} - {paid['hits']} + chips {a['chips']:.0f} "
+              f"= {paid['total']:.0f}")
+        print('  NB: assumes £100m available every week — real sell-on fees '
+              'would erode that, so treat as an estimate.')
+
         print()
         print('=' * 70)
         print('TIER B — best set-and-forget squad (bought GW8, never touched)')
@@ -378,7 +445,8 @@ def main():
         print('THE PERFECT SEASON — GW8-38, 2025-26')
         print('=' * 70)
         rows = [
-            ('Tier A: perfect weekly rebuild + chips', a['total']),
+            ('Tier A: perfect weekly rebuild, free transfers', a['total']),
+            ('Tier A: perfect weekly rebuild, PAYING hits', paid['total']),
             ('Tier C: perfect manager (real transfer rules)', c['total']),
             ('Tier B: best set-and-forget squad', b['total']),
             ('best backtest strategy (live+chips+shrink)', 1739),
