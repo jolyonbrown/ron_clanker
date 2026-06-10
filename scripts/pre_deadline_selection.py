@@ -400,7 +400,7 @@ async def main(args):
     print(f"Duration: {duration:.1f} seconds")
     print(f"Status: SUCCESS")
     print(f"\nView team announcement:")
-    print(f"  venv/bin/python scripts/show_latest_team.py")
+    print(f"  venv/bin/python scripts/track_ron_team.py")
     print(f"\nView draft team:")
     print(f"  SELECT * FROM draft_team WHERE for_gameweek = {gameweek};")
 

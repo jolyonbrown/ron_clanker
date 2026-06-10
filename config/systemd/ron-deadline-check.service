@@ -1,0 +1,12 @@
+[Unit]
+Description=Ron Clanker - Check FPL deadline and schedule pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python scripts/schedule_next_deadline.py
+StandardOutput=append:/home/jolyon/ron_clanker/logs/deadline_scheduler.log
+StandardError=append:/home/jolyon/ron_clanker/logs/deadline_scheduler.log
+Environment=HOME=/home/jolyon

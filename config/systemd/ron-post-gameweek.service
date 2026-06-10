@@ -1,0 +1,13 @@
+[Unit]
+Description=Ron Clanker - Post-gameweek workflow
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python scripts/post_gameweek_workflow.py
+StandardOutput=append:/home/jolyon/ron_clanker/logs/cron_post_gw.log
+StandardError=append:/home/jolyon/ron_clanker/logs/cron_post_gw.log
+TimeoutStartSec=infinity
+Environment=HOME=/home/jolyon

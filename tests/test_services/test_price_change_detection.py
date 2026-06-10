@@ -21,10 +21,13 @@ def db(tmp_path):
             "INSERT INTO player_transfer_snapshots "
             "(player_id, snapshot_date, now_cost, gameweek) "
             "VALUES (?, ?, ?, 10)", (pid, day, cost))
-    # player 1 rises overnight, player 2 falls, player 3 static
+    # player 1 rises overnight, player 2 falls, players 3-10 static
+    # (enough static players that 2 changes stay under the mass-change
+    # guard's 30% renumbering threshold)
     snap(1, '2026-09-01', 100); snap(1, '2026-09-02', 101)
     snap(2, '2026-09-01', 55);  snap(2, '2026-09-02', 54)
-    snap(3, '2026-09-01', 45);  snap(3, '2026-09-02', 45)
+    for pid in range(3, 11):
+        snap(pid, '2026-09-01', 45); snap(pid, '2026-09-02', 45)
     return database
 
 
@@ -65,6 +68,11 @@ def test_backfill_processes_all_pairs(db):
         "INSERT INTO player_transfer_snapshots "
         "(player_id, snapshot_date, now_cost, gameweek) "
         "VALUES (1, '2026-09-03', 102, 10)")
+    for pid in range(3, 11):   # statics present on day 3 too, else the
+        db.execute_update(     # 1-player pair trips the renumbering guard
+            "INSERT INTO player_transfer_snapshots "
+            "(player_id, snapshot_date, now_cost, gameweek) "
+            "VALUES (?, '2026-09-03', 45, 10)", (pid,))
     n = detect_price_changes(db, backfill=True)
     assert n == 3   # two changes on 09-02 + one on 09-03
     player1 = [r for r in changes(db) if r['player_id'] == 1]

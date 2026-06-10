@@ -78,7 +78,7 @@ def main():
         print(f"   Recommended: 100+ price changes for good training")
 
         if change_count == 0:
-            print(f"\n💡 Price changes are tracked automatically by monitor_prices.py")
+            print(f"\n💡 Price changes are derived nightly by collect_price_snapshots.py")
             print(f"   They will accumulate as players' prices change")
             return 1
 

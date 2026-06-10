@@ -33,7 +33,10 @@ Ron now operates fully autonomously via systemd timers:
 | `ron-data-collection` | Daily 02:30 | Syncs FPL data (players, fixtures, prices) |
 | `ron-daily-scout` | Daily 03:00 | Intelligence gathering (injuries, news) |
 | `ron-post-gameweek` | Tuesday 08:00 | Post-GW analysis, ML retraining |
-| `ron-db-maintenance` | Sunday 03:00 | Database backup and optimization |
+| `ron-db-maintenance` | Sunday 03:00 | Database backup, optimization, log rotation |
+| `ron-price-snapshot` | Daily 22:30 | Price/transfer snapshot + nightly change detection |
+| `ron-price-predict` | Daily 23:00 | Price change predictions (stores confidence>0.5) |
+| `ron-price-train` | Sunday 04:00 | Weekly price model retrain |
 
 **Manage timers:**
 ```bash
@@ -151,8 +154,6 @@ Check current adjustments: `python -c "from learning.performance_tracker import 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
 | `pre_deadline_selection.py` | Full team selection with ML predictions | Pre-deadline |
-| `pre_deadline_optimizer.py` | Transfer optimization only | Debug/analysis |
-| `show_latest_team.py` | Display current draft team | Any time |
 | `send_team_announcement.py` | Send Slack announcement after Chrome submission | Post-submission |
 
 ### ML Training
@@ -177,7 +178,6 @@ Check current adjustments: `python -c "from learning.performance_tracker import 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
 | `track_ron_team.py` | Track Ron's FPL performance | Post-GW |
-| `track_mini_league.py` | Track mini-league standings | Weekly |
 | `track_global_rankings.py` | Track overall rank | Weekly |
 | `track_gameweek_live.py` | Live GW tracking | During matches |
 
@@ -185,7 +185,6 @@ Check current adjustments: `python -c "from learning.performance_tracker import 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
 | `daily_scout.py` | Gather news from all sources | Daily (automated) |
-| `gather_news_intelligence.py` | Manual news collection | As needed |
 | `process_press_conferences.py` | Extract injury info from pressers | Pre-GW |
 
 ### Maintenance
@@ -201,7 +200,6 @@ Check current adjustments: `python -c "from learning.performance_tracker import 
 | Script | Purpose | When to Use |
 |--------|---------|-------------|
 | `setup_database.py` | Initialize database schema | Initial setup |
-| `setup_cron.py` | Configure scheduled jobs | Initial setup |
 | `setup_notifications.py` | Configure webhooks | Initial setup |
 | `import_historical_seasons.py` | Load historical FPL data | Initial setup |
 
@@ -374,7 +372,7 @@ FPL_PASSWORD=<password>
    ```bash
    # Use --no-notify to skip Slack (we'll send after Chrome confirms)
    python scripts/pre_deadline_selection.py --no-notify
-   python scripts/show_latest_team.py
+   venv/bin/python scripts/track_ron_team.py
    ```
 
 2. **Open Chrome** with Claude plugin active
@@ -445,7 +443,7 @@ These run automatically if cron is configured:
 
 Configure with:
 ```bash
-python scripts/setup_cron.py
+bash scripts/setup_systemd_timers.sh
 ```
 
 ---
@@ -579,7 +577,7 @@ See `bd list --status open` for current tasks.
   - Added to post-GW workflow as Step 5
   - Thresholds stored in `learned_thresholds` table
 
-- **Learning Feedback Loop** (`ml/prediction/learning_adjustment.py`):
+- **Learning Feedback Loop** (removed 2026-06 — superseded by prediction calibration in `ml/prediction/calibration.py`):
   - Predictions are compared to actuals after each gameweek
   - Position-specific and price-bracket bias corrections are calculated
   - Corrections are **automatically applied** to all future predictions

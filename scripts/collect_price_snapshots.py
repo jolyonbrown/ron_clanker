@@ -28,6 +28,12 @@ logger = logging.getLogger('ron_clanker.price_snapshots')
 # record months of price drift as one night and poison training labels.
 MAX_DETECTION_GAP_DAYS = 3
 
+# A real night changes a handful of prices. If a large share of players
+# "changed" at once, the player IDs have been renumbered underneath us
+# (new season's bootstrap went live before season_rollover.py ran) and
+# the diffs compare DIFFERENT HUMANS sharing an id. Refuse to record.
+MAX_CHANGED_SHARE = 0.30
+
 
 def detect_price_changes(db, backfill: bool = False) -> int:
     """Derive price_changes rows from day-over-day snapshot prices.
@@ -69,6 +75,21 @@ def detect_price_changes(db, backfill: bool = False) -> int:
             WHERE cur.snapshot_date = ?
               AND cur.now_cost != prev.now_cost
         """, (prev_d, cur_d))
+        compared = db.execute_query("""
+            SELECT COUNT(*) AS n
+            FROM player_transfer_snapshots cur
+            JOIN player_transfer_snapshots prev
+              ON prev.player_id = cur.player_id
+             AND prev.snapshot_date = ?
+            WHERE cur.snapshot_date = ?
+        """, (prev_d, cur_d))[0]['n']
+        if compared and len(rows) / compared > MAX_CHANGED_SHARE:
+            logger.error(
+                "PriceChanges: %d/%d players 'changed' %s -> %s — this is "
+                "an ID renumbering (new season bootstrap?), not price moves."
+                " Run scripts/season_rollover.py. Skipping detection.",
+                len(rows), compared, prev_d, cur_d)
+            continue
         detected_at = f'{str(cur_d)[:10]} 02:30:00'
         for r in rows:
             db.execute_update("""

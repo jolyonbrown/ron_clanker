@@ -149,7 +149,7 @@ def check_xp_model_performance():
         else:
             print(f"  {pos_name}: No active model!")
 
-    print("\nNote: Run tune_hyperparameters.py + train_with_tuned_params.py to retrain")
+    print("\nNote: Run tune_hyperparameters.py then train_prediction_models.py --force to retrain")
 
 
 def main():

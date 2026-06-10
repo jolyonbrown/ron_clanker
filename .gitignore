@@ -238,3 +238,7 @@ models/**/*.pt
 
 # Archived old files
 archive/
+
+# Runtime state (sensitive: browser session holds FPL auth tokens)
+data/.browser_state/
+data/.deadline_scheduler_state.json

@@ -1,0 +1,13 @@
+[Unit]
+Description=Ron Clanker - Daily intelligence gathering
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python scripts/daily_scout.py
+StandardOutput=append:/home/jolyon/ron_clanker/logs/cron_scout.log
+StandardError=append:/home/jolyon/ron_clanker/logs/cron_scout.log
+TimeoutStartSec=infinity
+Environment=HOME=/home/jolyon

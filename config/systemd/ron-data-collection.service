@@ -1,0 +1,13 @@
+[Unit]
+Description=Ron Clanker - Collect FPL data
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python scripts/collect_fpl_data.py
+StandardOutput=append:/home/jolyon/ron_clanker/logs/cron_data.log
+StandardError=append:/home/jolyon/ron_clanker/logs/cron_data.log
+TimeoutStartSec=infinity
+Environment=HOME=/home/jolyon

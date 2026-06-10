@@ -1,0 +1,13 @@
+[Unit]
+Description=Ron Clanker - Database backup and maintenance
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python scripts/db_maintenance.py
+ExecStartPost=/home/jolyon/ron_clanker/venv/bin/python scripts/backup_database.py
+ExecStartPost=/home/jolyon/ron_clanker/venv/bin/python scripts/rotate_logs.py
+StandardOutput=append:/home/jolyon/ron_clanker/logs/cron_db.log
+StandardError=append:/home/jolyon/ron_clanker/logs/cron_db.log
+TimeoutStartSec=infinity
+Environment=HOME=/home/jolyon

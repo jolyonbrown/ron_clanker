@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.database import Database
-from config.settings import DATABASE_PATH
+DATABASE_PATH = 'data/ron_clanker.db'
 import logging
 
 logging.basicConfig(level=logging.INFO)
