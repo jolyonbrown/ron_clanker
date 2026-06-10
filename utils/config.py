@@ -49,8 +49,6 @@ def load_config() -> Dict[str, Any]:
     config['league_id'] = int(os.getenv('FPL_LEAGUE_ID', 0)) or None
 
     # Telegram
-    config['telegram_bot_token'] = os.getenv('TELEGRAM_BOT_TOKEN', '')
-    config['telegram_chat_id'] = os.getenv('TELEGRAM_CHAT_ID', '')
 
     # Database
     config['db_password'] = os.getenv('DB_PASSWORD', '')
@@ -101,14 +99,6 @@ def get_league_id() -> Optional[int]:
     return int(league_id) if league_id else None
 
 
-def get_telegram_token() -> str:
-    """Get Telegram bot token from environment."""
-    return os.getenv('TELEGRAM_BOT_TOKEN', '')
-
-
-def get_telegram_chat_id() -> str:
-    """Get Telegram chat ID from environment."""
-    return os.getenv('TELEGRAM_CHAT_ID', '')
 
 
 def check_config() -> Dict[str, bool]:
@@ -124,8 +114,6 @@ def check_config() -> Dict[str, bool]:
     return {
         'team_id': bool(os.getenv('FPL_TEAM_ID')),
         'league_id': bool(os.getenv('FPL_LEAGUE_ID')),
-        'telegram_bot_token': bool(os.getenv('TELEGRAM_BOT_TOKEN')),
-        'telegram_chat_id': bool(os.getenv('TELEGRAM_CHAT_ID')),
         'db_password': bool(os.getenv('DB_PASSWORD')),
     }
 

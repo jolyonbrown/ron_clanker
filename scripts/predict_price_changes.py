@@ -20,8 +20,7 @@ sys.path.insert(0, str(project_root))
 from models.price_change import PriceChangePredictor
 from agents.data_collector import DataCollector
 from data.database import Database
-from utils.config import get_telegram_token, get_telegram_chat_id
-from telegram_bot.notifications import send_price_predictions, send_cron_failure
+from notifications.slack import SlackNotifier
 import logging
 import os
 
@@ -212,25 +211,20 @@ async def predict_prices():
         print(f"\nNext: Wait for actual price changes (02:00 AM)")
         print(f"Then: Outcomes are settled by the nightly snapshot run (verify_price_predictions in collect_price_snapshots.py)")
 
-        # Send Telegram notification (if configured and enabled)
-        if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
-            bot_token = get_telegram_token()
-            chat_id = get_telegram_chat_id()
-
-            if bot_token and chat_id and (rises or falls):
-                try:
-                    print("\n📱 Sending Telegram notification...")
-                    send_price_predictions(
-                        bot_token=bot_token,
-                        chat_id=chat_id,
-                        rises=rises,
-                        falls=falls,
-                        prediction_date=str(prediction_date)
-                    )
-                    print("   ✓ Notification sent")
-                except Exception as e:
-                    logger.warning(f"Failed to send Telegram notification: {e}")
-                    print(f"   ⚠️  Failed to send notification: {e}")
+        # Dry/technical report -> the private ops channel
+        if rises or falls:
+            try:
+                lines = [f"Price predictions for {prediction_date}:"]
+                for r in rises[:10]:
+                    lines.append(f"  ▲ {r['player_name']} £{r['price']:.1f}m "
+                                 f"({r['confidence']:.0%})")
+                for f_ in falls[:10]:
+                    lines.append(f"  ▼ {f_['player_name']} £{f_['price']:.1f}m "
+                                 f"({f_['confidence']:.0%})")
+                SlackNotifier().send_ops("\n".join(lines),
+                                         context="price-predict")
+            except Exception as e:
+                logger.warning(f"Failed to send ops notification: {e}")
 
         return 0
 
@@ -238,20 +232,11 @@ async def predict_prices():
         logger.error(f"Prediction error: {e}", exc_info=True)
         print(f"\n❌ Error: {e}")
 
-        # Send failure notification
-        if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
-            bot_token = get_telegram_token()
-            chat_id = get_telegram_chat_id()
-            if bot_token and chat_id:
-                try:
-                    send_cron_failure(
-                        bot_token=bot_token,
-                        chat_id=chat_id,
-                        job_name="Price Predictions",
-                        error=str(e)
-                    )
-                except:
-                    pass  # Don't fail on notification failure
+        try:
+            SlackNotifier().send_ops(f"Price predictions failed: {e}",
+                                     context="price-predict")
+        except Exception:
+            pass  # Don't fail on notification failure
 
         return 1
 

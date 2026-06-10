@@ -1,0 +1,17 @@
+[Unit]
+Description=Ron Clanker - Ron in Slack (bidirectional persona chat)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jolyon/ron_clanker
+ExecStart=/home/jolyon/ron_clanker/venv/bin/python -m ron_clanker.slack_bot
+StandardOutput=append:/home/jolyon/ron_clanker/logs/slack_bot.log
+StandardError=append:/home/jolyon/ron_clanker/logs/slack_bot.log
+Restart=on-failure
+RestartSec=30
+Environment=HOME=/home/jolyon
+
+[Install]
+WantedBy=default.target

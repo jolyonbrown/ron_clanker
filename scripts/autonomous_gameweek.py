@@ -144,7 +144,8 @@ _SLACK_ENABLED = True  # module-level flag; --no-slack disables
 
 
 def send_slack_notification(message: str, gameweek: int = 0):
-    """Send a status notification to Slack unless suppressed."""
+    """Pipeline status/errors -> the PRIVATE ops channel, never the
+    league channel (raw API errors in the main chat looked awful)."""
     if not _SLACK_ENABLED:
         logger.info(f"[slack-suppressed] {message}")
         return
@@ -152,7 +153,7 @@ def send_slack_notification(message: str, gameweek: int = 0):
         from notifications.slack import SlackNotifier
         notifier = SlackNotifier()
         if notifier.enabled:
-            notifier.send_message(f"[Ron Autonomous GW{gameweek}] {message}")
+            notifier.send_ops(f"[Ron Autonomous GW{gameweek}] {message}")
     except Exception as e:
         logger.warning(f"Could not send Slack notification: {e}")
 

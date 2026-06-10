@@ -16,8 +16,7 @@ sys.path.insert(0, str(project_root))
 
 from agents.scout import ScoutAgent
 from data.database import Database
-from utils.config import get_telegram_token, get_telegram_chat_id
-from telegram_bot.notifications import send_scout_report, send_cron_failure
+from notifications.slack import SlackNotifier
 import logging
 import os
 
@@ -98,19 +97,11 @@ async def main():
         print(f"\n❌ Error: {e}")
 
         # Send failure notification
-        if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
-            bot_token = get_telegram_token()
-            chat_id = get_telegram_chat_id()
-            if bot_token and chat_id:
-                try:
-                    send_cron_failure(
-                        bot_token=bot_token,
-                        chat_id=chat_id,
-                        job_name="Daily Scout",
-                        error=str(e)
-                    )
-                except:
-                    pass  # Don't fail on notification failure
+        try:
+            SlackNotifier().send_ops(f"Daily Scout failed: {e}",
+                                     context="daily-scout")
+        except Exception:
+            pass  # Don't fail on notification failure
 
         return 1
 
@@ -163,23 +154,14 @@ async def main():
 
     # Send Telegram notification (if configured and enabled)
     if os.getenv('TELEGRAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true':
-        bot_token = get_telegram_token()
-        chat_id = get_telegram_chat_id()
-
-        if bot_token and chat_id:
-            try:
-                print("\n📱 Sending Telegram notification...")
-                send_scout_report(
-                    bot_token=bot_token,
-                    chat_id=chat_id,
-                    intel_count=len(intelligence),
-                    breakdown=by_type,
-                    top_items=intelligence[:3] if intelligence else None
-                )
-                print("   ✓ Notification sent")
-            except Exception as e:
-                logger.warning(f"Failed to send Telegram notification: {e}")
-                print(f"   ⚠️  Failed to send notification: {e}")
+        try:
+            lines = [f"Scout report: {len(intelligence)} item(s)"]
+            lines += [f"  {k}: {v}" for k, v in (by_type or {}).items()]
+            for item in (intelligence or [])[:3]:
+                lines.append(f"  - {str(item)[:140]}")
+            SlackNotifier().send_ops("\n".join(lines), context="daily-scout")
+        except Exception as e:
+            logger.warning(f"Failed to send ops notification: {e}")
 
     return 0
 

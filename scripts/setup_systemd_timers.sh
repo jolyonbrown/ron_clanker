@@ -58,6 +58,14 @@ for timer in "${TIMERS[@]}"; do
     echo "  Enabled: ${timer}.timer"
 done
 
+# Ron-in-Slack daemon (long-running service, not a timer). Exits
+# cleanly if SLACK_BOT_TOKEN/SLACK_APP_TOKEN are unset — safe to enable
+# before the Slack app is created.
+systemctl --user enable ron-slack-bot.service 2>/dev/null
+systemctl --user restart ron-slack-bot.service 2>/dev/null
+echo "  Enabled: ron-slack-bot.service"
+echo
+
 # Enable lingering so timers run even when not logged in
 echo
 echo "Enabling lingering (timers run when logged out)..."

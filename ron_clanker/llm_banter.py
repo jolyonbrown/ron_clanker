@@ -14,6 +14,22 @@ import anthropic
 logger = logging.getLogger('ron_clanker.llm_banter')
 
 
+
+# The canonical Ron character sheet — the ONE place his personality is
+# defined. The announcement prompt and the Slack chat bot both build on
+# this; edit here, not in scattered prompt strings.
+RON_CHARACTER = """- Managed lower-league clubs in the 70s and 80s. Hard as nails. Knows the game inside out.
+- Now uses "the algorithms", "the models", "the data" - but always filtered through proper football knowledge
+- OUTRAGEOUS, sweary, bombastic, and completely unhinged in the best way. Ron says what everyone's thinking but nobody has the bollocks to say out loud.
+- Uses "fuck", "shit", "bollocks", "bloody hell", "Christ almighty" freely - he's an old-school gaffer, not a vicar
+- Uses old-school football language: "between the sticks", "the back line", "engine room", "up front", "the gaffer's logic"
+- Genuinely believes in Defensive Contribution as the market inefficiency of the season - gets EVANGELICAL about it, like he's discovered fire
+- Mixes data science with gut feeling: "the models say 8.9 xP but I've seen that look in his eye"
+- Competitive, confident, will mock template managers and "FPL Twitter sheep" mercilessly
+- Compares himself to legendary managers (Clough, Shankly, Ferguson) without a hint of irony
+- Roasts his own bad picks with brutal honesty before anyone else can
+- No emojis. Ron's old school."""
+
 class RonBanterGenerator:
     """
     Generates Ron's post-match banter using Claude API.
@@ -222,6 +238,36 @@ Making changes. Can't afford another week like that. The algorithms say we need 
 - RC"""
 
 
+
+    @staticmethod
+    def _grounding_violations(text, allowed_opponents, bank, gameweek):
+        """Heuristic fact-check of generated copy against the fact sheet.
+
+        Instructions alone don't stop a temperature-sampled model from
+        inventing fixtures — the 2025-26 announcements repeatedly got
+        opponents wrong. Verify, don't trust:
+          - every "vs XXX" opponent code must come from the fact sheet
+          - every £ figure must be the stated bank
+          - every GW number mentioned must be THIS gameweek
+        Returns a list of violation strings (empty = grounded)."""
+        import re
+        violations = []
+        mentioned = set(re.findall(r"vs\.?\s+([A-Z]{2,3})\b", text))
+        bogus = mentioned - set(allowed_opponents)
+        if bogus:
+            violations.append(
+                f"invented opponents {sorted(bogus)} — only "
+                f"{sorted(set(allowed_opponents))} play these fixtures")
+        for amount in re.findall(r"£(\d+(?:\.\d+)?)m", text):
+            if abs(float(amount) - bank) > 0.051:
+                violations.append(
+                    f"invented £{amount}m — the bank is £{bank:.1f}m")
+        for gw in re.findall(r"[Gg]ameweek\s+(\d+)|GW\s?(\d+)", text):
+            n = int(gw[0] or gw[1])
+            if n != gameweek:
+                violations.append(f"mentions GW{n} — this is GW{gameweek}")
+        return violations
+
     def generate_team_announcement(
         self,
         gameweek: int,
@@ -257,6 +303,13 @@ Making changes. Can't afford another week like that. The algorithms say we need 
 
         if not self.enabled:
             logger.error("Cannot generate announcement - API key not configured")
+            return self._fallback_announcement(gameweek, squad, transfers)
+
+        if not fixtures:
+            # A model without the fact sheet WILL invent fixtures from its
+            # training data. Boring and correct beats colourful and wrong.
+            logger.error("No fixture facts supplied — using deterministic "
+                         "announcement instead of an ungrounded LLM")
             return self._fallback_announcement(gameweek, squad, transfers)
 
         # Organize squad by position
@@ -347,19 +400,10 @@ Making changes. Can't afford another week like that. The algorithms say we need 
         prompt = f"""You are Ron Clanker, a gruff 1970s/80s football manager who now runs an autonomous FPL team using AI and data science. You're announcing your team selection for Gameweek {gameweek} to the league WhatsApp group.
 
 CHARACTER - Ron Clanker:
-- Managed lower-league clubs in the 70s and 80s. Hard as nails. Knows the game inside out.
-- Now uses "the algorithms", "the models", "the data" - but always filtered through proper football knowledge
-- OUTRAGEOUS, sweary, bombastic, and completely unhinged in the best way. Ron says what everyone's thinking but nobody has the bollocks to say out loud.
-- Uses "fuck", "shit", "bollocks", "bloody hell", "Christ almighty" freely - he's an old-school gaffer, not a vicar
-- Uses old-school football language: "between the sticks", "the back line", "engine room", "up front", "the gaffer's logic"
-- Genuinely believes in Defensive Contribution as the market inefficiency of the season - gets EVANGELICAL about it, like he's discovered fire
+{RON_CHARACTER}
 - Talks about players like he's watched them train all week, with wild metaphors and similes
-- Mixes data science with gut feeling: "the models say 8.9 xP but I've seen that look in his eye"
 - Has genuine tactical opinions - WHY this formation, WHY these players over alternatives
-- Competitive, confident, will mock template managers and "FPL Twitter sheep" mercilessly
 - Makes bold, ridiculous predictions he'll absolutely stand behind
-- Compares himself to legendary managers (Clough, Shankly, Ferguson) without a hint of irony
-- Roasts his own bad picks from previous weeks with brutal honesty before anyone else can
 
 {league_context}
 
@@ -443,21 +487,42 @@ Do NOT:
 - Be boring, safe, or forgettable - Ron would rather be wrong and entertaining than right and dull
 - Use corporate/formal language - Ron's a football man after six pints, not a CEO"""
 
-        try:
-            # Use Claude Haiku 4.5
-            message = self.client.messages.create(
-                model="claude-haiku-4-5",
-                max_tokens=1200,
-                temperature=1.0,  # Creative and varied
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
+        # Facts the validator checks generated copy against
+        allowed_opponents = [f['opponent'] for f in fixtures.values()
+                             if f.get('opponent')]
 
-            announcement = message.content[0].text.strip()
-            logger.info(f"Generated {len(announcement)} character team announcement for GW{gameweek}")
-            return announcement
+        try:
+            # Generate -> verify grounding -> one corrective retry ->
+            # deterministic fallback. Temperature is deliberately lower
+            # than the review banter: announcements carry facts.
+            messages = [{"role": "user", "content": prompt}]
+            for attempt in (1, 2):
+                message = self.client.messages.create(
+                    model="claude-haiku-4-5",
+                    max_tokens=1200,
+                    temperature=0.6,
+                    messages=messages,
+                )
+                announcement = message.content[0].text.strip()
+                violations = self._grounding_violations(
+                    announcement, allowed_opponents, bank, gameweek)
+                if not violations:
+                    logger.info(f"Generated {len(announcement)} character team announcement for GW{gameweek}")
+                    return announcement
+                logger.warning(
+                    "Announcement attempt %d failed grounding: %s",
+                    attempt, '; '.join(violations))
+                messages += [
+                    {"role": "assistant", "content": announcement},
+                    {"role": "user", "content":
+                        "Your announcement contains factual errors: "
+                        + '; '.join(violations)
+                        + ". Rewrite it using ONLY the facts provided. "
+                          "Do not mention anything not in the fact sheet."},
+                ]
+            logger.error("Announcement failed grounding twice — using "
+                         "deterministic fallback")
+            return self._fallback_announcement(gameweek, squad, transfers)
 
         except Exception as e:
             logger.error(f"Failed to generate LLM announcement: {e}")
