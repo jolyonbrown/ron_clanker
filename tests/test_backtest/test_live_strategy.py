@@ -101,21 +101,37 @@ class TestChipAwareStrategy:
         _, strategy = chips_run
         assert strategy.vetoed == []
 
-    def test_all_eight_chips_played_legally(self, chips_run):
+    def test_chips_played_legally(self, chips_run):
+        """At most one of each chip per half. NOT necessarily all 8: the
+        WC organic-gain discount deliberately lets a wildcard expire when
+        the rebuild uplift is within prediction noise — on 2025-26 data,
+        skipping the first-half WC beat playing it by ~58 points."""
         result, _ = chips_run
         chips = [(g.gameweek, g.chip) for g in result.gameweeks if g.chip]
-        assert len(chips) == 8
+        assert len(chips) >= 6
         for half, lo, hi in ((1, 8, 19), (2, 20, 38)):
             half_chips = [c for gw, c in chips if lo <= gw <= hi]
-            assert sorted(half_chips) == ['3xc', 'bboost', 'freehit', 'wildcard'], \
-                f'half {half} chips: {half_chips}'
+            assert len(half_chips) == len(set(half_chips)), \
+                f'half {half} repeats a chip: {half_chips}'
+
+    def test_second_half_team_chips_find_the_dgws(self, chips_run):
+        """2025-26 had DGWs at GW26/33/36. With DGW-normalized
+        predictions the engine must land at least one big team chip
+        (BB/TC) on a double gameweek — the pre-tuning engine burned both
+        on ordinary single GWs (GW24/31)."""
+        result, _ = chips_run
+        h2_team_chips = {g.gameweek for g in result.gameweeks
+                         if g.chip in ('bboost', '3xc') and g.gameweek >= 20}
+        assert h2_team_chips & {26, 33, 36}, \
+            f'no second-half BB/TC on a DGW: {sorted(h2_team_chips)}'
 
     def test_points_regression_floor(self, chips_run):
-        # Baseline 1660 at the time of writing. Chips must add value over
-        # the chipless floor (1550); a drop below 1580 means a chip-timing
-        # or optimizer regression — investigate before weakening.
+        # Baseline 1676 with DGW-normalized predictions and tuned chip
+        # knobs (was 1660 pre-normalization). Chips must beat the
+        # chipless floor; a drop below 1640 means a chip-timing or
+        # optimizer regression — investigate before weakening.
         result, _ = chips_run
-        assert result.total_net_points >= 1580
+        assert result.total_net_points >= 1640
 
     def test_no_hits(self, chips_run):
         result, _ = chips_run

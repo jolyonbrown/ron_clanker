@@ -154,14 +154,29 @@ class HistoricalDataProvider:
     # Pre-deadline data (safe for strategies)
 
     def predictions(self, gameweek: int) -> Dict[int, float]:
-        """The model's stored pre-deadline xP for a gameweek (GW totals,
-        already summed across DGW fixtures — see commit 06551f0)."""
+        """The model's stored pre-deadline xP for a gameweek, as GW TOTALS.
+
+        The GW-total contract (commit 06551f0) postdates the whole
+        2025-26 prediction store: every stored DGW row is per-fixture
+        (verified: no GW26/33/36 DGW-team row exceeds 6.1 — Haaland's
+        GW33 double stored as 5.86). That actively inverts the DGW
+        signal, so rows are normalized here by the team's fixture count:
+        doubles ×2, blanks ×0, normal GWs unchanged. Next season's data
+        stores totals natively and the multiplier is the identity.
+        """
         rows = self._con.execute(
-            "SELECT player_id, predicted_points FROM player_predictions "
-            "WHERE gameweek = ?",
+            "SELECT pp.player_id, "
+            "       pp.predicted_points * ("
+            "           SELECT COUNT(*) FROM fixtures f"
+            "           WHERE f.event = pp.gameweek"
+            "             AND (f.team_h = p.team_id OR f.team_a = p.team_id)"
+            "       ) AS xp "
+            "FROM player_predictions pp "
+            "JOIN players p ON p.id = pp.player_id "
+            "WHERE pp.gameweek = ?",
             (gameweek,),
         ).fetchall()
-        return {r['player_id']: r['predicted_points'] for r in rows}
+        return {r['player_id']: r['xp'] for r in rows}
 
     def history_before(self, gameweek: int) -> Dict[int, Dict]:
         """Per-player aggregates strictly before a gameweek — the only

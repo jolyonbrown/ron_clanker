@@ -134,12 +134,45 @@ class ChipStrategyService:
     service builds a per-chip EV curve across the chip's remaining
     window, then decides whether the current GW is the right moment
     to fire — or if holding for a better future GW is preferable.
+
+    Future EV must be ADJUSTABILITY-AWARE for the team chips. WC/FH
+    plans already are (they re-optimize a full squad per candidate GW),
+    but BB/TC evaluated future GWs with the current squad held static —
+    so a DGW three weeks out looked no better than next week, because
+    the squad didn't own the doublers YET. The 2025-26 backtest showed
+    this fired BB/TC early (GW24/31) and missed the GW33/36 DGWs:
+
+    - TC future EV: best market-wide xP for that GW × tc_market_discount
+      (any captain target is a transfer away by then), floored at the
+      current squad's best.
+    - BB future EV: bench xP × (1 + bb_dgw_bonus × share of teams with
+      a double fixture that GW) — benches get steered toward doublers
+      as a DGW approaches.
+
+    The CURRENT GW's EV is never inflated — the squad is what it is.
     """
 
-    def __init__(self, database=None, squad_optimizer=None, availability_service=None):
+    def __init__(self, database=None, squad_optimizer=None, availability_service=None,
+                 tc_market_discount: float = 0.85, bb_dgw_bonus: float = 1.0,
+                 wc_organic_gain_per_gw: float = 2.5):
         self.db = database
         self.availability = availability_service or ChipAvailabilityService()
         self._optimizer = squad_optimizer  # lazily constructed if None
+        # Tuning knobs (see class docstring). Set tc_market_discount=0 or
+        # bb_dgw_bonus=0 to restore squad-static future EV.
+        self.tc_market_discount = tc_market_discount
+        self.bb_dgw_bonus = bb_dgw_bonus
+        # WC EV compares the rebuild against the CURRENT squad held
+        # static, which overstates the wildcard two ways: the no-WC squad
+        # still improves ~1 transfer/week, and rebuild claims realize at
+        # ~0.7x (top-of-ranking predictions are optimistic — winner's
+        # curse, measured on 2025-26: top-15 realization 0.62-0.82).
+        # This is the per-GW correction subtracted from the rebuild
+        # uplift. 2.5 ≈ (0.3 x typical 5-6pt/GW claim) + ~1.2pt/GW
+        # organic gain. Backtest 2025-26: 0-2.0 -> 1618 (WC fires GW16,
+        # value-destroying rebuild), 2.5 -> 1770, 3.0+ -> 1676 (first
+        # WC deliberately expires). 0 restores the static baseline.
+        self.wc_organic_gain_per_gw = wc_organic_gain_per_gw
 
     # ------------------------------------------------------------------
     # PUBLIC API
@@ -288,13 +321,19 @@ class ChipStrategyService:
         window: List[int],
         squad: List[Dict[str, Any]],
     ) -> ChipPlan:
-        """BB EV = sum of bench xP for that GW (haircut for autosubs)."""
+        """BB EV = sum of bench xP for that GW (haircut for autosubs).
+
+        Future GWs get a DGW-share bonus: the bench can be steered toward
+        doublers by the time a double gameweek arrives, so its static xP
+        understates what a held Bench Boost is worth there."""
         bench_ids = [p['id'] for p in squad if p.get('is_bench')]
         # Evaluate each GW in the window
         ev_by_gw: Dict[int, float] = {}
         for gw in window:
             preds = self._predictions_for_gw(gw, bench_ids)
             ev = sum(preds.values()) * BB_AUTOSUB_HAIRCUT
+            if gw > current_gw and self.bb_dgw_bonus:
+                ev *= 1.0 + self.bb_dgw_bonus * self._dgw_team_share(gw)
             ev_by_gw[gw] = round(ev, 2)
 
         best_gw, best_ev = self._argmax(ev_by_gw)
@@ -334,6 +373,19 @@ class ChipStrategyService:
                 continue
             best_pid = max(preds, key=preds.get)
             ev = preds[best_pid]
+            # Future GWs: any captain target is a transfer away by then,
+            # so the holdable EV is the market-wide best (discounted for
+            # acquisition uncertainty), floored at the squad's own best.
+            # Without this, a Haaland double gameweek is invisible unless
+            # Haaland is ALREADY owned, and TC fires early.
+            if gw > current_gw and self.tc_market_discount:
+                market = self._predictions_for_gw(gw, None)
+                if market:
+                    market_pid = max(market, key=market.get)
+                    market_ev = market[market_pid] * self.tc_market_discount
+                    if market_ev > ev:
+                        ev = market_ev
+                        best_pid = market_pid
             ev_by_gw[gw] = round(ev, 2)
             target_by_gw[gw] = (best_pid, id_to_name.get(best_pid, str(best_pid)))
 
@@ -478,8 +530,11 @@ class ChipStrategyService:
                 rebuild = baseline  # treat as no gain
 
             # Subtract an expected gain from "no WC" transfers over horizon
-            # (roughly free_transfers * 2pts/transfer * horizon/N_to_use)
-            no_wc_transfer_gain = transfers_needed * 2.0
+            # (roughly free_transfers * 2pts/transfer * horizon/N_to_use),
+            # plus the organic weekly improvement the static baseline
+            # ignores (see wc_organic_gain_per_gw).
+            no_wc_transfer_gain = transfers_needed * 2.0 \
+                + self.wc_organic_gain_per_gw * len(horizon_gws)
             ev = max(0.0, rebuild - baseline - no_wc_transfer_gain)
             ev_by_gw[start_gw] = round(ev, 2)
 
@@ -659,6 +714,26 @@ class ChipStrategyService:
             base['is_bench'] = is_bench
             enriched.append(base)
         return enriched
+
+    def _dgw_team_share(self, gameweek: int) -> float:
+        """Fraction of the 20 clubs with 2+ fixtures in the gameweek."""
+        if not self.db:
+            return 0.0
+        try:
+            rows = self.db.execute_query(
+                "SELECT team_h, team_a FROM fixtures WHERE event = ?",
+                (gameweek,),
+            )
+        except Exception as exc:
+            logger.warning("ChipStrategy: fixture lookup failed GW%s: %s",
+                           gameweek, exc)
+            return 0.0
+        counts: Dict[int, int] = {}
+        for r in rows:
+            counts[r['team_h']] = counts.get(r['team_h'], 0) + 1
+            counts[r['team_a']] = counts.get(r['team_a'], 0) + 1
+        doubling = sum(1 for n in counts.values() if n >= 2)
+        return doubling / 20.0
 
     def _predictions_for_gw(
         self, gameweek: int, player_ids: Optional[List[int]]

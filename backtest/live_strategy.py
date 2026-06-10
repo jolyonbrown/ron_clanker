@@ -93,6 +93,29 @@ class EraDatabase:
             source_db_path,
             ('teams', 'players', 'fixtures', 'player_predictions'),
         )
+        self._normalize_dgw_predictions()
+
+    def _normalize_dgw_predictions(self) -> None:
+        """Restore the GW-total contract (commit 06551f0) on the copied
+        predictions: the whole 2025-26 store predates the fix and holds
+        per-fixture values, which makes double gameweeks look WORSE than
+        normal ones. Multiplying by the team's fixture count gives the
+        numbers next season's pipeline stores natively (doubles ×2,
+        blanks ×0)."""
+        con = sqlite3.connect(self.path)
+        try:
+            con.execute("""
+                UPDATE player_predictions SET predicted_points =
+                    predicted_points * (
+                        SELECT COUNT(*) FROM fixtures f
+                        JOIN players p ON p.id = player_predictions.player_id
+                        WHERE f.event = player_predictions.gameweek
+                          AND (f.team_h = p.team_id OR f.team_a = p.team_id)
+                    )
+            """)
+            con.commit()
+        finally:
+            con.close()
 
     def _copy_tables(self, source: Path, tables) -> None:
         src = sqlite3.connect(f'file:{source}?mode=ro', uri=True)
@@ -396,6 +419,7 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
             squad_optimizer=self._squad_opt,
             availability_service=self._avail,
         )
+        self.chip_log: List = []   # (gw, {chip: {use, ev_now, best_alt...}})
 
     def decide(self, gameweek: int, state_info: Dict, view: AsOfView) -> GWDecision:
         prices = view.prices()
@@ -413,7 +437,7 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
         self._avail.used = [
             {'name': chip, 'event': gw} for gw, chip in state_info['chips_used']
         ]
-        decision = self._chip_service.get_recommended_chip(
+        all_decisions = self._chip_service.get_chip_decision(
             team_id=0,
             gameweek=gameweek,
             squad=team_dicts,
@@ -421,7 +445,24 @@ class LiveOptimizerWithChipsStrategy(LiveOptimizerStrategy):
             free_transfers=state_info['available_ft'],
             bank=state_info['bank'] / 10.0,
         )
-        chip = decision.chip_name if decision and decision.use_chip else None
+        self.chip_log.append((gameweek, {
+            name: {
+                'use': d.use_chip,
+                'ev_now': d.expected_value,
+                'best_alt_gw': d.best_alternative_gw,
+                'best_alt_ev': d.best_alternative_ev,
+                'reason': d.reason,
+            }
+            for name, d in all_decisions.items()
+        }))
+        playable = [d for d in all_decisions.values() if d.use_chip]
+        urgency_rank = {'HIGH': 3, 'MEDIUM': 2, 'LOW': 1, 'NONE': 0}
+        playable.sort(
+            key=lambda d: (urgency_rank.get(d.urgency, 0), d.expected_value),
+            reverse=True,
+        )
+        decision = playable[0] if playable else None
+        chip = decision.chip_name if decision else None
 
         if chip == WILDCARD:
             rebuilt = self._squad_opt.optimize_wildcard(
