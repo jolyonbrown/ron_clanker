@@ -154,10 +154,16 @@ class ChipStrategyService:
 
     def __init__(self, database=None, squad_optimizer=None, availability_service=None,
                  tc_market_discount: float = 0.85, bb_dgw_bonus: float = 1.0,
-                 wc_organic_gain_per_gw: float = 2.5):
+                 wc_organic_gain_per_gw: float = 2.5, calibrator=None):
         self.db = database
         self.availability = availability_service or ChipAvailabilityService()
         self._optimizer = squad_optimizer  # lazily constructed if None
+        # Winner's-curse correction (ml/prediction/calibration.py): when
+        # set, every prediction this service reads is calibrated with
+        # parameters known at the decision gameweek. Backtest-validated:
+        # calibrated chip EV removes the raw engine's knife-edge timing.
+        self.calibrator = calibrator
+        self._calibration_as_of: Optional[int] = None
         # Tuning knobs (see class docstring). Set tc_market_discount=0 or
         # bb_dgw_bonus=0 to restore squad-static future EV.
         self.tc_market_discount = tc_market_discount
@@ -277,6 +283,9 @@ class ChipStrategyService:
         Used by `chip_plan_report.py` and internally by `get_chip_decision`.
         """
         statuses = self.availability.get_available_chips(team_id, current_gw)
+        # Calibration must be as-of the DECISION gameweek for every
+        # prediction read in this planning pass, including future GWs.
+        self._calibration_as_of = current_gw
         squad_meta = self._enrich_squad(squad)
 
         plans: Dict[str, ChipPlan] = {}
@@ -756,7 +765,12 @@ class ChipStrategyService:
                     "WHERE gameweek = ?",
                     (gameweek,),
                 )
-            return {r['player_id']: float(r['predicted_points'] or 0.0) for r in rows}
+            preds = {r['player_id']: float(r['predicted_points'] or 0.0) for r in rows}
+            if self.calibrator and self._calibration_as_of:
+                preds = self.calibrator.calibrate(
+                    preds, as_of_gw=self._calibration_as_of
+                )
+            return preds
         except Exception as exc:
             logger.warning("ChipStrategy: predictions load failed for GW%s: %s", gameweek, exc)
             return {}
@@ -783,6 +797,10 @@ class ChipStrategyService:
         for r in rows:
             result.setdefault(r['player_id'], {})[r['gameweek']] = float(
                 r['predicted_points'] or 0.0
+            )
+        if self.calibrator and self._calibration_as_of:
+            result = self.calibrator.calibrate_multi(
+                result, as_of_gw=self._calibration_as_of
             )
         return result
 

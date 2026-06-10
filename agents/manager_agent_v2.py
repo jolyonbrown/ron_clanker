@@ -85,22 +85,35 @@ class RonManager(BaseAgent):
         if use_ml:
             try:
                 self.synthesis_engine = DecisionSynthesisEngine(database=self.db)
-                self.chip_strategy = ChipStrategyService(database=self.db)
+                # Winner's-curse calibration: applied to chip EV and WC/FH
+                # rebuild inputs ONLY. Deliberately NOT given to the
+                # TransferOptimizer — its roll-vs-make thresholds are tuned
+                # to raw prediction scale, and the 2025-26 backtest measured
+                # calibrated weekly transfers ~31 pts WORSE without a
+                # threshold retune (ron_clanker-2qop).
+                from ml.prediction.calibration import PredictionCalibrator
+                self.prediction_calibrator = PredictionCalibrator(self.db)
+                self.chip_strategy = ChipStrategyService(
+                    database=self.db,
+                    calibrator=self.prediction_calibrator,
+                )
                 self.transfer_optimizer = TransferOptimizer(
                     database=self.db,
                     chip_strategy=None  # TransferOptimizer handles its own chip logic
                 )
-                logger.info("Ron: ML decision systems loaded (synthesis, transfers, chips)")
+                logger.info("Ron: ML decision systems loaded (synthesis, transfers, chips, calibration)")
             except Exception as e:
                 logger.warning(f"Ron: Could not load ML systems: {e}. Falling back to basic valuation.")
                 self.synthesis_engine = None
                 self.chip_strategy = None
                 self.transfer_optimizer = None
+                self.prediction_calibrator = None
                 self.use_ml = False
         else:
             self.synthesis_engine = None
             self.chip_strategy = None
             self.transfer_optimizer = None
+            self.prediction_calibrator = None
 
         # Captain Optimizer (ML-based captain selection)
         try:
@@ -1552,6 +1565,14 @@ Captain: {captain['web_name']}
                             r['player_id']: float(r['predicted_points'] or 0.0)
                             for r in rows
                         }
+                        if self.prediction_calibrator:
+                            # A Free Hit squad is 15 simultaneous argmax
+                            # bets — exactly where the winner's curse bites
+                            # hardest. Calibrated inputs build better
+                            # squads (backtest-validated).
+                            predictions = self.prediction_calibrator.calibrate(
+                                predictions, as_of_gw=gameweek
+                            )
                         logger.info(f"Ron: Loaded {len(predictions)} predictions for GW{gameweek}")
 
                         selling_value = sum(
@@ -1594,6 +1615,13 @@ Captain: {captain['web_name']}
                         for r in rows:
                             multi_gw_predictions.setdefault(r['player_id'], {})[r['gameweek']] = float(
                                 r['predicted_points'] or 0.0
+                            )
+                        if self.prediction_calibrator:
+                            # Wildcard rebuild = 15 simultaneous argmax bets;
+                            # calibrate with params known NOW (as-of the
+                            # decision GW, never future targets).
+                            multi_gw_predictions = self.prediction_calibrator.calibrate_multi(
+                                multi_gw_predictions, as_of_gw=gameweek
                             )
                         total_preds = sum(len(g) for g in multi_gw_predictions.values())
                         logger.info(
